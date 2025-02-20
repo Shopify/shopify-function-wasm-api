@@ -1,0 +1,6 @@
+name: shopify-function-wasm-api
+
+type: rust
+
+up:
+  - rust
