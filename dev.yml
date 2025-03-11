@@ -4,3 +4,22 @@ type: rust
 
 up:
   - rust
+  - packages:
+    - binaryen # for wasm-merge
+  - custom:
+      name: Install wasm-tools
+      met?: which wasm-tools
+      meet: cargo install wasm-tools
+
+commands:
+  test:
+    run: cargo test --workspace --exclude shopify_function_wasm_api
+  style:
+    run: |
+      cargo fmt
+      cargo clippy --all-features -- -D warnings
+      cargo clippy --tests --all-features
+      cargo clippy --benches --all-features
+      cargo clippy --examples --all-features
+  build:
+    run: cargo build --release --all-features

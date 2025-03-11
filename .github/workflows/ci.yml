@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  BINARYEN_VERSION: 122
 
 jobs:
   lint:
@@ -37,6 +38,14 @@ jobs:
     runs-on: shopify-ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Cargo Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: cargo-${{ hashFiles('Cargo.toml') }}
+          restore-keys: |
+            cargo-${{ hashFiles('Cargo.toml') }}
+            cargo
       - name: Cargo Target Cache
         uses: actions/cache@v4
         with:
@@ -45,8 +54,17 @@ jobs:
           restore-keys: |
             cargo-target-${{ hashFiles('Cargo.toml') }}
             cargo-target
+      - name: Install wasm-merge
+        run: |
+          wget -nv https://github.com/WebAssembly/binaryen/releases/download/version_${{ env.BINARYEN_VERSION }}/binaryen-version_${{ env.BINARYEN_VERSION }}-x86_64-linux.tar.gz -O /tmp/binaryen.tar.xz
+          tar -xf /tmp/binaryen.tar.xz -C /tmp
+          sudo cp /tmp/binaryen-version_${{ env.BINARYEN_VERSION }}/bin/wasm-merge /usr/local/bin/wasm-merge
+      - name: Install wasm-tools
+        run: cargo install wasm-tools
       - name: Run tests
-        run: cargo test --all-features
+        # we exclude the api crate because it cannot be tested in isolation
+        # due to needing the trampoline wasm to be merged into it
+        run: cargo test --workspace --exclude shopify_function_wasm_api
 
   build:
     runs-on: shopify-ubuntu-latest
@@ -62,5 +80,3 @@ jobs:
             cargo-target
       - name: Build
         run: cargo build --release --all-features
-      - name: Build (examples)
-        run: cargo build --release --examples --all-features
