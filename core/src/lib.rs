@@ -85,6 +85,12 @@ impl NanBox {
         Self::encode(0, 0, Tag::Null)
     }
 
+    /// Create a new NaN-boxed number.
+    pub fn number(val: f64) -> Self {
+        assert!(!val.is_nan());
+        Self(val.to_bits())
+    }
+
     pub fn try_decode(&self) -> Result<ValueRef, Box<dyn Error>> {
         if self.0 & Self::NAN_MASK != Self::NAN_MASK {
             return Ok(ValueRef::Number(f64::from_bits(self.0)));
@@ -236,5 +242,16 @@ mod tests {
             let value_ref = boxed.try_decode().unwrap();
             assert_eq!(value_ref, ValueRef::Bool(val));
         });
+    }
+
+    #[test]
+    fn test_number_roundtrip() {
+        [0.0, 1.0, -1.0, f64::MAX, f64::MIN]
+            .iter()
+            .for_each(|&val| {
+                let boxed = NanBox::number(val);
+                let value_ref = boxed.try_decode().unwrap();
+                assert_eq!(value_ref, ValueRef::Number(val));
+            });
     }
 }

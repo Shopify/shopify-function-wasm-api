@@ -8,6 +8,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         format!("got value {}\n", boolean)
     } else if input.as_null().is_some() {
         "got value null\n".to_string()
+    } else if let Some(number) = input.as_number() {
+        format!("got value {}\n", number)
     } else {
         "got unknown value\n".to_string()
     };
