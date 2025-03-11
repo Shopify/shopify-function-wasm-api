@@ -9,21 +9,7 @@ fn workspace_root() -> std::path::PathBuf {
 
 fn trampoline_wasm() -> std::path::PathBuf {
     let workspace_root = workspace_root();
-    workspace_root.join("trampoline.wasm")
-}
-
-/// Builds the trampoline.wasm file from the trampoline.wat file
-fn build_trampoline() -> Result<()> {
-    let workspace_root = workspace_root();
-    let status = Command::new("wasm-tools")
-        .current_dir(workspace_root)
-        .args(["parse", "trampoline.wat", "-o", "trampoline.wasm"])
-        .status()?;
-    if !status.success() {
-        anyhow::bail!(status);
-    }
-
-    Ok(())
+    workspace_root.join("target/trampoline.wasm")
 }
 
 /// Builds the provider library to a `.wasm` file
@@ -102,14 +88,10 @@ fn merge_example(name: &str) -> Result<()> {
     Ok(())
 }
 
-static BUILD_TRAMPOLINE_RESULT: LazyLock<Result<()>> = LazyLock::new(build_trampoline);
 static BUILD_PROVIDER_RESULT: LazyLock<Result<()>> = LazyLock::new(build_provider);
 
 /// Builds the trampoline, provider, and example, and merges the example with the trampoline
 pub fn prepare_example(name: &str) -> Result<()> {
-    BUILD_TRAMPOLINE_RESULT
-        .as_ref()
-        .map_err(|e| anyhow::anyhow!("Failed to build trampoline: {}", e))?;
     BUILD_PROVIDER_RESULT
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to build provider: {}", e))?;
