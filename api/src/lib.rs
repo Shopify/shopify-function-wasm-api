@@ -1,9 +1,9 @@
 use shopify_function_wasm_api_core::{NanBox, ValueRef};
 
-#[link(wasm_import_module = "trampoline")]
+#[link(wasm_import_module = "shopify_function_v0.1.0")]
 extern "C" {
     // Read API.
-    fn trampoline_input_get() -> u64;
+    fn shopify_function_input_get() -> u64;
 }
 
 pub enum Value {
@@ -31,7 +31,7 @@ impl Value {
 }
 
 pub fn input_get() -> Value {
-    let val = unsafe { trampoline_input_get() };
+    let val = unsafe { shopify_function_input_get() };
     Value::NanBox(NanBox::from_bits(val))
 }
 

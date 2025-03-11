@@ -86,7 +86,7 @@ fn merge_example(name: &str) -> Result<()> {
             "--enable-bulk-memory",
             "--enable-multimemory",
             trampoline_wasm,
-            "trampoline",
+            "shopify_function_v0.1.0",
             example_path,
             "function",
             "-o",

@@ -21,7 +21,7 @@ fn bytes() -> &'static [u8] {
 }
 
 #[no_mangle]
-#[export_name = "shopify_function_input_get"]
+#[export_name = "_shopify_function_input_get"]
 extern "C" fn shopify_function_input_get() -> u64 {
     encode_value(0).to_bits()
 }
