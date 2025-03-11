@@ -4,6 +4,7 @@ use shopify_function_wasm_api_core::{NanBox, ValueRef};
 extern "C" {
     // Read API.
     fn shopify_function_input_get() -> u64;
+    fn shopify_function_input_read_utf8_str(src: usize, out: *mut u8, len: usize);
 }
 
 pub enum Value {
@@ -33,6 +34,21 @@ impl Value {
         match self {
             Value::NanBox(v) => match v.try_decode() {
                 Ok(ValueRef::Number(n)) => Some(n),
+                _ => None,
+            },
+        }
+    }
+
+    pub fn as_string(&self) -> Option<String> {
+        match self {
+            Value::NanBox(v) => match v.try_decode() {
+                Ok(ValueRef::String { ptr, len }) => {
+                    let mut buf = vec![0; len];
+                    unsafe {
+                        shopify_function_input_read_utf8_str(ptr as _, buf.as_mut_ptr(), len)
+                    };
+                    Some(unsafe { String::from_utf8_unchecked(buf) })
+                }
                 _ => None,
             },
         }
