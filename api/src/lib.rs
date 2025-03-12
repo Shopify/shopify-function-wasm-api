@@ -28,6 +28,15 @@ impl Value {
             },
         }
     }
+
+    pub fn as_number(&self) -> Option<f64> {
+        match self {
+            Value::NanBox(v) => match v.try_decode() {
+                Ok(ValueRef::Number(n)) => Some(n),
+                _ => None,
+            },
+        }
+    }
 }
 
 pub fn input_get() -> Value {

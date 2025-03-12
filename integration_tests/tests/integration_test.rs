@@ -83,3 +83,23 @@ fn test_simple_with_null_input() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_simple_with_number_input() -> Result<()> {
+    SIMPLE_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    assert_eq!(
+        run_example_with_input("simple", serde_json::json!(0.0))?,
+        "got value 0\n"
+    );
+    assert_eq!(
+        run_example_with_input("simple", serde_json::json!(1.0))?,
+        "got value 1\n"
+    );
+    assert_eq!(
+        run_example_with_input("simple", serde_json::json!(std::f64::consts::PI))?,
+        "got value 3.141592653589793\n"
+    );
+    Ok(())
+}
