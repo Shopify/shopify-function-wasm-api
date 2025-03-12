@@ -9,21 +9,12 @@ fn workspace_root() -> std::path::PathBuf {
 
 fn trampoline_wasm() -> std::path::PathBuf {
     let workspace_root = workspace_root();
-    workspace_root.join("trampoline.wasm")
+    workspace_root.join("target/trampoline.wasm")
 }
 
 /// Builds the trampoline.wasm file from the trampoline.wat file
 fn build_trampoline() -> Result<()> {
-    let workspace_root = workspace_root();
-    let status = Command::new("wasm-tools")
-        .current_dir(workspace_root)
-        .args(["parse", "trampoline.wat", "-o", "trampoline.wasm"])
-        .status()?;
-    if !status.success() {
-        anyhow::bail!(status);
-    }
-
-    Ok(())
+    shopify_function_wasm_api_trampoline::generate_trampoline()?.emit_wasm_file(trampoline_wasm())
 }
 
 /// Builds the provider library to a `.wasm` file
@@ -86,7 +77,7 @@ fn merge_example(name: &str) -> Result<()> {
             "--enable-bulk-memory",
             "--enable-multimemory",
             trampoline_wasm,
-            "shopify_function_v0.1.0",
+            shopify_function_wasm_api_trampoline::PROVIDER_MODULE_NAME,
             example_path,
             "function",
             "-o",
