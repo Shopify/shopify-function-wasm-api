@@ -33,7 +33,11 @@ fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<Str
     let mut store = Store::new(&engine, wasi);
 
     let provider_instance = linker.instantiate(&mut store, &provider)?;
-    linker.instance(&mut store, "shopify_function_v0.1.0", provider_instance)?;
+    linker.instance(
+        &mut store,
+        shopify_function_wasm_api_provider::PROVIDER_MODULE_NAME,
+        provider_instance,
+    )?;
 
     let instance = linker.instantiate(&mut store, &module)?;
 

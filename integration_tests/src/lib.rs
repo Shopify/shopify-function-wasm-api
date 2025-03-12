@@ -12,6 +12,11 @@ fn trampoline_wasm() -> std::path::PathBuf {
     workspace_root.join("target/trampoline.wasm")
 }
 
+/// Builds the trampoline.wasm file from the trampoline.wat file
+fn build_trampoline() -> Result<()> {
+    shopify_function_wasm_api_trampoline::generate_trampoline()?.emit_wasm_file(trampoline_wasm())
+}
+
 /// Builds the provider library to a `.wasm` file
 fn build_provider() -> Result<()> {
     let status = Command::new("cargo")
@@ -72,7 +77,7 @@ fn merge_example(name: &str) -> Result<()> {
             "--enable-bulk-memory",
             "--enable-multimemory",
             trampoline_wasm,
-            "shopify_function_v0.1.0",
+            shopify_function_wasm_api_trampoline::PROVIDER_MODULE_NAME,
             example_path,
             "function",
             "-o",
@@ -88,10 +93,14 @@ fn merge_example(name: &str) -> Result<()> {
     Ok(())
 }
 
+static BUILD_TRAMPOLINE_RESULT: LazyLock<Result<()>> = LazyLock::new(build_trampoline);
 static BUILD_PROVIDER_RESULT: LazyLock<Result<()>> = LazyLock::new(build_provider);
 
 /// Builds the trampoline, provider, and example, and merges the example with the trampoline
 pub fn prepare_example(name: &str) -> Result<()> {
+    BUILD_TRAMPOLINE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to build trampoline: {}", e))?;
     BUILD_PROVIDER_RESULT
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to build provider: {}", e))?;
