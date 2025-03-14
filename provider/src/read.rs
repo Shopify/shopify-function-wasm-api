@@ -1,11 +1,10 @@
 use once_cell::sync::OnceCell;
-use rmp::{
-    decode::{self, read_marker, Bytes},
-    Marker,
-};
+use rmpv::{decode::read_value_ref, ValueRef};
 use shopify_function_wasm_api_core::NanBox;
 use std::io::Read;
+
 static BYTES: OnceCell<Vec<u8>> = OnceCell::new();
+static VALUE: OnceCell<ValueRef<'static>> = OnceCell::new();
 
 fn bytes() -> &'static [u8] {
     BYTES.get_or_init(|| {
@@ -20,48 +19,31 @@ fn bytes() -> &'static [u8] {
     })
 }
 
+fn value() -> &'static ValueRef<'static> {
+    VALUE.get_or_init(|| {
+        let mut reader = bytes();
+        read_value_ref(&mut reader).unwrap()
+    })
+}
+
 #[no_mangle]
 #[export_name = "_shopify_function_input_get"]
 extern "C" fn shopify_function_input_get() -> u64 {
-    encode_value(bytes()).to_bits()
+    encode_value(value()).to_bits()
 }
 
-fn encode_value(bytes: &[u8]) -> NanBox {
-    let mut reader = Bytes::new(bytes);
-    // clone the reader because other decode functions need to read the marker again
-    match read_marker(&mut reader.clone()) {
-        Ok(Marker::False) => NanBox::bool(false),
-        Ok(Marker::True) => NanBox::bool(true),
-        Ok(Marker::Null) => NanBox::null(),
-        Ok(Marker::F32) => NanBox::number(decode::read_f32(&mut reader).unwrap().into()),
-        Ok(Marker::F64) => NanBox::number(decode::read_f64(&mut reader).unwrap()),
-        Ok(Marker::U8) => NanBox::number(decode::read_u8(&mut reader).unwrap() as f64),
-        Ok(Marker::U16) => NanBox::number(decode::read_u16(&mut reader).unwrap() as f64),
-        Ok(Marker::U32) => NanBox::number(decode::read_u32(&mut reader).unwrap() as f64),
-        Ok(Marker::U64) => NanBox::number(decode::read_u64(&mut reader).unwrap() as f64),
-        Ok(Marker::I8) => NanBox::number(decode::read_i8(&mut reader).unwrap() as f64),
-        Ok(Marker::I16) => NanBox::number(decode::read_i16(&mut reader).unwrap() as f64),
-        Ok(Marker::I32) => NanBox::number(decode::read_i32(&mut reader).unwrap() as f64),
-        Ok(Marker::I64) => NanBox::number(decode::read_i64(&mut reader).unwrap() as f64),
-        Ok(Marker::FixPos(n)) => NanBox::number(n as f64),
-        Ok(Marker::FixNeg(n)) => NanBox::number(n as f64),
-        Ok(Marker::FixStr(len)) => {
-            let len = len as usize;
-            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[1..(len + 1)]) })
-        }
-        Ok(Marker::Str8) => {
-            let len = bytes[1] as usize;
-            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[2..(len + 2)]) })
-        }
-        Ok(Marker::Str16) => {
-            let len = u16::from_be_bytes([bytes[1], bytes[2]]) as usize;
-            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[3..(len + 3)]) })
-        }
-        Ok(Marker::Str32) => {
-            let len = u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as usize;
-            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[5..(len + 5)]) })
-        }
-        marker => todo!("marker not yet supported: {:?}", marker),
+fn encode_value(value: &ValueRef<'_>) -> NanBox {
+    match value {
+        ValueRef::Nil => NanBox::null(),
+        ValueRef::Boolean(b) => NanBox::bool(*b),
+        ValueRef::Integer(n) => NanBox::number(n.as_f64().expect("integer out of range")),
+        ValueRef::F32(n) => NanBox::number(f64::from(*n)),
+        ValueRef::F64(n) => NanBox::number(*n),
+        ValueRef::String(s) => NanBox::string(s.as_str().expect("string is not valid UTF-8")),
+        ValueRef::Map(_) => todo!("map not yet supported"),
+        ValueRef::Array(_) => todo!("array not yet supported"),
+        ValueRef::Binary(_) => todo!("binary not yet supported"),
+        ValueRef::Ext(_, _) => todo!("ext not yet supported"),
     }
 }
 
@@ -69,6 +51,7 @@ fn encode_value(bytes: &[u8]) -> NanBox {
 mod tests {
     use super::*;
     use rmp::encode::{self, ByteBuf};
+    use rmpv::decode::read_value_ref;
     use shopify_function_wasm_api_core::ValueRef;
 
     fn build_msgpack<E, F: FnOnce(&mut ByteBuf) -> Result<(), E>>(
@@ -83,7 +66,8 @@ mod tests {
     fn test_encode_bool_value() {
         [true, false].iter().for_each(|&b| {
             let bytes = build_msgpack(|w| encode::write_bool(w, b)).unwrap();
-            let nanbox = encode_value(&bytes);
+            let value_ref = read_value_ref(&mut bytes.as_slice()).unwrap();
+            let nanbox = encode_value(&value_ref);
             assert_eq!(nanbox, NanBox::bool(b));
         });
     }
@@ -91,7 +75,8 @@ mod tests {
     #[test]
     fn test_encode_null_value() {
         let bytes = build_msgpack(encode::write_nil).unwrap();
-        let nanbox = encode_value(&bytes);
+        let value_ref = read_value_ref(&mut bytes.as_slice()).unwrap();
+        let nanbox = encode_value(&value_ref);
         assert_eq!(nanbox, NanBox::null());
     }
 
@@ -102,7 +87,8 @@ mod tests {
                 fn [<test_encode_ $encode_type _value>]() {
                     $values.iter().for_each(|&n| {
                         let bytes = build_msgpack(|w| encode::[<write_ $encode_type>](w, n)).unwrap();
-                        let nanbox = encode_value(&bytes);
+                        let value_ref = read_value_ref(&mut bytes.as_slice()).unwrap();
+                        let nanbox = encode_value(&value_ref);
                         assert_eq!(nanbox, NanBox::number(n as f64));
                     });
                 }
@@ -137,7 +123,8 @@ mod tests {
                 #[test]
                 fn [<test_encode_ $encode_type _value>]() {
                     let bytes = build_msgpack(|w| encode::write_str(w, "a".repeat($len).as_str())).unwrap();
-                    let nanbox = encode_value(&bytes);
+                    let value_ref = read_value_ref(&mut bytes.as_slice()).unwrap();
+                    let nanbox = encode_value(&value_ref);
                     let decoded = nanbox.try_decode().unwrap();
                     let ptr = bytes[$marker_and_len_size..].as_ptr() as usize & u32::MAX as usize;
                     assert_eq!(

@@ -103,6 +103,11 @@ impl NanBox {
         Self::encode(ptr as _, val.len() as _, Tag::String)
     }
 
+    /// Create a new NaN-boxed object.
+    pub fn obj(ptr: usize) -> Self {
+        Self::encode(ptr as _, 0, Tag::Object)
+    }
+
     pub fn try_decode(&self) -> Result<ValueRef, Box<dyn Error>> {
         if self.0 & Self::NAN_MASK != Self::NAN_MASK {
             return Ok(ValueRef::Number(f64::from_bits(self.0)));
@@ -298,5 +303,13 @@ mod tests {
                 len: string.len()
             }
         );
+    }
+
+    #[test]
+    fn test_object_roundtrip() {
+        let ptr = 0x12345678;
+        let boxed = NanBox::obj(ptr);
+        let value_ref = boxed.try_decode().unwrap();
+        assert_eq!(value_ref, ValueRef::Object { ptr });
     }
 }
