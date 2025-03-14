@@ -1,6 +1,6 @@
 use once_cell::sync::OnceCell;
 use rmpv::{decode::read_value_ref, ValueRef};
-use shopify_function_wasm_api_core::NanBox;
+use shopify_function_wasm_api_core::{ErrorCode, NanBox, ValueRef as NanBoxValueRef};
 use std::io::Read;
 
 static BYTES: OnceCell<Vec<u8>> = OnceCell::new();
@@ -32,6 +32,32 @@ extern "C" fn shopify_function_input_get() -> u64 {
     encode_value(value()).to_bits()
 }
 
+#[no_mangle]
+#[export_name = "_shopify_function_input_get_obj_prop"]
+extern "C" fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, len: usize) -> u64 {
+    let v = NanBox::from_bits(scope);
+    match v.try_decode() {
+        Ok(NanBoxValueRef::Object { ptr: obj_ptr }) => {
+            let query = unsafe { query_from_raw_parts(ptr, len) };
+            let obj_ptr = obj_ptr as *const ValueRef<'_>;
+            let value = unsafe { &*obj_ptr };
+            let ValueRef::Map(map) = value else {
+                panic!("expected map, got {:?}", value);
+            };
+            let boxed = match map
+                .iter()
+                .find(|(k, _)| matches!(k, ValueRef::String(s) if s.as_str() == Some(query)))
+            {
+                Some((_, v)) => encode_value(v),
+                None => NanBox::null(),
+            };
+            boxed.to_bits()
+        }
+        Ok(_) => NanBox::error(ErrorCode::NotAnObject).to_bits(),
+        Err(_) => NanBox::error(ErrorCode::DecodeError).to_bits(),
+    }
+}
+
 fn encode_value(value: &ValueRef<'_>) -> NanBox {
     match value {
         ValueRef::Nil => NanBox::null(),
@@ -40,11 +66,19 @@ fn encode_value(value: &ValueRef<'_>) -> NanBox {
         ValueRef::F32(n) => NanBox::number(f64::from(*n)),
         ValueRef::F64(n) => NanBox::number(*n),
         ValueRef::String(s) => NanBox::string(s.as_str().expect("string is not valid UTF-8")),
-        ValueRef::Map(_) => todo!("map not yet supported"),
+        ValueRef::Map(_) => {
+            let ptr = value as *const _ as usize;
+            NanBox::obj(ptr)
+        }
         ValueRef::Array(_) => todo!("array not yet supported"),
         ValueRef::Binary(_) => todo!("binary not yet supported"),
         ValueRef::Ext(_, _) => todo!("ext not yet supported"),
     }
+}
+
+unsafe fn query_from_raw_parts(ptr: *const u8, len: usize) -> &'static str {
+    let slice = std::slice::from_raw_parts(ptr, len);
+    std::str::from_utf8_unchecked(slice)
 }
 
 #[cfg(test)]

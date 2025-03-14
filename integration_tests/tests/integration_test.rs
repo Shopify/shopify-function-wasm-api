@@ -23,13 +23,14 @@ fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<Str
 
     let input_stream = wasi_common::pipe::ReadPipe::new(Cursor::new(input));
     let output_stream = wasi_common::pipe::WritePipe::new_in_memory();
+    let error_stream = wasi_common::pipe::WritePipe::new_in_memory();
 
     let mut linker = Linker::new(&engine);
     wasi_common::sync::add_to_linker(&mut linker, |ctx| ctx)?;
     let wasi = deterministic_wasi_ctx::build_wasi_ctx();
     wasi.set_stdin(Box::new(input_stream));
     wasi.set_stdout(Box::new(output_stream.clone()));
-
+    wasi.set_stderr(Box::new(error_stream.clone()));
     let mut store = Store::new(&engine, wasi);
 
     let provider_instance = linker.instantiate(&mut store, &provider)?;
@@ -43,9 +44,21 @@ fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<Str
 
     let func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
 
-    func.call(&mut store, ())?;
+    let result = func.call(&mut store, ());
 
     drop(store);
+
+    if let Err(e) = result {
+        let error = error_stream
+            .try_into_inner()
+            .map_err(|_| anyhow::anyhow!("Error stream reference still exists"))?
+            .into_inner();
+        return Err(anyhow::anyhow!(
+            "{}\n\nSTDERR:\n{}",
+            e,
+            String::from_utf8(error)?
+        ));
+    }
 
     let output = output_stream
         .try_into_inner()
@@ -112,6 +125,27 @@ fn test_simple_with_string_input() -> Result<()> {
     assert_eq!(
         run_example_with_input("simple", serde_json::json!("Hello, world!"))?,
         "got value Hello, world!\n"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_simple_with_obj_input() -> Result<()> {
+    SIMPLE_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    assert_eq!(
+        run_example_with_input("simple", serde_json::json!({ "key": "Hello, world!" }))?,
+        "got value obj; key: Hello, world!\n"
+    );
+    assert_eq!(
+        run_example_with_input("simple", serde_json::json!({}))?,
+        "got value obj; key: null\n"
+    );
+    // the example is written to return "unknown value" for any non-string or null value
+    assert_eq!(
+        run_example_with_input("simple", serde_json::json!({ "key": 1.0 }))?,
+        "got value obj; key: unknown value\n"
     );
     Ok(())
 }

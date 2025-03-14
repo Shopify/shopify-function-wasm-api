@@ -12,6 +12,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         format!("got value {}\n", number)
     } else if let Some(string) = input.as_string() {
         format!("got value {}\n", string)
+    } else if input.is_obj() {
+        let value_for_key = input.get_obj_prop("key");
+        let serialized = if let Some(s) = value_for_key.as_string() {
+            s
+        } else if value_for_key.as_null().is_some() {
+            "null".to_string()
+        } else {
+            "unknown value".to_string()
+        };
+        format!("got value obj; key: {}\n", serialized)
     } else {
         "got unknown value\n".to_string()
     };
