@@ -45,6 +45,22 @@ fn encode_value(bytes: &[u8]) -> NanBox {
         Ok(Marker::I64) => NanBox::number(decode::read_i64(&mut reader).unwrap() as f64),
         Ok(Marker::FixPos(n)) => NanBox::number(n as f64),
         Ok(Marker::FixNeg(n)) => NanBox::number(n as f64),
+        Ok(Marker::FixStr(len)) => {
+            let len = len as usize;
+            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[1..(len + 1)]) })
+        }
+        Ok(Marker::Str8) => {
+            let len = bytes[1] as usize;
+            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[2..(len + 2)]) })
+        }
+        Ok(Marker::Str16) => {
+            let len = u16::from_be_bytes([bytes[1], bytes[2]]) as usize;
+            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[3..(len + 3)]) })
+        }
+        Ok(Marker::Str32) => {
+            let len = u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as usize;
+            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[5..(len + 5)]) })
+        }
         marker => todo!("marker not yet supported: {:?}", marker),
     }
 }
@@ -53,6 +69,7 @@ fn encode_value(bytes: &[u8]) -> NanBox {
 mod tests {
     use super::*;
     use rmp::encode::{self, ByteBuf};
+    use shopify_function_wasm_api_core::ValueRef;
 
     fn build_msgpack<E, F: FnOnce(&mut ByteBuf) -> Result<(), E>>(
         writer_fn: F,
@@ -82,7 +99,7 @@ mod tests {
         ($type:ty, $encode_type:ident, $values:tt) => {
             paste::paste! {
                 #[test]
-                fn [<test_encode_ $encode_type>]() {
+                fn [<test_encode_ $encode_type _value>]() {
                     $values.iter().for_each(|&n| {
                         let bytes = build_msgpack(|w| encode::[<write_ $encode_type>](w, n)).unwrap();
                         let nanbox = encode_value(&bytes);
@@ -113,4 +130,31 @@ mod tests {
     test_encode_number_type!(i64);
     test_encode_number_type!(f32);
     test_encode_number_type!(f64);
+
+    macro_rules! test_encode_str {
+        ($len:expr, $encode_type:ident, $marker_and_len_size:literal) => {
+            paste::paste! {
+                #[test]
+                fn [<test_encode_ $encode_type _value>]() {
+                    let bytes = build_msgpack(|w| encode::write_str(w, "a".repeat($len).as_str())).unwrap();
+                    let nanbox = encode_value(&bytes);
+                    let decoded = nanbox.try_decode().unwrap();
+                    let ptr = bytes[$marker_and_len_size..].as_ptr() as usize & u32::MAX as usize;
+                    assert_eq!(
+                        decoded,
+                        ValueRef::String {
+                            ptr,
+                            len: bytes.len() - $marker_and_len_size
+                        }
+                    );
+                }
+            }
+        };
+    }
+
+    test_encode_str!(31, fixstr, 1);
+    test_encode_str!(u8::MAX as usize, str8, 2);
+    // TODO: enable once we have support for longer strings
+    // test_encode_str!(u16::MAX as usize, str16, 3);
+    // test_encode_str!(u32::MAX as usize, str32, 5);
 }

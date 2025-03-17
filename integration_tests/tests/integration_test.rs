@@ -103,3 +103,15 @@ fn test_simple_with_number_input() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_simple_with_string_input() -> Result<()> {
+    SIMPLE_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    assert_eq!(
+        run_example_with_input("simple", serde_json::json!("Hello, world!"))?,
+        "got value Hello, world!\n"
+    );
+    Ok(())
+}
