@@ -8,10 +8,10 @@ pub const PROVIDER_MODULE_NAME: &str = concat!("shopify_function_v", env!("CARGO
 pub fn trampoline_existing_module(path: impl AsRef<Path>) -> walrus::Result<Module> {
     let module = Module::from_file(path)?;
 
-    TrampolineApplicator::new(module)?.apply()
+    TrampolineCodegen::new(module)?.apply()
 }
 
-struct TrampolineApplicator {
+struct TrampolineCodegen {
     module: Module,
     guest_memory_id: MemoryId,
     provider_memory_id: OnceCell<MemoryId>,
@@ -21,7 +21,7 @@ struct TrampolineApplicator {
     alloc: OnceCell<FunctionId>,
 }
 
-impl TrampolineApplicator {
+impl TrampolineCodegen {
     fn new(module: Module) -> walrus::Result<Self> {
         let guest_memory_id = module.get_memory_id()?;
 
@@ -51,7 +51,7 @@ impl TrampolineApplicator {
         })
     }
 
-    fn memcpy_to_guest(&mut self) -> FunctionId {
+    fn emit_memcpy_to_guest(&mut self) -> FunctionId {
         let provider_memory_id = self.provider_memory_id();
 
         *self.memcpy_to_guest.get_or_init(|| {
@@ -76,7 +76,7 @@ impl TrampolineApplicator {
         })
     }
 
-    fn memcpy_to_provider(&mut self) -> FunctionId {
+    fn emit_memcpy_to_provider(&mut self) -> FunctionId {
         let provider_memory_id = self.provider_memory_id();
 
         *self.memcpy_to_provider.get_or_init(|| {
@@ -101,7 +101,7 @@ impl TrampolineApplicator {
         })
     }
 
-    fn imported_shopify_function_realloc(&mut self) -> FunctionId {
+    fn emit_shopify_function_realloc_import(&mut self) -> FunctionId {
         *self.imported_shopify_function_realloc.get_or_init(|| {
             let shopify_function_realloc_type = self.module.types.add(
                 &[ValType::I32, ValType::I32, ValType::I32, ValType::I32],
@@ -118,8 +118,8 @@ impl TrampolineApplicator {
         })
     }
 
-    fn alloc(&mut self) -> FunctionId {
-        let imported_shopify_function_realloc = self.imported_shopify_function_realloc();
+    fn emit_alloc(&mut self) -> FunctionId {
+        let imported_shopify_function_realloc = self.emit_shopify_function_realloc_import();
 
         *self.alloc.get_or_init(|| {
             let mut alloc =
@@ -157,13 +157,13 @@ impl TrampolineApplicator {
         Ok(())
     }
 
-    fn trampoline_shopify_function_input_read_utf8_str(&mut self) -> walrus::Result<()> {
+    fn emit_shopify_function_input_read_utf8_str(&mut self) -> walrus::Result<()> {
         let imported_shopify_function_input_read_utf8_str = self
             .module
             .imports
             .get_func(PROVIDER_MODULE_NAME, "shopify_function_input_read_utf8_str")?;
 
-        let memcpy_to_guest = self.memcpy_to_guest();
+        let memcpy_to_guest = self.emit_memcpy_to_guest();
 
         self.module.replace_imported_func(
             imported_shopify_function_input_read_utf8_str,
@@ -180,7 +180,7 @@ impl TrampolineApplicator {
         Ok(())
     }
 
-    fn trampoline_shopify_function_input_get_obj_prop(&mut self) -> walrus::Result<()> {
+    fn emit_shopify_function_input_get_obj_prop(&mut self) -> walrus::Result<()> {
         if let Ok(imported_shopify_function_input_get_obj_prop) = self
             .module
             .imports
@@ -197,8 +197,8 @@ impl TrampolineApplicator {
                 shopify_function_input_get_obj_prop_type,
             );
 
-            let alloc = self.alloc();
-            let memcpy_to_provider = self.memcpy_to_provider();
+            let alloc = self.emit_alloc();
+            let memcpy_to_provider = self.emit_memcpy_to_provider();
 
             let dst_ptr = self.module.locals.add(ValType::I32);
 
@@ -230,8 +230,8 @@ impl TrampolineApplicator {
 
     fn apply(mut self) -> walrus::Result<Module> {
         self.rename_imported_func("shopify_function_input_get", "_shopify_function_input_get")?;
-        self.trampoline_shopify_function_input_read_utf8_str()?;
-        self.trampoline_shopify_function_input_get_obj_prop()?;
+        self.emit_shopify_function_input_read_utf8_str()?;
+        self.emit_shopify_function_input_get_obj_prop()?;
         Ok(self.module)
     }
 }
