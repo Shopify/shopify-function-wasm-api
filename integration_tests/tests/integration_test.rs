@@ -4,7 +4,7 @@ use std::io::Cursor;
 use std::sync::LazyLock;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 
-fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<String> {
+fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<Vec<u8>> {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let workspace_root = std::path::PathBuf::from(manifest_dir).join("..");
     let engine = Engine::new(&Config::new())?;
@@ -64,10 +64,27 @@ fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<Str
         .try_into_inner()
         .map_err(|_| anyhow::anyhow!("Output stream reference still exists"))?
         .into_inner();
-    Ok(String::from_utf8(output.clone())?)
+    Ok(output)
+}
+
+fn run_example_with_input_and_string_output(
+    example: &str,
+    input: serde_json::Value,
+) -> Result<String> {
+    let output = run_example_with_input(example, input)?;
+    Ok(String::from_utf8(output)?)
+}
+
+fn run_example_with_input_and_msgpack_output(
+    example: &str,
+    input: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let output = run_example_with_input(example, input)?;
+    Ok(rmp_serde::from_slice(&output)?)
 }
 
 static SIMPLE_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("simple"));
+static ECHO_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("echo"));
 
 #[test]
 fn test_simple_with_bool_input() -> Result<()> {
@@ -75,11 +92,11 @@ fn test_simple_with_bool_input() -> Result<()> {
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!(true))?,
+        run_example_with_input_and_string_output("simple", serde_json::json!(true))?,
         "got value true\n",
     );
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!(false))?,
+        run_example_with_input_and_string_output("simple", serde_json::json!(false))?,
         "got value false\n",
     );
     Ok(())
@@ -91,7 +108,7 @@ fn test_simple_with_null_input() -> Result<()> {
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!(null))?,
+        run_example_with_input_and_string_output("simple", serde_json::json!(null))?,
         "got value null\n"
     );
     Ok(())
@@ -103,15 +120,18 @@ fn test_simple_with_number_input() -> Result<()> {
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!(0.0))?,
+        run_example_with_input_and_string_output("simple", serde_json::json!(0.0))?,
         "got value 0\n"
     );
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!(1.0))?,
+        run_example_with_input_and_string_output("simple", serde_json::json!(1.0))?,
         "got value 1\n"
     );
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!(std::f64::consts::PI))?,
+        run_example_with_input_and_string_output(
+            "simple",
+            serde_json::json!(std::f64::consts::PI)
+        )?,
         "got value 3.141592653589793\n"
     );
     Ok(())
@@ -123,7 +143,7 @@ fn test_simple_with_string_input() -> Result<()> {
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!("Hello, world!"))?,
+        run_example_with_input_and_string_output("simple", serde_json::json!("Hello, world!"))?,
         "got value Hello, world!\n"
     );
     Ok(())
@@ -135,14 +155,14 @@ fn test_simple_with_obj_input() -> Result<()> {
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
     assert_eq!(
-        run_example_with_input(
+        run_example_with_input_and_string_output(
             "simple",
             serde_json::json!({ "other_key": "other_value", "key": "Hello, world!" })
         )?,
         "got value obj; key: Hello, world!, other_key: other_value\n"
     );
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!({}))?,
+        run_example_with_input_and_string_output("simple", serde_json::json!({}))?,
         "got value obj; key: null, other_key: null\n"
     );
     Ok(())
@@ -155,17 +175,17 @@ fn test_simple_with_array_input() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
 
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!([]))?,
+        run_example_with_input_and_string_output("simple", serde_json::json!([]))?,
         "got value array; []\n"
     );
 
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!([42]))?,
+        run_example_with_input_and_string_output("simple", serde_json::json!([42]))?,
         "got value array; [42]\n"
     );
 
     let mixed_array_result =
-        run_example_with_input("simple", serde_json::json!([1, "string", true]))?;
+        run_example_with_input_and_string_output("simple", serde_json::json!([1, "string", true]))?;
 
     assert_eq!(mixed_array_result, "got value array; [1, string, true]\n");
 
@@ -179,8 +199,26 @@ fn test_simple_with_large_string_input() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
     let large_string = "a".repeat(u16::MAX as usize);
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!(large_string))?,
+        run_example_with_input_and_string_output("simple", serde_json::json!(large_string))?,
         format!("got value {}\n", large_string)
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_echo_with_bool_input() -> Result<()> {
+    ECHO_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    assert_eq!(
+        run_example_with_input_and_msgpack_output("echo", serde_json::json!(true))?,
+        serde_json::json!(true)
+    );
+    assert_eq!(
+        run_example_with_input_and_msgpack_output("echo", serde_json::json!(false))?,
+        serde_json::json!(false)
+    );
+
     Ok(())
 }

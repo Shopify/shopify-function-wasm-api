@@ -1,4 +1,3 @@
-use anyhow::Context;
 use std::cell::OnceCell;
 use std::path::Path;
 use walrus::{ir::BinaryOp, FunctionBuilder, FunctionId, ImportKind, MemoryId, Module, ValType};
@@ -140,11 +139,9 @@ impl TrampolineCodegen {
     }
 
     fn rename_imported_func(&mut self, func_name: &str, new_name: &str) -> walrus::Result<()> {
-        let import_id = self
-            .module
-            .imports
-            .find(PROVIDER_MODULE_NAME, func_name)
-            .context("no imported function found")?;
+        let Some(import_id) = self.module.imports.find(PROVIDER_MODULE_NAME, func_name) else {
+            return Ok(());
+        };
 
         let import = self.module.imports.get_mut(import_id);
 
@@ -158,10 +155,13 @@ impl TrampolineCodegen {
     }
 
     fn emit_shopify_function_input_read_utf8_str(&mut self) -> walrus::Result<()> {
-        let imported_shopify_function_input_read_utf8_str = self
+        let Ok(imported_shopify_function_input_read_utf8_str) = self
             .module
             .imports
-            .get_func(PROVIDER_MODULE_NAME, "shopify_function_input_read_utf8_str")?;
+            .get_func(PROVIDER_MODULE_NAME, "shopify_function_input_read_utf8_str")
+        else {
+            return Ok(());
+        };
 
         let shopify_function_input_get_utf8_str_offset =
             self.module.types.add(&[ValType::I32], &[ValType::I32]);
@@ -252,6 +252,19 @@ impl TrampolineCodegen {
             "shopify_function_input_get_at_index",
             "_shopify_function_input_get_at_index",
         )?;
+        self.rename_imported_func(
+            "shopify_function_output_new",
+            "_shopify_function_output_new",
+        )?;
+        self.rename_imported_func(
+            "shopify_function_output_new_bool",
+            "_shopify_function_output_new_bool",
+        )?;
+        self.rename_imported_func(
+            "shopify_function_output_finalize",
+            "_shopify_function_output_finalize",
+        )?;
+
         Ok(self.module)
     }
 }

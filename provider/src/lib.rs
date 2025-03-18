@@ -1,4 +1,5 @@
 mod alloc;
 mod read;
+mod write;
 
 pub const PROVIDER_MODULE_NAME: &str = concat!("shopify_function_v", env!("CARGO_PKG_VERSION"));
