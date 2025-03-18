@@ -135,17 +135,15 @@ fn test_simple_with_obj_input() -> Result<()> {
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
     assert_eq!(
-        run_example_with_input("simple", serde_json::json!({ "key": "Hello, world!" }))?,
-        "got value obj; key: Hello, world!\n"
+        run_example_with_input(
+            "simple",
+            serde_json::json!({ "other_key": "other_value", "key": "Hello, world!" })
+        )?,
+        "got value obj; key: Hello, world!, other_key: other_value\n"
     );
     assert_eq!(
         run_example_with_input("simple", serde_json::json!({}))?,
-        "got value obj; key: null\n"
-    );
-    // the example is written to return "unknown value" for any non-string or null value
-    assert_eq!(
-        run_example_with_input("simple", serde_json::json!({ "key": 1.0 }))?,
-        "got value obj; key: unknown value\n"
+        "got value obj; key: null, other_key: null\n"
     );
     Ok(())
 }
