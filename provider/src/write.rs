@@ -31,6 +31,15 @@ extern "C" fn shopify_function_output_new_bool(context: WriteContextPtr, bool: u
 }
 
 #[no_mangle]
+#[export_name = "_shopify_function_output_new_null"]
+extern "C" fn shopify_function_output_new_null(context: WriteContextPtr) -> WriteResult {
+    let mut context = write_context_from_raw(context);
+    let bytes = unsafe { &mut context.as_mut().bytes };
+    encode::write_nil(bytes).unwrap(); // infallible unwrap
+    WriteResult::Ok
+}
+
+#[no_mangle]
 #[export_name = "_shopify_function_output_finalize"]
 extern "C" fn shopify_function_output_finalize(context: WriteContextPtr) -> WriteResult {
     let mut context = write_context_from_raw(context);

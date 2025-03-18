@@ -15,6 +15,7 @@ extern "C" {
     // Write API.
     fn shopify_function_output_new() -> usize;
     fn shopify_function_output_new_bool(context: usize, bool: u32) -> u32;
+    fn shopify_function_output_new_null(context: usize) -> u32;
     fn shopify_function_output_finalize(context: usize) -> u32;
 }
 

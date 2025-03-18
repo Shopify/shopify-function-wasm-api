@@ -26,6 +26,10 @@ impl ValueSerializer {
         map_result(unsafe { crate::shopify_function_output_new_bool(self.0 as _, value as u32) })
     }
 
+    pub fn write_null(&mut self) -> Result<(), Error> {
+        map_result(unsafe { crate::shopify_function_output_new_null(self.0 as _) })
+    }
+
     pub fn finalize(&mut self) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_finalize(self.0 as _) })
     }
