@@ -214,6 +214,10 @@ pub enum ErrorCode {
     DecodeError = 0,
     /// The value is not an object, but an operation expected an object.
     NotAnObject = 1,
+    /// Pointer is out of bounds.
+    PointerOutOfBounds = 2,
+    /// An error occurred while attempting to read a value.
+    ReadError = 3,
 }
 
 #[cfg(test)]

@@ -36,24 +36,26 @@ extern "C" fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, le
     match v.try_decode() {
         Ok(NanBoxValueRef::Object { ptr: obj_ptr }) => {
             let query = unsafe { query_from_raw_parts(ptr, len) };
-            let offset = obj_ptr - bytes().as_ptr() as usize;
+            let Some(offset) = obj_ptr.checked_sub(bytes().as_ptr() as usize) else {
+                return NanBox::error(ErrorCode::PointerOutOfBounds).to_bits();
+            };
             let len = bytes().len() - offset;
             let bytes = unsafe { std::slice::from_raw_parts(obj_ptr as *const u8, len) };
             let mut reader = Bytes::new(bytes);
             let Ok(map_len) = decode::read_map_len(&mut reader) else {
-                return NanBox::error(ErrorCode::DecodeError).to_bits();
+                return NanBox::error(ErrorCode::ReadError).to_bits();
             };
             for _ in 0..map_len {
                 let Ok((key, remainder)) = decode::read_str_from_slice(reader.remaining_slice())
                 else {
-                    return NanBox::error(ErrorCode::DecodeError).to_bits();
+                    return NanBox::error(ErrorCode::ReadError).to_bits();
                 };
                 reader = Bytes::new(remainder);
                 if key == query {
                     return encode_value(reader.remaining_slice()).to_bits();
                 }
                 let Ok(()) = msgpack_utils::skip_value(&mut reader) else {
-                    return NanBox::error(ErrorCode::DecodeError).to_bits();
+                    return NanBox::error(ErrorCode::ReadError).to_bits();
                 };
             }
             NanBox::null().to_bits()
