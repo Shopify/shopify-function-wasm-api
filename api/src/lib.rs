@@ -4,6 +4,7 @@ use shopify_function_wasm_api_core::{NanBox, ValueRef};
 extern "C" {
     // Read API.
     fn shopify_function_input_get() -> u64;
+    fn shopify_function_input_get_length(ptr: usize) -> u64; // does this need to be in the trampoline as well?
     fn shopify_function_input_read_utf8_str(src: usize, out: *mut u8, len: usize);
     fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, len: usize) -> u64;
     fn shopify_function_input_get_at_index(scope: u64, index: u32) -> u64;
@@ -44,15 +45,15 @@ impl Value {
     pub fn as_string(&self) -> Option<String> {
         match self {
             Value::NanBox(v) => match v.try_decode() {
+                Ok(ValueRef::Length { ptr, offset }) => {
+                    let len = input_get_length(ptr)? as usize;
+                    read_string(ptr + offset, len)
+                },
                 Ok(ValueRef::String { ptr, len }) => {
-                    let mut buf = vec![0; len];
-                    unsafe {
-                        shopify_function_input_read_utf8_str(ptr as _, buf.as_mut_ptr(), len)
-                    };
-                    Some(unsafe { String::from_utf8_unchecked(buf) })
-                }
+                    read_string(ptr, len)
+                },
                 _ => None,
-            },
+            }
         }
     }
 
@@ -98,7 +99,20 @@ impl Value {
     }
 }
 
+fn read_string(ptr: usize, len: usize) -> Option<String> {
+    let mut buf = vec![0; len];
+    unsafe {
+        shopify_function_input_read_utf8_str(ptr as _, buf.as_mut_ptr(), len)
+    };
+    Some(unsafe { String::from_utf8_unchecked(buf) })
+}
+
 pub fn input_get() -> Value {
     let val = unsafe { shopify_function_input_get() };
     Value::NanBox(NanBox::from_bits(val))
+}
+
+pub fn input_get_length(ptr: usize) -> Option<u64> {
+    let val = unsafe { shopify_function_input_get_length(ptr) };
+    Some(val)
 }

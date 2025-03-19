@@ -230,6 +230,7 @@ impl TrampolineCodegen {
 
     fn apply(mut self) -> walrus::Result<Module> {
         self.rename_imported_func("shopify_function_input_get", "_shopify_function_input_get")?;
+        self.rename_imported_func("shopify_function_input_get_length", "_shopify_function_input_get_length")?;
         self.emit_shopify_function_input_read_utf8_str()?;
         self.emit_shopify_function_input_get_obj_prop()?;
         self.rename_imported_func(

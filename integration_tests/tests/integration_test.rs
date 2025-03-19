@@ -171,3 +171,16 @@ fn test_simple_with_array_input() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_simple_with_large_string_input() -> Result<()> {
+    SIMPLE_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    let large_string = "a".repeat(16384);
+    assert_eq!(
+        run_example_with_input("simple", serde_json::json!(large_string))?,
+        format!("got value {}\n", large_string)
+    );
+    Ok(())
+}

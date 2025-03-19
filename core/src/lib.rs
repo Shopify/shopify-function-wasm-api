@@ -62,7 +62,7 @@ impl NanBox {
     /// The maximum number that can be encoed in the number of bits reserved for
     /// [`Self::VALUE_LENGTH_SIZE`].
     /// This is (2^14) - 1.
-    const MAX_VALUE_LENGTH: u64 = (1 << Self::VALUE_LENGTH_SIZE) - 1;
+    pub const MAX_VALUE_LENGTH: u64 = (1 << Self::VALUE_LENGTH_SIZE) - 1;
     /// Mask to retrive the value from the payload.
     const VALUE_MASK: u64 = Self::PAYLOAD_MASK & !Self::TAG_MASK;
     /// Mask to retrive the pointer from the value, in the case that the value is
@@ -118,6 +118,12 @@ impl NanBox {
         Self::encode(ptr as _, len as _, Tag::Array)
     }
 
+    /// Create a new NaN-boxed length.
+    pub fn length(ptr: *const u8, offset: usize) -> Self {
+        let ptr = ptr as usize;
+        Self::encode(ptr as _,  offset as _, Tag::Length)
+    }
+
     pub fn try_decode(&self) -> Result<ValueRef, Box<dyn Error>> {
         if self.0 & Self::NAN_MASK != Self::NAN_MASK {
             return Ok(ValueRef::Number(f64::from_bits(self.0)));
@@ -139,6 +145,7 @@ impl NanBox {
             Tag::Array => Ok(ValueRef::Array { ptr, len }),
             Tag::String => Ok(ValueRef::String { ptr, len }),
             Tag::Object => Ok(ValueRef::Object { ptr }),
+            Tag::Length => Ok(ValueRef::Length { ptr, offset: len }),
             Tag::Error => ErrorCode::from_repr(val as usize)
                 .map(ValueRef::Error)
                 .ok_or_else(|| "Invalid error code.".into()),
@@ -162,7 +169,7 @@ impl NanBox {
             // length values for arrays and strings. In practice that should be
             // more than enough as well, but for completeness, we should allow
             // usize::MAX.
-            todo!("Lengths greater than 2^14 are not supported yet.")
+            todo!("Lengths greater than 2^14 should produce an error.")
         }
     }
 }
@@ -176,6 +183,9 @@ pub enum ValueRef {
     String { ptr: usize, len: usize },
     Object { ptr: usize },
     Array { ptr: usize, len: usize },
+    /// Stores a pointer to the length of an array or string and the offset
+    /// between that pointer and the pointer to the actual string or array value.
+    Length { ptr: usize, offset: usize },
     Error(ErrorCode),
 }
 
@@ -194,6 +204,8 @@ enum Tag {
     Object = 4,
     /// An array pointer.
     Array = 5,
+    /// A length pointer.
+    Length = 6,
     /// An error code.
     Error = NanBox::MAX_TAG_VALUE, // this should be the last tag
 }
@@ -319,6 +331,21 @@ mod tests {
                 let value_ref = boxed.try_decode().unwrap();
                 assert_eq!(value_ref, ValueRef::Number(val));
             });
+    }
+
+    #[test]
+    fn test_length_roundtrip() {
+        let string = "Hello, world!";
+        let ptr = string.as_ptr();
+        let boxed = NanBox::length(ptr, 3);
+        let value_ref = boxed.try_decode().unwrap();
+        assert_eq!(
+            value_ref, 
+            ValueRef::Length { 
+                ptr: ptr as usize & NanBox::POINTER_MASK as usize, 
+                offset: 3 
+            }
+        );
     }
 
     #[test]

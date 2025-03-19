@@ -154,11 +154,19 @@ fn encode_value(bytes: &[u8]) -> NanBox {
         }
         Ok(Marker::Str16) => {
             let len = u16::from_be_bytes([bytes[1], bytes[2]]) as usize;
-            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[3..(len + 3)]) })
+            if len >= NanBox::MAX_VALUE_LENGTH as usize {
+                NanBox::length(bytes.as_ptr(), 3)
+            } else {
+                NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[3..(len + 3)]) })
+            }
         }
         Ok(Marker::Str32) => {
             let len = u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as usize;
-            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[5..(len + 5)]) })
+            if len >= NanBox::MAX_VALUE_LENGTH as usize {
+                NanBox::length(bytes.as_ptr(), 5)
+            } else {
+                NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[5..(len + 5)]) })
+            }
         }
         Ok(Marker::FixMap(_) | Marker::Map16 | Marker::Map32) => {
             NanBox::obj(bytes.as_ptr() as usize)
@@ -176,6 +184,28 @@ fn encode_value(bytes: &[u8]) -> NanBox {
             eprintln!("Unsupported marker: {:?}", marker);
             todo!("marker not yet supported: {:?}", marker)
         }
+    }
+}
+
+#[no_mangle]
+#[export_name = "_shopify_function_input_get_length"]
+extern "C" fn shopify_function_input_get_length(ptr: *const u8) -> u64 {
+    get_length(ptr, bytes())
+}
+
+// Calculate the offset in number of bytes between the pointer and the start of the bytes array,
+// then use that when reading the length and encoding it as a NanBox.
+fn get_length(ptr: *const u8, bytes: &[u8]) -> u64 {
+    let offset = unsafe { ptr.offset_from(bytes.as_ptr()) } as usize;
+    let reader = Bytes::new(bytes);
+    match read_marker(&mut reader.clone()) {
+        Ok(Marker::Str16) => {
+            u16::from_be_bytes([bytes[offset + 1], bytes[offset + 2]]) as u64
+        }
+        Ok(Marker::Str32) => {
+            u32::from_be_bytes([bytes[offset + 1], bytes[offset + 2], bytes[offset + 3], bytes[offset + 4]]) as u64
+        }
+        marker => todo!("marker not yet supported: {:?}", marker),
     }
 }
 
@@ -273,9 +303,49 @@ mod tests {
 
     test_encode_str!(31, fixstr, 1);
     test_encode_str!(u8::MAX as usize, str8, 2);
-    // TODO: enable once we have support for longer strings
-    // test_encode_str!(u16::MAX as usize, str16, 3);
-    // test_encode_str!(u32::MAX as usize, str32, 5);
+
+
+    #[test]
+    fn test_encode_large_str16_value() {
+        let bytes = build_msgpack(|w| encode::write_str(w, "a".repeat(u16::MAX as usize).as_str()))
+            .unwrap();
+        let nanbox = encode_value(&bytes);
+        let decoded = nanbox.try_decode().unwrap();
+        let ptr = bytes.as_ptr() as usize & u32::MAX as usize;
+
+        assert_eq!(
+            decoded,
+            ValueRef::Length {
+                ptr,
+                offset: 3
+            }
+        );
+    }
+
+    #[test]
+    fn test_encode_large_str32_value() {
+        let bytes = build_msgpack(|w| encode::write_str(w, "a".repeat(u32::MAX as usize).as_str()))
+            .unwrap();
+        let nanbox = encode_value(&bytes);
+        let decoded = nanbox.try_decode().unwrap();
+        let ptr = bytes.as_ptr() as usize & u32::MAX as usize;
+
+        assert_eq!(
+            decoded,
+            ValueRef::Length {
+                ptr,
+                offset: 5
+            }
+        );
+    }
+
+    #[test]
+    fn test_get_length() {
+        let bytes = build_msgpack(|w| encode::write_str(w, "a".repeat(u16::MAX as usize).as_str()))
+            .unwrap();
+        let len = get_length(bytes.as_ptr(), &bytes);
+        assert_eq!(len,u16::MAX as u64);
+    }
 
     #[test]
     fn test_encode_array_value() {
