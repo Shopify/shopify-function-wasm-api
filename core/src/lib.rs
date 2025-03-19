@@ -118,10 +118,10 @@ impl NanBox {
         Self::encode(ptr as _, len as _, Tag::Array)
     }
 
-    /// Create a new NaN-boxed length.
-    pub fn length(ptr: *const u8, offset: usize) -> Self {
+    /// Create a new NaN-boxed string length.
+    pub fn string_length(ptr: *const u8, offset: usize) -> Self {
         let ptr = ptr as usize;
-        Self::encode(ptr as _,  offset as _, Tag::Length)
+        Self::encode(ptr as _, offset as _, Tag::StringLength)
     }
 
     pub fn try_decode(&self) -> Result<ValueRef, Box<dyn Error>> {
@@ -145,7 +145,7 @@ impl NanBox {
             Tag::Array => Ok(ValueRef::Array { ptr, len }),
             Tag::String => Ok(ValueRef::String { ptr, len }),
             Tag::Object => Ok(ValueRef::Object { ptr }),
-            Tag::Length => Ok(ValueRef::Length { ptr, offset: len }),
+            Tag::StringLength => Ok(ValueRef::StringLength { ptr, offset: len }),
             Tag::Error => ErrorCode::from_repr(val as usize)
                 .map(ValueRef::Error)
                 .ok_or_else(|| "Invalid error code.".into()),
@@ -164,12 +164,7 @@ impl NanBox {
             let val = (len << Self::VALUE_ENCODING_SIZE) | (ptr & Self::POINTER_MASK);
             Self(Self::NAN_MASK | (tag.as_u64() << Self::VALUE_SIZE) | val)
         } else {
-            // We can encode the pointer and length in a fat-pointer.
-            // For the prototype this should be fine, as we have 2^14 to encode
-            // length values for arrays and strings. In practice that should be
-            // more than enough as well, but for completeness, we should allow
-            // usize::MAX.
-            todo!("Lengths greater than 2^14 should produce an error.")
+            panic!("Length is too large to encode.");
         }
     }
 }
@@ -180,12 +175,23 @@ pub enum ValueRef {
     Null,
     Bool(bool),
     Number(f64),
-    String { ptr: usize, len: usize },
-    Object { ptr: usize },
-    Array { ptr: usize, len: usize },
+    String {
+        ptr: usize,
+        len: usize,
+    },
+    Object {
+        ptr: usize,
+    },
+    Array {
+        ptr: usize,
+        len: usize,
+    },
     /// Stores a pointer to the length of an array or string and the offset
     /// between that pointer and the pointer to the actual string or array value.
-    Length { ptr: usize, offset: usize },
+    StringLength {
+        ptr: usize,
+        offset: usize,
+    },
     Error(ErrorCode),
 }
 
@@ -205,7 +211,7 @@ enum Tag {
     /// An array pointer.
     Array = 5,
     /// A length pointer.
-    Length = 6,
+    StringLength = 6,
     /// An error code.
     Error = NanBox::MAX_TAG_VALUE, // this should be the last tag
 }
@@ -337,13 +343,13 @@ mod tests {
     fn test_length_roundtrip() {
         let string = "Hello, world!";
         let ptr = string.as_ptr();
-        let boxed = NanBox::length(ptr, 3);
+        let boxed = NanBox::string_length(ptr, 3);
         let value_ref = boxed.try_decode().unwrap();
         assert_eq!(
-            value_ref, 
-            ValueRef::Length { 
-                ptr: ptr as usize & NanBox::POINTER_MASK as usize, 
-                offset: 3 
+            value_ref,
+            ValueRef::StringLength {
+                ptr: ptr as usize & NanBox::POINTER_MASK as usize,
+                offset: 3
             }
         );
     }

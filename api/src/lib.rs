@@ -45,15 +45,13 @@ impl Value {
     pub fn as_string(&self) -> Option<String> {
         match self {
             Value::NanBox(v) => match v.try_decode() {
-                Ok(ValueRef::Length { ptr, offset }) => {
-                    let len = input_get_length(ptr)? as usize;
+                Ok(ValueRef::StringLength { ptr, offset }) => {
+                    let len = input_get_length(ptr) as usize;
                     read_string(ptr + offset, len)
-                },
-                Ok(ValueRef::String { ptr, len }) => {
-                    read_string(ptr, len)
-                },
+                }
+                Ok(ValueRef::String { ptr, len }) => read_string(ptr, len),
                 _ => None,
-            }
+            },
         }
     }
 
@@ -101,9 +99,7 @@ impl Value {
 
 fn read_string(ptr: usize, len: usize) -> Option<String> {
     let mut buf = vec![0; len];
-    unsafe {
-        shopify_function_input_read_utf8_str(ptr as _, buf.as_mut_ptr(), len)
-    };
+    unsafe { shopify_function_input_read_utf8_str(ptr as _, buf.as_mut_ptr(), len) };
     Some(unsafe { String::from_utf8_unchecked(buf) })
 }
 
@@ -112,7 +108,6 @@ pub fn input_get() -> Value {
     Value::NanBox(NanBox::from_bits(val))
 }
 
-pub fn input_get_length(ptr: usize) -> Option<u64> {
-    let val = unsafe { shopify_function_input_get_length(ptr) };
-    Some(val)
+pub fn input_get_length(ptr: usize) -> u64 {
+    unsafe { shopify_function_input_get_length(ptr) }
 }
