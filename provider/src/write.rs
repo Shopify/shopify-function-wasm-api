@@ -12,11 +12,6 @@ fn write_context_from_raw(context: WriteContextPtr) -> NonNull<WriteContext> {
     unsafe { NonNull::new_unchecked(context as _) }
 }
 
-unsafe fn query_from_raw_parts(ptr: *const u8, len: usize) -> &'static str {
-    let slice = std::slice::from_raw_parts(ptr, len);
-    std::str::from_utf8_unchecked(slice)
-}
-
 #[export_name = "_shopify_function_output_new"]
 extern "C" fn shopify_function_output_new() -> WriteContextPtr {
     Box::into_raw(Box::new(WriteContext::default())) as _
@@ -55,16 +50,13 @@ extern "C" fn shopify_function_output_new_f64(context: WriteContextPtr, float: f
 }
 
 #[export_name = "_shopify_function_output_new_utf8_str"]
-fn shopify_function_output_new_utf8_str(
-    context: WriteContextPtr,
-    ptr: *const u8,
-    len: usize,
-) -> i32 {
-    let string = unsafe { query_from_raw_parts(ptr, len) };
+fn shopify_function_output_new_utf8_str(context: WriteContextPtr, len: usize) -> usize {
     let mut context = write_context_from_raw(context);
     let bytes = unsafe { &mut context.as_mut().bytes };
-    encode::write_str(bytes, string).unwrap();
-    0
+    encode::write_str_len(bytes, len as u32).unwrap();
+    let original_len = bytes.as_slice().len();
+    bytes.as_mut_vec().resize(original_len + len, 0);
+    bytes.as_slice()[original_len..].as_ptr() as _
 }
 
 #[export_name = "_shopify_function_output_finalize"]

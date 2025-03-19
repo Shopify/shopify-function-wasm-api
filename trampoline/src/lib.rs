@@ -252,7 +252,7 @@ impl TrampolineCodegen {
         let shopify_function_output_new_utf8_str_type = self
             .module
             .types
-            .add(&[ValType::I32, ValType::I32, ValType::I32], &[ValType::I32]);
+            .add(&[ValType::I32, ValType::I32], &[ValType::I32]);
 
         let (provider_shopify_function_output_new_utf8_str, _) = self.module.add_import_func(
             PROVIDER_MODULE_NAME,
@@ -261,7 +261,6 @@ impl TrampolineCodegen {
         );
 
         let memcpy_to_provider = self.emit_memcpy_to_provider();
-        let alloc = self.emit_alloc();
 
         let dst_ptr = self.module.locals.add(ValType::I32);
 
@@ -274,16 +273,14 @@ impl TrampolineCodegen {
 
                 builder
                     .func_body()
+                    .local_get(context)
                     .local_get(len)
-                    .call(alloc)
+                    .call(provider_shopify_function_output_new_utf8_str)
                     .local_tee(dst_ptr)
                     .local_get(src_ptr)
                     .local_get(len)
                     .call(memcpy_to_provider)
-                    .local_get(context)
-                    .local_get(dst_ptr)
-                    .local_get(len)
-                    .call(provider_shopify_function_output_new_utf8_str);
+                    .i32_const(0);
             },
         )?;
 
