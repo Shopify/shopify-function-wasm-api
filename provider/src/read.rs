@@ -65,9 +65,69 @@ extern "C" fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, le
     }
 }
 
+#[no_mangle]
+#[export_name = "_shopify_function_input_get_at_index"]
+extern "C" fn shopify_function_input_get_at_index(scope: u64, index: u32) -> u64 {
+    let v = NanBox::from_bits(scope);
+    match v.try_decode() {
+        Ok(NanBoxValueRef::Array { ptr, len: _ }) => {
+            let Some(offset) = ptr.checked_sub(bytes().as_ptr() as usize) else {
+                return NanBox::error(ErrorCode::PointerOutOfBounds).to_bits();
+            };
+            let bytes_len = bytes().len() - offset;
+            let bytes = unsafe { std::slice::from_raw_parts(ptr as *const u8, bytes_len) };
+            let mut reader = Bytes::new(bytes);
+
+            // Read array marker
+            let array_len = match read_marker(&mut reader) {
+                Ok(Marker::FixArray(len)) => len as usize,
+                Ok(Marker::Array16) => {
+                    let remaining = reader.remaining_slice();
+                    let len = u16::from_be_bytes([remaining[0], remaining[1]]) as usize;
+                    // Create a new reader that skips the length bytes
+                    reader = Bytes::new(&remaining[2..]);
+                    len
+                }
+                Ok(Marker::Array32) => {
+                    let remaining = reader.remaining_slice();
+                    let len = u32::from_be_bytes([
+                        remaining[0],
+                        remaining[1],
+                        remaining[2],
+                        remaining[3],
+                    ]) as usize;
+                    // Create a new reader that skips the length bytes
+                    reader = Bytes::new(&remaining[4..]);
+                    len
+                }
+                Ok(_) => return NanBox::error(ErrorCode::NotAnArray).to_bits(),
+                Err(_) => return NanBox::error(ErrorCode::ReadError).to_bits(),
+            };
+
+            if (index as usize) >= array_len {
+                return NanBox::error(ErrorCode::IndexOutOfBounds).to_bits();
+            }
+
+            // Skip elements until we reach the desired index
+            for _i in 0..index {
+                // Skip the current value
+                if msgpack_utils::skip_value(&mut reader).is_err() {
+                    return NanBox::error(ErrorCode::ReadError).to_bits();
+                }
+            }
+
+            // Return the element at the desired index
+            encode_value(reader.remaining_slice()).to_bits()
+        }
+        Ok(_) => NanBox::error(ErrorCode::NotAnArray).to_bits(),
+        Err(_) => NanBox::error(ErrorCode::ReadError).to_bits(),
+    }
+}
+
 fn encode_value(bytes: &[u8]) -> NanBox {
     let mut reader = Bytes::new(bytes);
     // clone the reader because other decode functions need to read the marker again
+
     match read_marker(&mut reader.clone()) {
         Ok(Marker::False) => NanBox::bool(false),
         Ok(Marker::True) => NanBox::bool(true),
@@ -103,7 +163,19 @@ fn encode_value(bytes: &[u8]) -> NanBox {
         Ok(Marker::FixMap(_) | Marker::Map16 | Marker::Map32) => {
             NanBox::obj(bytes.as_ptr() as usize)
         }
-        marker => todo!("marker not yet supported: {:?}", marker),
+        Ok(Marker::FixArray(len)) => NanBox::array(bytes.as_ptr() as usize, len as usize),
+        Ok(Marker::Array16) => {
+            let len = u16::from_be_bytes([bytes[1], bytes[2]]) as usize;
+            NanBox::array(bytes.as_ptr() as usize, len)
+        }
+        Ok(Marker::Array32) => {
+            let len = u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as usize;
+            NanBox::array(bytes.as_ptr() as usize, len)
+        }
+        marker => {
+            eprintln!("Unsupported marker: {:?}", marker);
+            todo!("marker not yet supported: {:?}", marker)
+        }
     }
 }
 
@@ -204,4 +276,25 @@ mod tests {
     // TODO: enable once we have support for longer strings
     // test_encode_str!(u16::MAX as usize, str16, 3);
     // test_encode_str!(u32::MAX as usize, str32, 5);
+
+    #[test]
+    fn test_encode_array_value() {
+        let bytes = build_msgpack(|w| {
+            encode::write_array_len(w, 3)?;
+            encode::write_i32(w, 1)?;
+            encode::write_i32(w, 2)?;
+            encode::write_i32(w, 3)
+        })
+        .unwrap();
+
+        let nanbox = encode_value(&bytes);
+        let decoded = nanbox.try_decode().unwrap();
+
+        match decoded {
+            ValueRef::Array { len, .. } => {
+                assert_eq!(len, 3);
+            }
+            _ => panic!("Expected array, got {:?}", decoded),
+        }
+    }
 }

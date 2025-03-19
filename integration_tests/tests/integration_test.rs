@@ -147,3 +147,27 @@ fn test_simple_with_obj_input() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_simple_with_array_input() -> Result<()> {
+    SIMPLE_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+
+    assert_eq!(
+        run_example_with_input("simple", serde_json::json!([]))?,
+        "got value array; []\n"
+    );
+
+    assert_eq!(
+        run_example_with_input("simple", serde_json::json!([42]))?,
+        "got value array; [42]\n"
+    );
+
+    let mixed_array_result =
+        run_example_with_input("simple", serde_json::json!([1, "string", true]))?;
+
+    assert_eq!(mixed_array_result, "got value array; [1, string, true]\n");
+
+    Ok(())
+}

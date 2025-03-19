@@ -28,6 +28,12 @@ fn serialize_value(value: Value) -> String {
             serialize_value(value_for_key),
             serialize_value(value_for_other_key)
         )
+    } else if let Some(array_len) = value.array_len() {
+        let elements = (0..array_len)
+            .map(|i| serialize_value(value.get_at_index(i as u32)))
+            .collect::<Vec<String>>();
+
+        format!("array; [{}]", elements.join(", "))
     } else {
         "unknown value".to_string()
     }

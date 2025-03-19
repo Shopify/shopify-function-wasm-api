@@ -113,6 +113,11 @@ impl NanBox {
         Self::encode(code as _, 0, Tag::Error)
     }
 
+    /// Create a new NaN-boxed array.
+    pub fn array(ptr: usize, len: usize) -> Self {
+        Self::encode(ptr as _, len as _, Tag::Array)
+    }
+
     pub fn try_decode(&self) -> Result<ValueRef, Box<dyn Error>> {
         if self.0 & Self::NAN_MASK != Self::NAN_MASK {
             return Ok(ValueRef::Number(f64::from_bits(self.0)));
@@ -218,6 +223,10 @@ pub enum ErrorCode {
     PointerOutOfBounds = 2,
     /// An error occurred while attempting to read a value.
     ReadError = 3,
+    /// The value is not an array, but an operation expected an array.
+    NotAnArray = 4,
+    /// The index is out of bounds for the array.
+    IndexOutOfBounds = 5,
 }
 
 #[cfg(test)]
