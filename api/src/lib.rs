@@ -20,6 +20,7 @@ extern "C" {
     fn shopify_function_output_new_bool(context: usize, bool: u32) -> WriteResult;
     fn shopify_function_output_new_null(context: usize) -> WriteResult;
     fn shopify_function_output_finalize(context: usize) -> WriteResult;
+    fn shopify_function_output_new_int(context: usize, int: i32) -> WriteResult;
 }
 
 pub enum Value {

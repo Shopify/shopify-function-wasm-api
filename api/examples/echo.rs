@@ -12,8 +12,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut out = ValueSerializer::new();
         out.write_null()?;
         out.finalize()?;
+    } else if let Some(n) = input.as_number() {
+        if n.trunc() == n {
+            let mut out = ValueSerializer::new();
+            out.write_int(n as i32)?;
+            out.finalize()?;
+        } else {
+            panic!("unexpected value")
+        }
     } else {
-        panic!("expected bool or null");
+        panic!("unexpected value");
     }
 
     Ok(())
