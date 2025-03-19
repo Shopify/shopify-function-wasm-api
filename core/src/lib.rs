@@ -190,7 +190,7 @@ enum Tag {
     /// An array pointer.
     Array = 5,
     /// An error code.
-    Error = 6,
+    Error = NanBox::MAX_TAG_VALUE, // this should be the last tag
 }
 
 impl Tag {
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn test_tag_less_than_max_tag_value() {
         Tag::iter().for_each(|tag| {
-            assert!((tag as u8) < NanBox::MAX_TAG_VALUE);
+            assert!((tag as u8) <= NanBox::MAX_TAG_VALUE);
         });
     }
 
