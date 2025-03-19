@@ -5,6 +5,7 @@ extern "C" {
     // Read API.
     fn shopify_function_input_get() -> u64;
     fn shopify_function_input_read_utf8_str(src: usize, out: *mut u8, len: usize);
+    fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, len: usize) -> u64;
 }
 
 pub enum Value {
@@ -51,6 +52,23 @@ impl Value {
                 }
                 _ => None,
             },
+        }
+    }
+
+    pub fn is_obj(&self) -> bool {
+        match self {
+            Value::NanBox(v) => matches!(v.try_decode(), Ok(ValueRef::Object { .. })),
+        }
+    }
+
+    pub fn get_obj_prop(&self, prop: &str) -> Value {
+        match self {
+            Value::NanBox(v) => {
+                let scope = unsafe {
+                    shopify_function_input_get_obj_prop(v.to_bits(), prop.as_ptr(), prop.len())
+                };
+                Value::NanBox(NanBox::from_bits(scope))
+            }
         }
     }
 }

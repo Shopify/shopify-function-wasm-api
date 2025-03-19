@@ -1,22 +1,34 @@
-use shopify_function_wasm_api::input_get;
+use shopify_function_wasm_api::{input_get, Value};
 use std::{error::Error, io::Write};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let input = input_get();
     let mut out = std::io::stdout();
-    let serialized = if let Some(boolean) = input.as_bool() {
-        format!("got value {}\n", boolean)
-    } else if input.as_null().is_some() {
-        "got value null\n".to_string()
-    } else if let Some(number) = input.as_number() {
-        format!("got value {}\n", number)
-    } else if let Some(string) = input.as_string() {
-        format!("got value {}\n", string)
-    } else {
-        "got unknown value\n".to_string()
-    };
+    let serialized = format!("got value {}\n", serialize_value(input));
     out.write_all(serialized.as_bytes())?;
     out.flush()?;
 
     Ok(())
+}
+
+fn serialize_value(value: Value) -> String {
+    if let Some(boolean) = value.as_bool() {
+        format!("{}", boolean)
+    } else if value.as_null().is_some() {
+        "null".to_string()
+    } else if let Some(number) = value.as_number() {
+        format!("{}", number)
+    } else if let Some(string) = value.as_string() {
+        string
+    } else if value.is_obj() {
+        let value_for_key = value.get_obj_prop("key");
+        let value_for_other_key = value.get_obj_prop("other_key");
+        format!(
+            "obj; key: {}, other_key: {}",
+            serialize_value(value_for_key),
+            serialize_value(value_for_other_key)
+        )
+    } else {
+        "unknown value".to_string()
+    }
 }

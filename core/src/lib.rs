@@ -103,6 +103,16 @@ impl NanBox {
         Self::encode(ptr as _, val.len() as _, Tag::String)
     }
 
+    /// Create a new NaN-boxed object.
+    pub fn obj(ptr: usize) -> Self {
+        Self::encode(ptr as _, 0, Tag::Object)
+    }
+
+    /// Create a new NaN-boxed error.
+    pub fn error(code: ErrorCode) -> Self {
+        Self::encode(code as _, 0, Tag::Error)
+    }
+
     pub fn try_decode(&self) -> Result<ValueRef, Box<dyn Error>> {
         if self.0 & Self::NAN_MASK != Self::NAN_MASK {
             return Ok(ValueRef::Number(f64::from_bits(self.0)));
@@ -124,6 +134,9 @@ impl NanBox {
             Tag::Array => Ok(ValueRef::Array { ptr, len }),
             Tag::String => Ok(ValueRef::String { ptr, len }),
             Tag::Object => Ok(ValueRef::Object { ptr }),
+            Tag::Error => ErrorCode::from_repr(val as usize)
+                .map(ValueRef::Error)
+                .ok_or_else(|| "Invalid error code.".into()),
         }
     }
 
@@ -158,6 +171,7 @@ pub enum ValueRef {
     String { ptr: usize, len: usize },
     Object { ptr: usize },
     Array { ptr: usize, len: usize },
+    Error(ErrorCode),
 }
 
 #[derive(Debug, Clone, Copy, strum::EnumIter, strum::FromRepr)]
@@ -175,6 +189,8 @@ enum Tag {
     Object = 4,
     /// An array pointer.
     Array = 5,
+    /// An error code.
+    Error = NanBox::MAX_TAG_VALUE, // this should be the last tag
 }
 
 impl Tag {
@@ -190,6 +206,20 @@ impl Tag {
     }
 }
 
+/// An error code.
+#[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::FromRepr)]
+#[repr(usize)]
+pub enum ErrorCode {
+    /// The NanBox could not be decoded.
+    DecodeError = 0,
+    /// The value is not an object, but an operation expected an object.
+    NotAnObject = 1,
+    /// Pointer is out of bounds.
+    PointerOutOfBounds = 2,
+    /// An error occurred while attempting to read a value.
+    ReadError = 3,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,7 +228,7 @@ mod tests {
     #[test]
     fn test_tag_less_than_max_tag_value() {
         Tag::iter().for_each(|tag| {
-            assert!((tag as u8) < NanBox::MAX_TAG_VALUE);
+            assert!((tag as u8) <= NanBox::MAX_TAG_VALUE);
         });
     }
 
@@ -298,5 +328,22 @@ mod tests {
                 len: string.len()
             }
         );
+    }
+
+    #[test]
+    fn test_object_roundtrip() {
+        let ptr = 0x12345678;
+        let boxed = NanBox::obj(ptr);
+        let value_ref = boxed.try_decode().unwrap();
+        assert_eq!(value_ref, ValueRef::Object { ptr });
+    }
+
+    #[test]
+    fn test_error_roundtrip() {
+        ErrorCode::iter().for_each(|code| {
+            let error = NanBox::error(code);
+            let value_ref = error.try_decode().unwrap();
+            assert_eq!(value_ref, ValueRef::Error(code));
+        });
     }
 }
