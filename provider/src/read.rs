@@ -174,7 +174,7 @@ fn encode_value(bytes: &[u8]) -> NanBox {
 }
 
 #[no_mangle]
-#[export_name = "_shopify_function_input_get_length"]
+#[export_name = "_shopify_function_input_get_uft8_str_len"]
 extern "C" fn shopify_function_input_get_length(ptr: *const u8) -> u64 {
     get_string_length(ptr, bytes())
 }
