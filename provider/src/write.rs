@@ -64,6 +64,14 @@ extern "C" fn shopify_function_output_new_utf8_str(context: WriteContextPtr, len
     ((result as u64) << 32) | ptr as u64
 }
 
+#[export_name = "_shopify_function_output_new_object"]
+fn shopify_function_output_new_object(context: WriteContextPtr, len: usize) -> WriteResult {
+    let mut context = write_context_from_raw(context);
+    let bytes = unsafe { &mut context.as_mut().bytes };
+    encode::write_map_len(bytes, len as u32).unwrap(); // infallible unwrap
+    WriteResult::Ok
+}
+
 #[export_name = "_shopify_function_output_finalize"]
 extern "C" fn shopify_function_output_finalize(context: WriteContextPtr) -> WriteResult {
     let mut context = write_context_from_raw(context);

@@ -1,34 +1,48 @@
-use shopify_function_wasm_api::{input_get, ValueSerializer};
+use shopify_function_wasm_api::{
+    input_get,
+    write::{Error as WriteError, ValueSerializer},
+    Value,
+};
 use std::error::Error;
+
+const KNOWN_KEYS: [&str; 2] = ["foo", "bar"];
 
 fn main() -> Result<(), Box<dyn Error>> {
     let input = input_get();
 
-    if let Some(b) = input.as_bool() {
-        let mut out = ValueSerializer::new();
-        out.write_bool(b)?;
-        out.finalize()?;
-    } else if let Some(()) = input.as_null() {
-        let mut out = ValueSerializer::new();
-        out.write_null()?;
-        out.finalize()?;
-    } else if let Some(n) = input.as_number() {
+    let mut out = ValueSerializer::new();
+    serialize_value(input, &mut out)?;
+    out.finalize()?;
+
+    Ok(())
+}
+
+fn serialize_value(value: Value, out: &mut ValueSerializer) -> Result<(), WriteError> {
+    if let Some(b) = value.as_bool() {
+        out.write_bool(b)
+    } else if let Some(()) = value.as_null() {
+        out.write_null()
+    } else if let Some(n) = value.as_number() {
         if n.trunc() == n && n >= i32::MIN as f64 && n <= i32::MAX as f64 {
-            let mut out = ValueSerializer::new();
-            out.write_i32(n as i32)?;
-            out.finalize()?;
+            out.write_i32(n as i32)
         } else {
-            let mut out = ValueSerializer::new();
-            out.write_f64(n)?;
-            out.finalize()?;
+            out.write_f64(n)
         }
-    } else if let Some(s) = input.as_string() {
-        let mut out = ValueSerializer::new();
-        out.write_utf8_str(&s)?;
-        out.finalize()?;
+    } else if let Some(s) = value.as_string() {
+        out.write_utf8_str(&s)
+    } else if value.is_obj() {
+        out.write_object(
+            |out| {
+                for key in KNOWN_KEYS {
+                    let value = value.get_obj_prop(key);
+                    out.write_utf8_str(key)?;
+                    serialize_value(value, out)?;
+                }
+                Ok(())
+            },
+            2,
+        )
     } else {
         panic!("unexpected value");
     }
-
-    Ok(())
 }

@@ -3,8 +3,7 @@ use shopify_function_wasm_api_core::{
     write::{WriteContext, WriteResult},
 };
 
-mod write;
-pub use write::ValueSerializer;
+pub mod write;
 
 #[link(wasm_import_module = "shopify_function_v0.1.0")]
 extern "C" {
@@ -27,6 +26,7 @@ extern "C" {
         ptr: *const u8,
         len: usize,
     ) -> WriteResult;
+    fn shopify_function_output_new_object(context: usize, len: usize) -> WriteResult;
 }
 
 pub enum Value {

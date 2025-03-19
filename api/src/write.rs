@@ -43,6 +43,16 @@ impl ValueSerializer {
         })
     }
 
+    pub fn write_object<F: FnOnce(&mut Self) -> Result<(), Error>>(
+        &mut self,
+        f: F,
+        len: usize,
+    ) -> Result<(), Error> {
+        map_result(unsafe { crate::shopify_function_output_new_object(self.0 as _, len) })?;
+        f(self)?;
+        Ok(())
+    }
+
     pub fn finalize(&mut self) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_finalize(self.0 as _) })
     }
