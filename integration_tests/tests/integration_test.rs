@@ -264,3 +264,19 @@ fn test_echo_with_int_input() -> Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn test_echo_with_float_input() -> Result<()> {
+    ECHO_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    [0.1, 1.1, -1.1, f64::MAX, f64::MIN]
+        .iter()
+        .try_for_each(|&f| {
+            assert_eq!(
+                run_example_with_input_and_msgpack_output("echo", serde_json::json!(f))?,
+                serde_json::json!(f)
+            );
+            Ok(())
+        })
+}

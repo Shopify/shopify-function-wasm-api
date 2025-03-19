@@ -13,12 +13,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         out.write_null()?;
         out.finalize()?;
     } else if let Some(n) = input.as_number() {
-        if n.trunc() == n {
+        if n.trunc() == n && n >= i32::MIN as f64 && n <= i32::MAX as f64 {
             let mut out = ValueSerializer::new();
             out.write_i32(n as i32)?;
             out.finalize()?;
         } else {
-            panic!("unexpected value")
+            let mut out = ValueSerializer::new();
+            out.write_float(n)?;
+            out.finalize()?;
         }
     } else {
         panic!("unexpected value");

@@ -272,6 +272,10 @@ impl TrampolineCodegen {
             "shopify_function_output_new_i32",
             "_shopify_function_output_new_i32",
         )?;
+        self.rename_imported_func(
+            "shopify_function_output_new_float",
+            "_shopify_function_output_new_float",
+        )?;
 
         Ok(self.module)
     }
