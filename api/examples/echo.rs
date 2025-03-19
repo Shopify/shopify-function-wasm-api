@@ -22,6 +22,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             out.write_f64(n)?;
             out.finalize()?;
         }
+    } else if let Some(s) = input.as_string() {
+        let mut out = ValueSerializer::new();
+        out.write_utf8_str(&s)?;
+        out.finalize()?;
     } else {
         panic!("unexpected value");
     }

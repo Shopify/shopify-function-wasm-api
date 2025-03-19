@@ -240,6 +240,56 @@ impl TrampolineCodegen {
         Ok(())
     }
 
+    fn emit_shopify_function_output_new_utf8_str(&mut self) -> walrus::Result<()> {
+        let Ok(imported_shopify_function_output_new_utf8_str) = self
+            .module
+            .imports
+            .get_func(PROVIDER_MODULE_NAME, "shopify_function_output_new_utf8_str")
+        else {
+            return Ok(());
+        };
+
+        let shopify_function_output_new_utf8_str_type = self
+            .module
+            .types
+            .add(&[ValType::I32, ValType::I32, ValType::I32], &[ValType::I32]);
+
+        let (provider_shopify_function_output_new_utf8_str, _) = self.module.add_import_func(
+            PROVIDER_MODULE_NAME,
+            "_shopify_function_output_new_utf8_str",
+            shopify_function_output_new_utf8_str_type,
+        );
+
+        let memcpy_to_provider = self.emit_memcpy_to_provider();
+        let alloc = self.emit_alloc();
+
+        let dst_ptr = self.module.locals.add(ValType::I32);
+
+        self.module.replace_imported_func(
+            imported_shopify_function_output_new_utf8_str,
+            |(builder, arg_locals)| {
+                let context = arg_locals[0];
+                let src_ptr = arg_locals[1];
+                let len = arg_locals[2];
+
+                builder
+                    .func_body()
+                    .local_get(len)
+                    .call(alloc)
+                    .local_tee(dst_ptr)
+                    .local_get(src_ptr)
+                    .local_get(len)
+                    .call(memcpy_to_provider)
+                    .local_get(context)
+                    .local_get(dst_ptr)
+                    .local_get(len)
+                    .call(provider_shopify_function_output_new_utf8_str);
+            },
+        )?;
+
+        Ok(())
+    }
+
     fn apply(mut self) -> walrus::Result<Module> {
         self.rename_imported_func("shopify_function_input_get", "_shopify_function_input_get")?;
         self.rename_imported_func(
@@ -276,6 +326,7 @@ impl TrampolineCodegen {
             "shopify_function_output_new_f64",
             "_shopify_function_output_new_f64",
         )?;
+        self.emit_shopify_function_output_new_utf8_str()?;
 
         Ok(self.module)
     }
