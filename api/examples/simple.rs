@@ -30,7 +30,7 @@ fn serialize_value(value: Value) -> String {
         )
     } else if let Some(array_len) = value.array_len() {
         let elements = (0..array_len)
-            .map(|i| serialize_value(value.get_at_index(i as u32)))
+            .map(|i| serialize_value(value.get_at_index(i)))
             .collect::<Vec<String>>();
 
         format!("array; [{}]", elements.join(", "))

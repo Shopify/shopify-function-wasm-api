@@ -12,7 +12,7 @@ extern "C" {
     fn shopify_function_input_get_val_len(scope: Val) -> usize;
     fn shopify_function_input_read_utf8_str(src: usize, out: *mut u8, len: usize);
     fn shopify_function_input_get_obj_prop(scope: Val, ptr: *const u8, len: usize) -> Val;
-    fn shopify_function_input_get_at_index(scope: Val, index: u32) -> Val;
+    fn shopify_function_input_get_at_index(scope: Val, index: usize) -> Val;
 
     // Write API.
     fn shopify_function_output_new() -> WriteContext;
@@ -28,6 +28,7 @@ extern "C" {
     ) -> WriteResult;
     fn shopify_function_output_new_object(context: WriteContext, len: usize) -> WriteResult;
     fn shopify_function_output_finish_object(context: WriteContext) -> WriteResult;
+    fn shopify_function_output_new_array(context: WriteContext, len: usize) -> WriteResult;
 }
 
 pub enum Value {
@@ -121,7 +122,7 @@ impl Value {
         }
     }
 
-    pub fn get_at_index(&self, index: u32) -> Value {
+    pub fn get_at_index(&self, index: usize) -> Value {
         match self {
             Value::NanBox(v) => {
                 let scope = unsafe { shopify_function_input_get_at_index(v.to_bits(), index) };

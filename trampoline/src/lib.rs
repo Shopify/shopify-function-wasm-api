@@ -342,6 +342,10 @@ impl TrampolineCodegen {
             "shopify_function_output_finish_object",
             "_shopify_function_output_finish_object",
         )?;
+        self.rename_imported_func(
+            "shopify_function_output_new_array",
+            "_shopify_function_output_new_array",
+        )?;
 
         Ok(self.module)
     }

@@ -137,6 +137,14 @@ extern "C" fn shopify_function_output_finish_object(context: WriteContextPtr) ->
     unsafe { context.as_mut().finish_object() }
 }
 
+#[export_name = "_shopify_function_output_new_array"]
+fn shopify_function_output_new_array(context: WriteContextPtr, len: usize) -> WriteResult {
+    let mut context = write_context_from_raw(context);
+    let bytes = unsafe { &mut context.as_mut().bytes };
+    encode::write_array_len(bytes, len as u32).unwrap(); // infallible unwrap
+    WriteResult::Ok
+}
+
 #[export_name = "_shopify_function_output_finalize"]
 extern "C" fn shopify_function_output_finalize(context: WriteContextPtr) -> WriteResult {
     let mut context = write_context_from_raw(context);
