@@ -166,17 +166,9 @@ pub enum ValueRef {
     Null,
     Bool(bool),
     Number(f64),
-    String {
-        ptr: usize,
-        len: usize,
-    },
-    Object {
-        ptr: usize,
-    },
-    Array {
-        ptr: usize,
-        len: usize,
-    },
+    String { ptr: usize, len: usize },
+    Object { ptr: usize },
+    Array { ptr: usize, len: usize },
     Error(ErrorCode),
 }
 

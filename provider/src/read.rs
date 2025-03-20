@@ -180,8 +180,8 @@ fn encode_value(bytes: &[u8]) -> NanBox {
 }
 
 #[no_mangle]
-#[export_name = "_shopify_function_input_get_len"]
-extern "C" fn shopify_function_input_get_len(scope: u64) -> u32 {
+#[export_name = "_shopify_function_input_get_val_len"]
+extern "C" fn shopify_function_input_get_val_len(scope: u64) -> u32 {
     let v = NanBox::from_bits(scope);
     match v.try_decode() {
         Ok(NanBoxValueRef::String { ptr, .. } | NanBoxValueRef::Array { ptr, .. }) => {
@@ -193,7 +193,9 @@ extern "C" fn shopify_function_input_get_len(scope: u64) -> u32 {
                 Marker::FixStr(len) | Marker::FixArray(len) => len as u32,
                 Marker::Str8 => bytes[1] as u32,
                 Marker::Str16 | Marker::Array16 => u16::from_be_bytes([bytes[1], bytes[2]]) as u32,
-                Marker::Str32 | Marker::Array32 => u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as u32,
+                Marker::Str32 | Marker::Array32 => {
+                    u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as u32
+                }
                 _ => 0,
             }
         }
@@ -316,7 +318,13 @@ mod tests {
         let decoded = nanbox.try_decode().unwrap();
         let ptr = bytes.as_ptr() as usize & u32::MAX as usize;
 
-        assert_eq!(decoded, ValueRef::String { ptr, len: NanBox::MAX_VALUE_LENGTH as usize });
+        assert_eq!(
+            decoded,
+            ValueRef::String {
+                ptr,
+                len: NanBox::MAX_VALUE_LENGTH as usize
+            }
+        );
     }
 
     #[test]
@@ -327,7 +335,13 @@ mod tests {
         let decoded = nanbox.try_decode().unwrap();
         let ptr = bytes.as_ptr() as usize & u32::MAX as usize;
 
-        assert_eq!(decoded, ValueRef::String { ptr, len: NanBox::MAX_VALUE_LENGTH as usize });
+        assert_eq!(
+            decoded,
+            ValueRef::String {
+                ptr,
+                len: NanBox::MAX_VALUE_LENGTH as usize
+            }
+        );
     }
 
     #[test]
