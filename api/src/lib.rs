@@ -6,6 +6,7 @@ extern "C" {
     fn shopify_function_input_get() -> u64;
     fn shopify_function_input_read_utf8_str(src: usize, out: *mut u8, len: usize);
     fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, len: usize) -> u64;
+    fn shopify_function_input_get_at_index(scope: u64, index: u32) -> u64;
 }
 
 pub enum Value {
@@ -67,6 +68,30 @@ impl Value {
                 let scope = unsafe {
                     shopify_function_input_get_obj_prop(v.to_bits(), prop.as_ptr(), prop.len())
                 };
+                Value::NanBox(NanBox::from_bits(scope))
+            }
+        }
+    }
+
+    pub fn is_array(&self) -> bool {
+        match self {
+            Value::NanBox(v) => matches!(v.try_decode(), Ok(ValueRef::Array { .. })),
+        }
+    }
+
+    pub fn array_len(&self) -> Option<usize> {
+        match self {
+            Value::NanBox(v) => match v.try_decode() {
+                Ok(ValueRef::Array { len, .. }) => Some(len),
+                _ => None,
+            },
+        }
+    }
+
+    pub fn get_at_index(&self, index: u32) -> Value {
+        match self {
+            Value::NanBox(v) => {
+                let scope = unsafe { shopify_function_input_get_at_index(v.to_bits(), index) };
                 Value::NanBox(NanBox::from_bits(scope))
             }
         }

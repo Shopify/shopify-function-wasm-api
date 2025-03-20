@@ -232,6 +232,10 @@ impl TrampolineCodegen {
         self.rename_imported_func("shopify_function_input_get", "_shopify_function_input_get")?;
         self.emit_shopify_function_input_read_utf8_str()?;
         self.emit_shopify_function_input_get_obj_prop()?;
+        self.rename_imported_func(
+            "shopify_function_input_get_at_index",
+            "_shopify_function_input_get_at_index",
+        )?;
         Ok(self.module)
     }
 }
