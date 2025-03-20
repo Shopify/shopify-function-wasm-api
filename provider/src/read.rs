@@ -65,6 +65,18 @@ extern "C" fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, le
     }
 }
 
+#[no_mangle]
+#[export_name = "_shopify_function_input_get_utf8_str_offset"]
+extern "C" fn shopify_function_input_get_utf8_str_offset(ptr: usize) -> u32 {
+    let byte = ptr as *const u8;
+    match Marker::from_u8(unsafe { *byte }) {
+        Marker::FixStr(_) | Marker::Str8 => 1,
+        Marker::Str16 => 3,
+        Marker::Str32 => 5,
+        _ => 0,
+    }
+}
+
 fn encode_value(bytes: &[u8]) -> NanBox {
     let mut reader = Bytes::new(bytes);
     // clone the reader because other decode functions need to read the marker again
@@ -86,19 +98,19 @@ fn encode_value(bytes: &[u8]) -> NanBox {
         Ok(Marker::FixNeg(n)) => NanBox::number(n as f64),
         Ok(Marker::FixStr(len)) => {
             let len = len as usize;
-            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[1..(len + 1)]) })
+            NanBox::string(bytes.as_ptr() as usize, len)
         }
         Ok(Marker::Str8) => {
             let len = bytes[1] as usize;
-            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[2..(len + 2)]) })
+            NanBox::string(bytes.as_ptr() as usize, len)
         }
         Ok(Marker::Str16) => {
             let len = u16::from_be_bytes([bytes[1], bytes[2]]) as usize;
-            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[3..(len + 3)]) })
+            NanBox::string(bytes.as_ptr() as usize, len)
         }
         Ok(Marker::Str32) => {
             let len = u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as usize;
-            NanBox::string(unsafe { std::str::from_utf8_unchecked(&bytes[5..(len + 5)]) })
+            NanBox::string(bytes.as_ptr() as usize, len)
         }
         Ok(Marker::FixMap(_) | Marker::Map16 | Marker::Map32) => {
             NanBox::obj(bytes.as_ptr() as usize)

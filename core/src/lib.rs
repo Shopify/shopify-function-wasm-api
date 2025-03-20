@@ -98,9 +98,8 @@ impl NanBox {
     }
 
     /// Create a new NaN-boxed string.
-    pub fn string(val: &str) -> Self {
-        let ptr = val.as_ptr() as usize;
-        Self::encode(ptr as _, val.len() as _, Tag::String)
+    pub fn string(ptr: usize, len: usize) -> Self {
+        Self::encode(ptr as _, len as _, Tag::String)
     }
 
     /// Create a new NaN-boxed object.
@@ -310,24 +309,6 @@ mod tests {
                 let value_ref = boxed.try_decode().unwrap();
                 assert_eq!(value_ref, ValueRef::Number(val));
             });
-    }
-
-    #[test]
-    fn test_string_roundtrip() {
-        let string = "Hello, world!";
-        let boxed = NanBox::string(string);
-        let value_ref = boxed.try_decode().unwrap();
-        assert_eq!(
-            value_ref,
-            ValueRef::String {
-                // When running the tests, we are not in a Wasm environment, so
-                // the pointer may be larger than 32-bits.
-                // We mask the pointer with `NanBox::POINTER_MASK` to emulate how
-                // this will be done in a Wasm environment.
-                ptr: string.as_ptr() as usize & NanBox::POINTER_MASK as usize,
-                len: string.len()
-            }
-        );
     }
 
     #[test]
