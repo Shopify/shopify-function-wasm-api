@@ -331,8 +331,9 @@ mod tests {
 
     #[test]
     fn test_encode_str32_value() {
-        let bytes = build_msgpack(|w| encode::write_str(w, "a".repeat(u32::MAX as usize).as_str()))
-            .unwrap();
+        let bytes =
+            build_msgpack(|w| encode::write_str(w, "a".repeat(u16::MAX as usize + 1).as_str()))
+                .unwrap();
         let nanbox = encode_value(&bytes);
         let decoded = nanbox.try_decode().unwrap();
         let ptr = bytes.as_ptr() as usize & u32::MAX as usize;
