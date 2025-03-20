@@ -98,9 +98,8 @@ impl NanBox {
     }
 
     /// Create a new NaN-boxed string.
-    pub fn string(val: &str) -> Self {
-        let ptr = val.as_ptr() as usize;
-        Self::encode(ptr as _, val.len() as _, Tag::String)
+    pub fn string(ptr: usize, len: usize) -> Self {
+        Self::encode(ptr as _, len as _, Tag::String)
     }
 
     /// Create a new NaN-boxed object.
@@ -116,12 +115,6 @@ impl NanBox {
     /// Create a new NaN-boxed array.
     pub fn array(ptr: usize, len: usize) -> Self {
         Self::encode(ptr as _, len as _, Tag::Array)
-    }
-
-    /// Create a new NaN-boxed string length.
-    pub fn string_length(ptr: *const u8, offset: usize) -> Self {
-        let ptr = ptr as usize;
-        Self::encode(ptr as _, offset as _, Tag::StringLength)
     }
 
     pub fn try_decode(&self) -> Result<ValueRef, Box<dyn Error>> {
@@ -145,7 +138,6 @@ impl NanBox {
             Tag::Array => Ok(ValueRef::Array { ptr, len }),
             Tag::String => Ok(ValueRef::String { ptr, len }),
             Tag::Object => Ok(ValueRef::Object { ptr }),
-            Tag::StringLength => Ok(ValueRef::StringLength { ptr, offset: len }),
             Tag::Error => ErrorCode::from_repr(val as usize)
                 .map(ValueRef::Error)
                 .ok_or_else(|| "Invalid error code.".into()),
@@ -160,11 +152,10 @@ impl NanBox {
     fn encode(ptr: u64, len: u64, tag: Tag) -> Self {
         if len == 0 {
             Self(Self::NAN_MASK | (tag.as_u64() << Self::VALUE_SIZE) | (ptr & Self::POINTER_MASK))
-        } else if len < Self::MAX_VALUE_LENGTH {
-            let val = (len << Self::VALUE_ENCODING_SIZE) | (ptr & Self::POINTER_MASK);
-            Self(Self::NAN_MASK | (tag.as_u64() << Self::VALUE_SIZE) | val)
         } else {
-            panic!("Length is too large to encode.");
+            let trimmed_len = len.min(Self::MAX_VALUE_LENGTH);
+            let val = (trimmed_len << Self::VALUE_ENCODING_SIZE) | (ptr & Self::POINTER_MASK);
+            Self(Self::NAN_MASK | (tag.as_u64() << Self::VALUE_SIZE) | val)
         }
     }
 }
@@ -186,12 +177,6 @@ pub enum ValueRef {
         ptr: usize,
         len: usize,
     },
-    /// Stores a pointer to the length of an array or string and the offset
-    /// between that pointer and the pointer to the actual string or array value.
-    StringLength {
-        ptr: usize,
-        offset: usize,
-    },
     Error(ErrorCode),
 }
 
@@ -210,8 +195,6 @@ enum Tag {
     Object = 4,
     /// An array pointer.
     Array = 5,
-    /// A length pointer.
-    StringLength = 6,
     /// An error code.
     Error = NanBox::MAX_TAG_VALUE, // this should be the last tag
 }
@@ -340,32 +323,13 @@ mod tests {
     }
 
     #[test]
-    fn test_length_roundtrip() {
-        let string = "Hello, world!";
-        let ptr = string.as_ptr();
-        let boxed = NanBox::string_length(ptr, 3);
-        let value_ref = boxed.try_decode().unwrap();
-        assert_eq!(
-            value_ref,
-            ValueRef::StringLength {
-                ptr: ptr as usize & NanBox::POINTER_MASK as usize,
-                offset: 3
-            }
-        );
-    }
-
-    #[test]
     fn test_string_roundtrip() {
         let string = "Hello, world!";
-        let boxed = NanBox::string(string);
+        let boxed = NanBox::string(string.as_ptr() as usize, string.len());
         let value_ref = boxed.try_decode().unwrap();
         assert_eq!(
             value_ref,
             ValueRef::String {
-                // When running the tests, we are not in a Wasm environment, so
-                // the pointer may be larger than 32-bits.
-                // We mask the pointer with `NanBox::POINTER_MASK` to emulate how
-                // this will be done in a Wasm environment.
                 ptr: string.as_ptr() as usize & NanBox::POINTER_MASK as usize,
                 len: string.len()
             }
