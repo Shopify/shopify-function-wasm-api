@@ -181,7 +181,7 @@ fn encode_value(bytes: &[u8]) -> NanBox {
 
 #[no_mangle]
 #[export_name = "_shopify_function_input_get_val_len"]
-extern "C" fn shopify_function_input_get_val_len(scope: u64) -> u32 {
+extern "C" fn shopify_function_input_get_val_len(scope: u64) -> usize {
     let v = NanBox::from_bits(scope);
     match v.try_decode() {
         Ok(NanBoxValueRef::String { ptr, .. } | NanBoxValueRef::Array { ptr, .. }) => {
@@ -190,11 +190,13 @@ extern "C" fn shopify_function_input_get_val_len(scope: u64) -> u32 {
             };
             let bytes = &bytes()[offset..];
             match Marker::from_u8(bytes[0]) {
-                Marker::FixStr(len) | Marker::FixArray(len) => len as u32,
-                Marker::Str8 => bytes[1] as u32,
-                Marker::Str16 | Marker::Array16 => u16::from_be_bytes([bytes[1], bytes[2]]) as u32,
+                Marker::FixStr(len) | Marker::FixArray(len) => len as usize,
+                Marker::Str8 => bytes[1] as usize,
+                Marker::Str16 | Marker::Array16 => {
+                    u16::from_be_bytes([bytes[1], bytes[2]]) as usize
+                }
                 Marker::Str32 | Marker::Array32 => {
-                    u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as u32
+                    u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]) as usize
                 }
                 _ => 0,
             }

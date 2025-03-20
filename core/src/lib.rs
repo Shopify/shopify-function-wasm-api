@@ -316,16 +316,9 @@ mod tests {
 
     #[test]
     fn test_string_roundtrip() {
-        let string = "Hello, world!";
-        let boxed = NanBox::string(string.as_ptr() as usize, string.len());
+        let boxed = NanBox::string(1, 2);
         let value_ref = boxed.try_decode().unwrap();
-        assert_eq!(
-            value_ref,
-            ValueRef::String {
-                ptr: string.as_ptr() as usize & NanBox::POINTER_MASK as usize,
-                len: string.len()
-            }
-        );
+        assert_eq!(value_ref, ValueRef::String { ptr: 1, len: 2 });
     }
 
     #[test]
