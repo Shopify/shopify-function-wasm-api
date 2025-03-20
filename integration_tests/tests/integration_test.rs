@@ -126,6 +126,11 @@ fn test_simple_with_string_input() -> Result<()> {
         run_example_with_input("simple", serde_json::json!("Hello, world!"))?,
         "got value Hello, world!\n"
     );
+    let long_string = "a".repeat(u16::MAX as usize + 1);
+    assert_eq!(
+        run_example_with_input("simple", serde_json::json!(long_string))?,
+        format!("got value {}\n", long_string),
+    );
     Ok(())
 }
 

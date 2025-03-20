@@ -6,6 +6,7 @@ extern "C" {
     fn shopify_function_input_get() -> u64;
     fn shopify_function_input_read_utf8_str(src: usize, out: *mut u8, len: usize);
     fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, len: usize) -> u64;
+    fn shopify_function_input_get_len(scope: u64) -> u32;
 }
 
 pub enum Value {
@@ -44,6 +45,11 @@ impl Value {
         match self {
             Value::NanBox(v) => match v.try_decode() {
                 Ok(ValueRef::String { ptr, len }) => {
+                    let len = if len as u64 == NanBox::MAX_VALUE_LENGTH {
+                        unsafe { shopify_function_input_get_len(v.to_bits()) as usize }
+                    } else {
+                        len
+                    };
                     let mut buf = vec![0; len];
                     unsafe {
                         shopify_function_input_read_utf8_str(ptr as _, buf.as_mut_ptr(), len)

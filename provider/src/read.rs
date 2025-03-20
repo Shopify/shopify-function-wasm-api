@@ -77,6 +77,30 @@ extern "C" fn shopify_function_input_get_utf8_str_offset(ptr: usize) -> u32 {
     }
 }
 
+#[no_mangle]
+#[export_name = "_shopify_function_input_get_len"]
+extern "C" fn shopify_function_input_get_len(scope: u64) -> u32 {
+    let v = NanBox::from_bits(scope);
+    match v.try_decode() {
+        Ok(NanBoxValueRef::String { ptr, .. } | NanBoxValueRef::Array { ptr, .. }) => {
+            let Some(offset) = ptr.checked_sub(bytes().as_ptr() as usize) else {
+                return 0;
+            };
+            let bytes = &bytes()[offset..];
+            match Marker::from_u8(bytes[0]) {
+                Marker::FixStr(len) | Marker::FixArray(len) => len as u32,
+                Marker::Str8 => bytes[1] as u32,
+                Marker::Str16 | Marker::Array16 => u16::from_be_bytes([bytes[1], bytes[2]]) as u32,
+                Marker::Str32 | Marker::Array32 => {
+                    u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]])
+                }
+                _ => 0,
+            }
+        }
+        _ => 0,
+    }
+}
+
 fn encode_value(bytes: &[u8]) -> NanBox {
     let mut reader = Bytes::new(bytes);
     // clone the reader because other decode functions need to read the marker again
@@ -198,7 +222,7 @@ mod tests {
                     let bytes = build_msgpack(|w| encode::write_str(w, "a".repeat($len).as_str())).unwrap();
                     let nanbox = encode_value(&bytes);
                     let decoded = nanbox.try_decode().unwrap();
-                    let ptr = bytes[$marker_and_len_size..].as_ptr() as usize & u32::MAX as usize;
+                    let ptr = bytes.as_ptr() as usize & u32::MAX as usize;
                     assert_eq!(
                         decoded,
                         ValueRef::String {
