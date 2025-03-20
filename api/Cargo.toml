@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 shopify_function_wasm_api_core = { path = "../core", version = "0.1.0" }
+thiserror = "2.0"
 
 [[example]]
 name = "simple"

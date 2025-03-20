@@ -6,8 +6,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if let Some(b) = input.as_bool() {
         let mut out = ValueSerializer::new();
-        out.write_bool(b);
-        out.finalize();
+        out.write_bool(b)?;
+        out.finalize()?;
     } else {
         panic!("expected bool");
     }

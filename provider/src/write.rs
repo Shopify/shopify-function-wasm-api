@@ -1,5 +1,6 @@
 use core::ptr::NonNull;
 use rmp::encode::{self, ByteBuf};
+use shopify_function_wasm_api_core::write::WriteResult;
 use std::ffi::c_void;
 use std::io::Write;
 
@@ -22,26 +23,28 @@ extern "C" fn shopify_function_output_new() -> WriteContextPtr {
 
 #[no_mangle]
 #[export_name = "_shopify_function_output_new_bool"]
-extern "C" fn shopify_function_output_new_bool(context: WriteContextPtr, bool: u32) -> i32 {
+extern "C" fn shopify_function_output_new_bool(context: WriteContextPtr, bool: u32) -> WriteResult {
     let mut context = write_context_from_raw(context);
     let bytes = unsafe { &mut context.as_mut().bytes };
-    encode::write_bool(bytes, bool != 0).unwrap();
-    0
+    encode::write_bool(bytes, bool != 0).unwrap(); // infallible unwrap
+    WriteResult::Ok
 }
 
 #[no_mangle]
 #[export_name = "_shopify_function_output_finalize"]
-extern "C" fn shopify_function_output_finalize(context: WriteContextPtr) -> i32 {
+extern "C" fn shopify_function_output_finalize(context: WriteContextPtr) -> WriteResult {
     let mut context = write_context_from_raw(context);
     let bytes = unsafe { &mut context.as_mut().bytes };
     let mut stdout = std::io::stdout();
     // Temporary use of stdout to copy from linear memory to the host.
     // Preliminary benchmarking doesn't seem to suggest that this operation
     // represents a considerable overhead.
-    stdout
-        .write_all(bytes.as_slice())
-        .expect("write to succeed");
-    stdout.flush().expect("flush to succeed");
-    unsafe { drop(Box::from_raw(context.as_ptr())) };
-    0
+    if stdout.write_all(bytes.as_slice()).is_err() {
+        return WriteResult::IoError;
+    }
+    if stdout.flush().is_err() {
+        return WriteResult::IoError;
+    }
+    let _ = unsafe { Box::from_raw(context.as_ptr()) }; // drop the context
+    WriteResult::Ok
 }

@@ -1,4 +1,4 @@
-use shopify_function_wasm_api_core::{NanBox, ValueRef};
+use shopify_function_wasm_api_core::read::{NanBox, ValueRef};
 
 mod write;
 pub use write::ValueSerializer;
@@ -14,8 +14,8 @@ extern "C" {
 
     // Write API.
     fn shopify_function_output_new() -> usize;
-    fn shopify_function_output_new_bool(context: usize, bool: u32) -> i32;
-    fn shopify_function_output_finalize(context: usize) -> i32;
+    fn shopify_function_output_new_bool(context: usize, bool: u32) -> u32;
+    fn shopify_function_output_finalize(context: usize) -> u32;
 }
 
 pub enum Value {

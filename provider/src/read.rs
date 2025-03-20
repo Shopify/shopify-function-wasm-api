@@ -3,7 +3,7 @@ use rmp::{
     decode::{self, read_marker, Bytes},
     Marker,
 };
-use shopify_function_wasm_api_core::{ErrorCode, NanBox, ValueRef as NanBoxValueRef};
+use shopify_function_wasm_api_core::read::{ErrorCode, NanBox, ValueRef as NanBoxValueRef};
 use std::io::Read;
 
 mod msgpack_utils;
@@ -226,7 +226,7 @@ unsafe fn query_from_raw_parts(ptr: *const u8, len: usize) -> &'static str {
 mod tests {
     use super::*;
     use rmp::encode::{self, ByteBuf};
-    use shopify_function_wasm_api_core::ValueRef;
+    use shopify_function_wasm_api_core::read::ValueRef;
 
     fn build_msgpack<E, F: FnOnce(&mut ByteBuf) -> Result<(), E>>(
         writer_fn: F,
