@@ -36,7 +36,7 @@ impl NanBox {
         ((1 << (Self::QUIET_NAN_SIZE + Self::EXPONENT_SIZE)) - 1) << Self::PAYLOAD_SIZE;
     /// Mask to retrieve the [`Self::PAYLOAD_SIZE`] bits.
     // We want the LS 50 bits to be 1.
-    const PAYLOAD_MASK: u64 = !(Self::NAN_MASK | 1 << 63);
+    const PAYLOAD_MASK: u64 = !(Self::NAN_MASK | (1 << 63));
     /// The number of bits reserved for the payload tag.
     const TAG_SIZE: u8 = 4;
     /// The maximum number that can be encoded in the number of bits reserved for

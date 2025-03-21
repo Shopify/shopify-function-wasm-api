@@ -23,13 +23,11 @@ fn bytes() -> &'static [u8] {
     })
 }
 
-#[no_mangle]
 #[export_name = "_shopify_function_input_get"]
 extern "C" fn shopify_function_input_get() -> u64 {
     encode_value(bytes()).to_bits()
 }
 
-#[no_mangle]
 #[export_name = "_shopify_function_input_get_obj_prop"]
 extern "C" fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, len: usize) -> u64 {
     let v = NanBox::from_bits(scope);
@@ -65,7 +63,6 @@ extern "C" fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, le
     }
 }
 
-#[no_mangle]
 #[export_name = "_shopify_function_input_get_at_index"]
 extern "C" fn shopify_function_input_get_at_index(scope: u64, index: u32) -> u64 {
     let v = NanBox::from_bits(scope);
@@ -179,7 +176,6 @@ fn encode_value(bytes: &[u8]) -> NanBox {
     }
 }
 
-#[no_mangle]
 #[export_name = "_shopify_function_input_get_val_len"]
 extern "C" fn shopify_function_input_get_val_len(scope: u64) -> usize {
     let v = NanBox::from_bits(scope);
@@ -205,7 +201,6 @@ extern "C" fn shopify_function_input_get_val_len(scope: u64) -> usize {
     }
 }
 
-#[no_mangle]
 #[export_name = "_shopify_function_input_get_utf8_str_offset"]
 extern "C" fn shopify_function_input_get_utf8_str_offset(ptr: usize) -> u32 {
     let byte = ptr as *const u8;

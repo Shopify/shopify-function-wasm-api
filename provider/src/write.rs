@@ -15,13 +15,11 @@ fn write_context_from_raw(context: WriteContextPtr) -> NonNull<WriteContext> {
     unsafe { NonNull::new_unchecked(context as _) }
 }
 
-#[no_mangle]
 #[export_name = "_shopify_function_output_new"]
 extern "C" fn shopify_function_output_new() -> WriteContextPtr {
     Box::into_raw(Box::new(WriteContext::default())) as _
 }
 
-#[no_mangle]
 #[export_name = "_shopify_function_output_new_bool"]
 extern "C" fn shopify_function_output_new_bool(context: WriteContextPtr, bool: u32) -> WriteResult {
     let mut context = write_context_from_raw(context);
@@ -30,7 +28,6 @@ extern "C" fn shopify_function_output_new_bool(context: WriteContextPtr, bool: u
     WriteResult::Ok
 }
 
-#[no_mangle]
 #[export_name = "_shopify_function_output_new_null"]
 extern "C" fn shopify_function_output_new_null(context: WriteContextPtr) -> WriteResult {
     let mut context = write_context_from_raw(context);
@@ -39,7 +36,6 @@ extern "C" fn shopify_function_output_new_null(context: WriteContextPtr) -> Writ
     WriteResult::Ok
 }
 
-#[no_mangle]
 #[export_name = "_shopify_function_output_finalize"]
 extern "C" fn shopify_function_output_finalize(context: WriteContextPtr) -> WriteResult {
     let mut context = write_context_from_raw(context);
