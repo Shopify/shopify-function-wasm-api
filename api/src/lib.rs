@@ -97,7 +97,14 @@ impl Value {
     pub fn array_len(&self) -> Option<usize> {
         match self {
             Value::NanBox(v) => match v.try_decode() {
-                Ok(ValueRef::Array { len, .. }) => Some(len),
+                Ok(ValueRef::Array { len, .. }) => {
+                    let len = if len as u64 == NanBox::MAX_VALUE_LENGTH {
+                        unsafe { shopify_function_input_get_val_len(v.to_bits()) as usize }
+                    } else {
+                        len
+                    };
+                    Some(len)
+                }
                 _ => None,
             },
         }

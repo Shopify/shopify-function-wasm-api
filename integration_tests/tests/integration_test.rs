@@ -234,3 +234,19 @@ fn test_echo_with_null_input() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+#[ignore = "large array test is disabled since it takes a long time to run"]
+fn test_simple_with_large_array_input() -> Result<()> {
+    SIMPLE_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+
+    let large_array: Vec<i32> = (0..=u16::MAX as usize).map(|x| x as i32).collect();
+    let result =
+        run_example_with_input_and_string_output("simple", serde_json::json!(large_array))?;
+
+    assert!(result.starts_with("got value array; [0, 1, 2"));
+    assert!(result.ends_with("65534, 65535]\n"));
+    Ok(())
+}
