@@ -172,7 +172,6 @@ impl TrampolineCodegen {
             shopify_function_input_get_utf8_str_offset,
         );
 
-        let src_ptr = self.module.locals.add(ValType::I32);
         let memcpy_to_guest = self.emit_memcpy_to_guest();
 
         self.module.replace_imported_func(
@@ -180,13 +179,11 @@ impl TrampolineCodegen {
             |(builder, arg_locals)| {
                 builder
                     .func_body()
+                    .local_get(arg_locals[1])
                     .local_get(arg_locals[0])
                     .call(shopify_function_input_get_utf8_str_offset)
                     .local_get(arg_locals[0])
                     .binop(BinaryOp::I32Add)
-                    .local_set(src_ptr)
-                    .local_get(arg_locals[1])
-                    .local_get(src_ptr)
                     .local_get(arg_locals[2])
                     .call(memcpy_to_guest);
             },
