@@ -8,8 +8,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut out = ValueSerializer::new();
         out.write_bool(b)?;
         out.finalize()?;
+    } else if let Some(()) = input.as_null() {
+        let mut out = ValueSerializer::new();
+        out.write_null()?;
+        out.finalize()?;
     } else {
-        panic!("expected bool");
+        panic!("expected bool or null");
     }
 
     Ok(())

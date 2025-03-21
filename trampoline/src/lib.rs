@@ -261,6 +261,10 @@ impl TrampolineCodegen {
             "_shopify_function_output_new_bool",
         )?;
         self.rename_imported_func(
+            "shopify_function_output_new_null",
+            "_shopify_function_output_new_null",
+        )?;
+        self.rename_imported_func(
             "shopify_function_output_finalize",
             "_shopify_function_output_finalize",
         )?;
