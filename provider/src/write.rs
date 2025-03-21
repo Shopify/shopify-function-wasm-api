@@ -33,8 +33,8 @@ extern "C" fn shopify_function_output_new_null(context: WriteContextPtr) -> Writ
     WriteResult::Ok
 }
 
-#[export_name = "_shopify_function_output_new_int"]
-extern "C" fn shopify_function_output_new_int(context: WriteContextPtr, int: i32) -> WriteResult {
+#[export_name = "_shopify_function_output_new_i32"]
+extern "C" fn shopify_function_output_new_i32(context: WriteContextPtr, int: i32) -> WriteResult {
     let mut context = write_context_from_raw(context);
     let bytes = unsafe { &mut context.as_mut().bytes };
     encode::write_sint(bytes, int as i64).unwrap(); // infallible unwrap
