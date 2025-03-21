@@ -79,28 +79,11 @@ extern "C" fn shopify_function_input_get_at_index(scope: u64, index: u32) -> u64
             let mut reader = Bytes::new(bytes);
 
             // Read array marker
-            let array_len = match read_marker(&mut reader) {
-                Ok(Marker::FixArray(len)) => len as usize,
-                Ok(Marker::Array16) => {
-                    let remaining = reader.remaining_slice();
-                    let len = u16::from_be_bytes([remaining[0], remaining[1]]) as usize;
-                    // Create a new reader that skips the length bytes
-                    reader = Bytes::new(&remaining[2..]);
-                    len
+            let array_len = match decode::read_array_len(&mut reader) {
+                Ok(array_len) => array_len as usize,
+                Err(decode::ValueReadError::TypeMismatch(_)) => {
+                    return NanBox::error(ErrorCode::NotAnArray).to_bits()
                 }
-                Ok(Marker::Array32) => {
-                    let remaining = reader.remaining_slice();
-                    let len = u32::from_be_bytes([
-                        remaining[0],
-                        remaining[1],
-                        remaining[2],
-                        remaining[3],
-                    ]) as usize;
-                    // Create a new reader that skips the length bytes
-                    reader = Bytes::new(&remaining[4..]);
-                    len
-                }
-                Ok(_) => return NanBox::error(ErrorCode::NotAnArray).to_bits(),
                 Err(_) => return NanBox::error(ErrorCode::ReadError).to_bits(),
             };
 
