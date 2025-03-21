@@ -1,5 +1,8 @@
 use std::error::Error;
 
+/// A type alias to represent raw NaN-boxed values.
+pub type Val = u64;
+
 /// Values are represented as NaN-boxed values.
 ///
 /// As a recap, IEEE floats consist of:
@@ -15,7 +18,7 @@ use std::error::Error;
 /// For example:
 /// 1 11111111111 1[0..51]
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct NanBox(u64);
+pub struct NanBox(Val);
 
 impl NanBox {
     /// The number of bits reserved for the payload.
