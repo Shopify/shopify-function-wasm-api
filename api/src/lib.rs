@@ -1,4 +1,7 @@
-use shopify_function_wasm_api_core::read::{NanBox, ValueRef};
+use shopify_function_wasm_api_core::{
+    read::{NanBox, Val, ValueRef},
+    write::{WriteContext, WriteResult},
+};
 
 mod write;
 pub use write::ValueSerializer;
@@ -6,17 +9,17 @@ pub use write::ValueSerializer;
 #[link(wasm_import_module = "shopify_function_v0.1.0")]
 extern "C" {
     // Read API.
-    fn shopify_function_input_get() -> u64;
+    fn shopify_function_input_get() -> Val;
     fn shopify_function_input_get_val_len(scope: u64) -> usize;
     fn shopify_function_input_read_utf8_str(src: usize, out: *mut u8, len: usize);
-    fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, len: usize) -> u64;
-    fn shopify_function_input_get_at_index(scope: u64, index: u32) -> u64;
+    fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, len: usize) -> Val;
+    fn shopify_function_input_get_at_index(scope: u64, index: u32) -> Val;
 
     // Write API.
-    fn shopify_function_output_new() -> usize;
-    fn shopify_function_output_new_bool(context: usize, bool: u32) -> u32;
-    fn shopify_function_output_new_null(context: usize) -> u32;
-    fn shopify_function_output_finalize(context: usize) -> u32;
+    fn shopify_function_output_new() -> WriteContext;
+    fn shopify_function_output_new_bool(context: usize, bool: u32) -> WriteResult;
+    fn shopify_function_output_new_null(context: usize) -> WriteResult;
+    fn shopify_function_output_finalize(context: usize) -> WriteResult;
 }
 
 pub enum Value {

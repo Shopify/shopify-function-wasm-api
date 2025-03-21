@@ -7,11 +7,10 @@ pub enum Error {
     IoError,
 }
 
-fn map_result(result: u32) -> Result<(), Error> {
-    match WriteResult::from_repr(result) {
-        Some(WriteResult::Ok) => Ok(()),
-        Some(WriteResult::IoError) => Err(Error::IoError),
-        None => panic!("Unknown write result: {}", result),
+fn map_result(result: WriteResult) -> Result<(), Error> {
+    match result {
+        WriteResult::Ok => Ok(()),
+        WriteResult::IoError => Err(Error::IoError),
     }
 }
 

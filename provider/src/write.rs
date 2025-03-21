@@ -1,15 +1,12 @@
 use core::ptr::NonNull;
 use rmp::encode::{self, ByteBuf};
-use shopify_function_wasm_api_core::write::WriteResult;
-use std::ffi::c_void;
+use shopify_function_wasm_api_core::write::{WriteContext as WriteContextPtr, WriteResult};
 use std::io::Write;
 
 #[derive(Default)]
 struct WriteContext {
     bytes: ByteBuf,
 }
-
-type WriteContextPtr = *mut c_void;
 
 fn write_context_from_raw(context: WriteContextPtr) -> NonNull<WriteContext> {
     unsafe { NonNull::new_unchecked(context as _) }
