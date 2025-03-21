@@ -1,7 +1,7 @@
 use anyhow::Context;
 use std::cell::OnceCell;
 use std::path::Path;
-use walrus::{FunctionBuilder, FunctionId, ImportKind, MemoryId, Module, ValType};
+use walrus::{ir::BinaryOp, FunctionBuilder, FunctionId, ImportKind, MemoryId, Module, ValType};
 
 pub const PROVIDER_MODULE_NAME: &str = concat!("shopify_function_v", env!("CARGO_PKG_VERSION"));
 
@@ -163,6 +163,15 @@ impl TrampolineCodegen {
             .imports
             .get_func(PROVIDER_MODULE_NAME, "shopify_function_input_read_utf8_str")?;
 
+        let shopify_function_input_get_utf8_str_offset =
+            self.module.types.add(&[ValType::I32], &[ValType::I32]);
+
+        let (shopify_function_input_get_utf8_str_offset, _) = self.module.add_import_func(
+            PROVIDER_MODULE_NAME,
+            "_shopify_function_input_get_utf8_str_offset",
+            shopify_function_input_get_utf8_str_offset,
+        );
+
         let memcpy_to_guest = self.emit_memcpy_to_guest();
 
         self.module.replace_imported_func(
@@ -172,6 +181,9 @@ impl TrampolineCodegen {
                     .func_body()
                     .local_get(arg_locals[1])
                     .local_get(arg_locals[0])
+                    .call(shopify_function_input_get_utf8_str_offset)
+                    .local_get(arg_locals[0])
+                    .binop(BinaryOp::I32Add)
                     .local_get(arg_locals[2])
                     .call(memcpy_to_guest);
             },
@@ -230,6 +242,10 @@ impl TrampolineCodegen {
 
     fn apply(mut self) -> walrus::Result<Module> {
         self.rename_imported_func("shopify_function_input_get", "_shopify_function_input_get")?;
+        self.rename_imported_func(
+            "shopify_function_input_get_val_len",
+            "_shopify_function_input_get_val_len",
+        )?;
         self.emit_shopify_function_input_read_utf8_str()?;
         self.emit_shopify_function_input_get_obj_prop()?;
         self.rename_imported_func(

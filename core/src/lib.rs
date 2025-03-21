@@ -62,7 +62,7 @@ impl NanBox {
     /// The maximum number that can be encoed in the number of bits reserved for
     /// [`Self::VALUE_LENGTH_SIZE`].
     /// This is (2^14) - 1.
-    const MAX_VALUE_LENGTH: u64 = (1 << Self::VALUE_LENGTH_SIZE) - 1;
+    pub const MAX_VALUE_LENGTH: u64 = (1 << Self::VALUE_LENGTH_SIZE) - 1;
     /// Mask to retrive the value from the payload.
     const VALUE_MASK: u64 = Self::PAYLOAD_MASK & !Self::TAG_MASK;
     /// Mask to retrive the pointer from the value, in the case that the value is
@@ -98,9 +98,8 @@ impl NanBox {
     }
 
     /// Create a new NaN-boxed string.
-    pub fn string(val: &str) -> Self {
-        let ptr = val.as_ptr() as usize;
-        Self::encode(ptr as _, val.len() as _, Tag::String)
+    pub fn string(ptr: usize, len: usize) -> Self {
+        Self::encode(ptr as _, len as _, Tag::String)
     }
 
     /// Create a new NaN-boxed object.
@@ -153,16 +152,10 @@ impl NanBox {
     fn encode(ptr: u64, len: u64, tag: Tag) -> Self {
         if len == 0 {
             Self(Self::NAN_MASK | (tag.as_u64() << Self::VALUE_SIZE) | (ptr & Self::POINTER_MASK))
-        } else if len < Self::MAX_VALUE_LENGTH {
-            let val = (len << Self::VALUE_ENCODING_SIZE) | (ptr & Self::POINTER_MASK);
-            Self(Self::NAN_MASK | (tag.as_u64() << Self::VALUE_SIZE) | val)
         } else {
-            // We can encode the pointer and length in a fat-pointer.
-            // For the prototype this should be fine, as we have 2^14 to encode
-            // length values for arrays and strings. In practice that should be
-            // more than enough as well, but for completeness, we should allow
-            // usize::MAX.
-            todo!("Lengths greater than 2^14 are not supported yet.")
+            let trimmed_len = len.min(Self::MAX_VALUE_LENGTH);
+            let val = (trimmed_len << Self::VALUE_ENCODING_SIZE) | (ptr & Self::POINTER_MASK);
+            Self(Self::NAN_MASK | (tag.as_u64() << Self::VALUE_SIZE) | val)
         }
     }
 }
@@ -323,20 +316,9 @@ mod tests {
 
     #[test]
     fn test_string_roundtrip() {
-        let string = "Hello, world!";
-        let boxed = NanBox::string(string);
+        let boxed = NanBox::string(1, 2);
         let value_ref = boxed.try_decode().unwrap();
-        assert_eq!(
-            value_ref,
-            ValueRef::String {
-                // When running the tests, we are not in a Wasm environment, so
-                // the pointer may be larger than 32-bits.
-                // We mask the pointer with `NanBox::POINTER_MASK` to emulate how
-                // this will be done in a Wasm environment.
-                ptr: string.as_ptr() as usize & NanBox::POINTER_MASK as usize,
-                len: string.len()
-            }
-        );
+        assert_eq!(value_ref, ValueRef::String { ptr: 1, len: 2 });
     }
 
     #[test]
