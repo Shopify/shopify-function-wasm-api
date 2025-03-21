@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             out.finalize()?;
         } else {
             let mut out = ValueSerializer::new();
-            out.write_float(n)?;
+            out.write_f64(n)?;
             out.finalize()?;
         }
     } else {

@@ -33,8 +33,8 @@ impl ValueSerializer {
         map_result(unsafe { crate::shopify_function_output_new_i32(self.0 as _, value) })
     }
 
-    pub fn write_float(&mut self, value: f64) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_float(self.0 as _, value) })
+    pub fn write_f64(&mut self, value: f64) -> Result<(), Error> {
+        map_result(unsafe { crate::shopify_function_output_new_f64(self.0 as _, value) })
     }
 
     pub fn finalize(&mut self) -> Result<(), Error> {

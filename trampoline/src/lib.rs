@@ -273,8 +273,8 @@ impl TrampolineCodegen {
             "_shopify_function_output_new_i32",
         )?;
         self.rename_imported_func(
-            "shopify_function_output_new_float",
-            "_shopify_function_output_new_float",
+            "shopify_function_output_new_f64",
+            "_shopify_function_output_new_f64",
         )?;
 
         Ok(self.module)
