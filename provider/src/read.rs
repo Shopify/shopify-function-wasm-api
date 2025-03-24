@@ -3,7 +3,10 @@ use rmp::{
     decode::{self, read_marker, Bytes},
     Marker,
 };
-use shopify_function_wasm_api_core::read::{ErrorCode, NanBox, ValueRef as NanBoxValueRef};
+use shopify_function_wasm_api_core::{
+    read::{ErrorCode, NanBox, ValueRef as NanBoxValueRef},
+    InternedStringId,
+};
 use std::io::Read;
 
 mod msgpack_utils;
@@ -29,11 +32,14 @@ extern "C" fn shopify_function_input_get() -> u64 {
 }
 
 #[export_name = "_shopify_function_input_get_obj_prop"]
-extern "C" fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, len: usize) -> u64 {
+extern "C" fn shopify_function_input_get_obj_prop(
+    scope: u64,
+    interned_string_id: InternedStringId,
+) -> u64 {
     let v = NanBox::from_bits(scope);
     match v.try_decode() {
         Ok(NanBoxValueRef::Object { ptr: obj_ptr }) => {
-            let query = unsafe { query_from_raw_parts(ptr, len) };
+            let query = crate::STRING_INTERNER.get(interned_string_id);
             let Some(offset) = obj_ptr.checked_sub(bytes().as_ptr() as usize) else {
                 return NanBox::error(ErrorCode::PointerOutOfBounds).to_bits();
             };
@@ -44,11 +50,11 @@ extern "C" fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, le
                 return NanBox::error(ErrorCode::ReadError).to_bits();
             };
             for _ in 0..map_len {
-                let Ok((key, remainder)) = decode::read_str_from_slice(reader.remaining_slice())
-                else {
+                let Ok(len) = decode::read_str_len(&mut reader) else {
                     return NanBox::error(ErrorCode::ReadError).to_bits();
                 };
-                reader = Bytes::new(remainder);
+                let key = &reader.remaining_slice()[..len as usize];
+                reader = Bytes::new(&reader.remaining_slice()[len as usize..]);
                 if key == query {
                     return encode_value(reader.remaining_slice()).to_bits();
                 }
@@ -193,11 +199,6 @@ extern "C" fn shopify_function_input_get_utf8_str_offset(ptr: usize) -> u32 {
         Marker::Str32 => 5,
         _ => 0,
     }
-}
-
-unsafe fn query_from_raw_parts(ptr: *const u8, len: usize) -> &'static str {
-    let slice = std::slice::from_raw_parts(ptr, len);
-    std::str::from_utf8_unchecked(slice)
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
-use shopify_function_wasm_api::{input_get, Value};
-use std::{error::Error, io::Write};
+use shopify_function_wasm_api::{input_get, intern_utf8_str, InternedStringId, Value};
+use std::{error::Error, io::Write, sync::LazyLock};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let input = input_get();
@@ -11,6 +11,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+static KEY: LazyLock<InternedStringId> = LazyLock::new(|| intern_utf8_str("key"));
+static OTHER_KEY: LazyLock<InternedStringId> = LazyLock::new(|| intern_utf8_str("other_key"));
+
 fn serialize_value(value: Value) -> String {
     if let Some(boolean) = value.as_bool() {
         format!("{}", boolean)
@@ -21,8 +24,8 @@ fn serialize_value(value: Value) -> String {
     } else if let Some(string) = value.as_string() {
         string
     } else if value.is_obj() {
-        let value_for_key = value.get_obj_prop("key");
-        let value_for_other_key = value.get_obj_prop("other_key");
+        let value_for_key = value.get_obj_prop(*KEY);
+        let value_for_other_key = value.get_obj_prop(*OTHER_KEY);
         format!(
             "obj; key: {}, other_key: {}",
             serialize_value(value_for_key),

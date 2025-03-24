@@ -12,7 +12,10 @@ extern "C" {
     fn shopify_function_input_get() -> Val;
     fn shopify_function_input_get_val_len(scope: Val) -> usize;
     fn shopify_function_input_read_utf8_str(src: usize, out: *mut u8, len: usize);
-    fn shopify_function_input_get_obj_prop(scope: Val, ptr: *const u8, len: usize) -> Val;
+    fn shopify_function_input_get_obj_prop(
+        scope: Val,
+        interned_string_id: shopify_function_wasm_api_core::InternedStringId,
+    ) -> Val;
     fn shopify_function_input_get_at_index(scope: Val, index: u32) -> Val;
 
     // Write API.
@@ -27,6 +30,19 @@ extern "C" {
         ptr: *const u8,
         len: usize,
     ) -> WriteResult;
+
+    // Other.
+    fn shopify_function_intern_utf8_str(ptr: *const u8, len: usize) -> usize;
+}
+
+#[derive(Clone, Copy)]
+pub struct InternedStringId(shopify_function_wasm_api_core::InternedStringId);
+
+pub fn intern_utf8_str(s: &str) -> InternedStringId {
+    let len = s.len();
+    let ptr = s.as_ptr();
+    let id = unsafe { shopify_function_intern_utf8_str(ptr, len) };
+    InternedStringId(id)
 }
 
 pub enum Value {
@@ -87,11 +103,11 @@ impl Value {
         }
     }
 
-    pub fn get_obj_prop(&self, prop: &str) -> Value {
+    pub fn get_obj_prop(&self, interned_string_id: InternedStringId) -> Value {
         match self {
             Value::NanBox(v) => {
                 let scope = unsafe {
-                    shopify_function_input_get_obj_prop(v.to_bits(), prop.as_ptr(), prop.len())
+                    shopify_function_input_get_obj_prop(v.to_bits(), interned_string_id.0)
                 };
                 Value::NanBox(NanBox::from_bits(scope))
             }
