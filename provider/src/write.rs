@@ -41,6 +41,14 @@ extern "C" fn shopify_function_output_new_i32(context: WriteContextPtr, int: i32
     WriteResult::Ok
 }
 
+#[export_name = "_shopify_function_output_new_f64"]
+extern "C" fn shopify_function_output_new_f64(context: WriteContextPtr, float: f64) -> WriteResult {
+    let mut context = write_context_from_raw(context);
+    let bytes = unsafe { &mut context.as_mut().bytes };
+    encode::write_f64(bytes, float).unwrap(); // infallible unwrap
+    WriteResult::Ok
+}
+
 #[export_name = "_shopify_function_output_finalize"]
 extern "C" fn shopify_function_output_finalize(context: WriteContextPtr) -> WriteResult {
     let mut context = write_context_from_raw(context);

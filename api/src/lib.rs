@@ -21,6 +21,7 @@ extern "C" {
     fn shopify_function_output_new_null(context: usize) -> WriteResult;
     fn shopify_function_output_finalize(context: usize) -> WriteResult;
     fn shopify_function_output_new_i32(context: usize, int: i32) -> WriteResult;
+    fn shopify_function_output_new_f64(context: usize, float: f64) -> WriteResult;
 }
 
 pub enum Value {
