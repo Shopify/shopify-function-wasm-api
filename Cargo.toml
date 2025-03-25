@@ -1,3 +1,3 @@
 [workspace]
-members = ["api", "core", "integration_tests", "provider", "trampoline"]
+members = ["api", "core", "integration_tests", "provider", "trampoline", "trampoline-cli"]
 resolver = "2"
