@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5.32", features = ["derive"] }
 shopify_function_wasm_api_trampoline = { path = "../trampoline" }
+
+[dev-dependencies]
+anyhow = "1.0"
