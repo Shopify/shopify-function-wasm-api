@@ -285,7 +285,7 @@ impl TrampolineCodegen {
                     .i64_const(32)
                     .binop(BinaryOp::I64ShrU)
                     .unop(UnaryOp::I32WrapI64) // result is on the stack now
-                    // extract the pointer with a bit shift and wrap it to i32
+                    // extract the pointer by wrapping the output to i32
                     .local_get(output)
                     .unop(UnaryOp::I32WrapI64) // dst_ptr is on the stack now
                     .local_get(src_ptr)

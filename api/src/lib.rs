@@ -10,20 +10,20 @@ pub use write::ValueSerializer;
 extern "C" {
     // Read API.
     fn shopify_function_input_get() -> Val;
-    fn shopify_function_input_get_val_len(scope: u64) -> usize;
+    fn shopify_function_input_get_val_len(scope: Val) -> usize;
     fn shopify_function_input_read_utf8_str(src: usize, out: *mut u8, len: usize);
-    fn shopify_function_input_get_obj_prop(scope: u64, ptr: *const u8, len: usize) -> Val;
-    fn shopify_function_input_get_at_index(scope: u64, index: u32) -> Val;
+    fn shopify_function_input_get_obj_prop(scope: Val, ptr: *const u8, len: usize) -> Val;
+    fn shopify_function_input_get_at_index(scope: Val, index: u32) -> Val;
 
     // Write API.
     fn shopify_function_output_new() -> WriteContext;
-    fn shopify_function_output_new_bool(context: usize, bool: u32) -> WriteResult;
-    fn shopify_function_output_new_null(context: usize) -> WriteResult;
-    fn shopify_function_output_finalize(context: usize) -> WriteResult;
-    fn shopify_function_output_new_i32(context: usize, int: i32) -> WriteResult;
-    fn shopify_function_output_new_f64(context: usize, float: f64) -> WriteResult;
+    fn shopify_function_output_new_bool(context: WriteContext, bool: u32) -> WriteResult;
+    fn shopify_function_output_new_null(context: WriteContext) -> WriteResult;
+    fn shopify_function_output_finalize(context: WriteContext) -> WriteResult;
+    fn shopify_function_output_new_i32(context: WriteContext, int: i32) -> WriteResult;
+    fn shopify_function_output_new_f64(context: WriteContext, float: f64) -> WriteResult;
     fn shopify_function_output_new_utf8_str(
-        context: usize,
+        context: WriteContext,
         ptr: *const u8,
         len: usize,
     ) -> WriteResult;
