@@ -174,9 +174,9 @@ impl TrampolineCodegen {
         let shopify_function_input_get_utf8_str_offset =
             self.module.types.add(&[ValType::I32], &[ValType::I32]);
 
-        let (shopify_function_input_get_utf8_str_offset, _) = self.module.add_import_func(
+        let (shopify_function_input_get_utf8_str_addr, _) = self.module.add_import_func(
             PROVIDER_MODULE_NAME,
-            "_shopify_function_input_get_utf8_str_offset",
+            "_shopify_function_input_get_utf8_str_addr",
             shopify_function_input_get_utf8_str_offset,
         );
 
@@ -189,9 +189,7 @@ impl TrampolineCodegen {
                     .func_body()
                     .local_get(arg_locals[1])
                     .local_get(arg_locals[0])
-                    .call(shopify_function_input_get_utf8_str_offset)
-                    .local_get(arg_locals[0])
-                    .binop(BinaryOp::I32Add)
+                    .call(shopify_function_input_get_utf8_str_addr)
                     .local_get(arg_locals[2])
                     .call(memcpy_to_guest);
             },
