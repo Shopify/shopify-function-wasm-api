@@ -49,6 +49,21 @@ extern "C" fn shopify_function_output_new_f64(context: WriteContextPtr, float: f
     WriteResult::Ok
 }
 
+/// The most significant 32 bits are the result, the least significant 32 bits are the pointer.
+#[export_name = "_shopify_function_output_new_utf8_str"]
+extern "C" fn shopify_function_output_new_utf8_str(context: WriteContextPtr, len: usize) -> u64 {
+    let (result, ptr): (WriteResult, *const u8) = {
+        let mut context = write_context_from_raw(context);
+        let bytes = unsafe { &mut context.as_mut().bytes };
+        encode::write_str_len(bytes, len as u32).unwrap(); // infallible unwrap
+        let original_len = bytes.as_slice().len();
+        // fill in the new bytes with zeros; the trampoline will copy the string to overwrite them
+        bytes.as_mut_vec().resize(original_len + len, 0);
+        (WriteResult::Ok, bytes.as_slice()[original_len..].as_ptr())
+    };
+    ((result as u64) << 32) | ptr as u64
+}
+
 #[export_name = "_shopify_function_output_finalize"]
 extern "C" fn shopify_function_output_finalize(context: WriteContextPtr) -> WriteResult {
     let mut context = write_context_from_raw(context);

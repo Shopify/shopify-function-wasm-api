@@ -37,6 +37,12 @@ impl ValueSerializer {
         map_result(unsafe { crate::shopify_function_output_new_f64(self.0 as _, value) })
     }
 
+    pub fn write_utf8_str(&mut self, value: &str) -> Result<(), Error> {
+        map_result(unsafe {
+            crate::shopify_function_output_new_utf8_str(self.0 as _, value.as_ptr(), value.len())
+        })
+    }
+
     pub fn finalize(&mut self) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_finalize(self.0 as _) })
     }

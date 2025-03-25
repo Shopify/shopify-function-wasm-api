@@ -1,6 +1,9 @@
 use std::cell::OnceCell;
 use std::path::Path;
-use walrus::{ir::BinaryOp, FunctionBuilder, FunctionId, ImportKind, MemoryId, Module, ValType};
+use walrus::{
+    ir::{BinaryOp, UnaryOp},
+    FunctionBuilder, FunctionId, ImportKind, MemoryId, Module, ValType,
+};
 
 pub const PROVIDER_MODULE_NAME: &str = concat!("shopify_function_v", env!("CARGO_PKG_VERSION"));
 
@@ -240,6 +243,60 @@ impl TrampolineCodegen {
         Ok(())
     }
 
+    fn emit_shopify_function_output_new_utf8_str(&mut self) -> walrus::Result<()> {
+        let Ok(imported_shopify_function_output_new_utf8_str) = self
+            .module
+            .imports
+            .get_func(PROVIDER_MODULE_NAME, "shopify_function_output_new_utf8_str")
+        else {
+            return Ok(());
+        };
+
+        let shopify_function_output_new_utf8_str_type = self
+            .module
+            .types
+            .add(&[ValType::I32, ValType::I32], &[ValType::I64]);
+
+        let (provider_shopify_function_output_new_utf8_str, _) = self.module.add_import_func(
+            PROVIDER_MODULE_NAME,
+            "_shopify_function_output_new_utf8_str",
+            shopify_function_output_new_utf8_str_type,
+        );
+
+        let memcpy_to_provider = self.emit_memcpy_to_provider();
+
+        let output = self.module.locals.add(ValType::I64);
+
+        self.module.replace_imported_func(
+            imported_shopify_function_output_new_utf8_str,
+            |(builder, arg_locals)| {
+                let context = arg_locals[0];
+                let src_ptr = arg_locals[1];
+                let len = arg_locals[2];
+
+                builder
+                    .func_body()
+                    .local_get(context)
+                    .local_get(len)
+                    // most significant 32 bits are the result, least significant 32 bits are the pointer
+                    .call(provider_shopify_function_output_new_utf8_str)
+                    .local_tee(output)
+                    // extract the result with a bit shift and wrap it to i32
+                    .i64_const(32)
+                    .binop(BinaryOp::I64ShrU)
+                    .unop(UnaryOp::I32WrapI64) // result is on the stack now
+                    // extract the pointer by wrapping the output to i32
+                    .local_get(output)
+                    .unop(UnaryOp::I32WrapI64) // dst_ptr is on the stack now
+                    .local_get(src_ptr)
+                    .local_get(len)
+                    .call(memcpy_to_provider);
+            },
+        )?;
+
+        Ok(())
+    }
+
     fn apply(mut self) -> walrus::Result<Module> {
         self.rename_imported_func("shopify_function_input_get", "_shopify_function_input_get")?;
         self.rename_imported_func(
@@ -276,6 +333,7 @@ impl TrampolineCodegen {
             "shopify_function_output_new_f64",
             "_shopify_function_output_new_f64",
         )?;
+        self.emit_shopify_function_output_new_utf8_str()?;
 
         Ok(self.module)
     }
