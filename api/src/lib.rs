@@ -6,7 +6,7 @@ use shopify_function_wasm_api_core::{
 mod write;
 pub use write::ValueSerializer;
 
-#[link(wasm_import_module = "shopify_function_v0.1.0")]
+#[link(wasm_import_module = "shopify_function_v0.0.1")]
 extern "C" {
     // Read API.
     fn shopify_function_input_get() -> Val;
