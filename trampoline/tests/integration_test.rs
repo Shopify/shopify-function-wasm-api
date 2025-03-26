@@ -34,6 +34,7 @@ fn test_trampoline_cli() -> Result<()> {
     ECHO_EXAMPLE
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to build example: {}", e))?;
+    println!("workspace_root: {:?}", workspace_root());
     let workspace_root = workspace_root();
     let input_path = workspace_root
         .join("target/wasm32-wasip1/release/examples")
@@ -53,7 +54,7 @@ fn test_trampoline_cli() -> Result<()> {
             "--output-path",
             output_path.to_str().unwrap(),
         ])
-        .current_dir(workspace_root.join("trampoline-cli"))
+        .current_dir(workspace_root.join("trampoline"))
         .status()?;
 
     assert!(status.success(), "Trampoline CLI failed to run");
