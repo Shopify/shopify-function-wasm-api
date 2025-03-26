@@ -1,10 +1,10 @@
 [package]
 name = "shopify_function_wasm_api"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-shopify_function_wasm_api_core = { path = "../core", version = "0.1.0" }
+shopify_function_wasm_api_core = { path = "../core", version = "0.0.1" }
 thiserror = "2.0"
 
 [[example]]
