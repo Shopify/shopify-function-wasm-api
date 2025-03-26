@@ -15,8 +15,8 @@ struct Args {
     output: PathBuf,
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    trampoline_existing_module(args.input, args.output).unwrap();
+    trampoline_existing_module(args.input, args.output)
 }
