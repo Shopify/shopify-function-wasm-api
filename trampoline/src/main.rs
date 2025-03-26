@@ -8,15 +8,15 @@ use shopify_function_wasm_api_trampoline::trampoline_existing_module;
 struct Args {
     /// Path to input Wasm file
     #[arg(short, long)]
-    input_path: PathBuf,
+    input: PathBuf,
 
-    /// Path to output Wasm file. If not provided, output will be written to stdout.
+    /// Path to output Wasm file
     #[arg(short, long)]
-    output_path: PathBuf,
+    output: PathBuf,
 }
 
 fn main() {
     let args = Args::parse();
 
-    trampoline_existing_module(args.input_path, args.output_path).unwrap();
+    trampoline_existing_module(args.input, args.output).unwrap();
 }

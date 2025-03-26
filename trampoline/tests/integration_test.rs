@@ -49,9 +49,9 @@ fn test_trampoline_cli() -> Result<()> {
             "run",
             "--release",
             "--",
-            "--input-path",
+            "--input",
             input_path.to_str().unwrap(),
-            "--output-path",
+            "--output",
             output_path.to_str().unwrap(),
         ])
         .current_dir(workspace_root.join("trampoline"))
