@@ -5,12 +5,27 @@ use shopify_function_wasm_api_core::write::WriteResult;
 pub enum Error {
     #[error("I/O error")]
     IoError,
+    #[error("Expected a key")]
+    ExpectedKey,
+    #[error("Object length error")]
+    ObjectLengthError,
+    #[error("Value already written")]
+    ValueAlreadyWritten,
+    #[error("Not an object")]
+    NotAnObject,
+    #[error("Value not finished")]
+    ValueNotFinished,
 }
 
 fn map_result(result: WriteResult) -> Result<(), Error> {
     match result {
         WriteResult::Ok => Ok(()),
         WriteResult::IoError => Err(Error::IoError),
+        WriteResult::ExpectedKey => Err(Error::ExpectedKey),
+        WriteResult::ObjectLengthError => Err(Error::ObjectLengthError),
+        WriteResult::ValueAlreadyWritten => Err(Error::ValueAlreadyWritten),
+        WriteResult::NotAnObject => Err(Error::NotAnObject),
+        WriteResult::ValueNotFinished => Err(Error::ValueNotFinished),
     }
 }
 
@@ -50,7 +65,7 @@ impl ValueSerializer {
     ) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_new_object(self.0 as _, len) })?;
         f(self)?;
-        Ok(())
+        map_result(unsafe { crate::shopify_function_output_finish_object(self.0 as _) })
     }
 
     pub fn finalize(&mut self) -> Result<(), Error> {

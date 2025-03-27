@@ -26,7 +26,8 @@ extern "C" {
         ptr: *const u8,
         len: usize,
     ) -> WriteResult;
-    fn shopify_function_output_new_object(context: usize, len: usize) -> WriteResult;
+    fn shopify_function_output_new_object(context: WriteContext, len: usize) -> WriteResult;
+    fn shopify_function_output_finish_object(context: WriteContext) -> WriteResult;
 }
 
 pub enum Value {
