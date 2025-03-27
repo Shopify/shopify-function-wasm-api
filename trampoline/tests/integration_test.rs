@@ -53,17 +53,17 @@ fn test_cli_trampolines_wasm_module() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to build example: {}", e))?;
     let output_path = generate_output_path();
 
-    // Run the trampoline-cli on the example
-    let status = Command::cargo_bin(env!("CARGO_PKG_NAME"))?
+    Command::cargo_bin(env!("CARGO_PKG_NAME"))?
         .args([
             "--input",
             echo_module_path().to_str().unwrap(),
             "--output",
             output_path.to_str().unwrap(),
         ])
-        .status()?;
+        .assert()
+        .success()
+        .code(0);
 
-    assert!(status.success(), "Trampoline CLI failed to run");
     assert!(output_path.exists(), "Output file was not created");
 
     Ok(())
@@ -72,24 +72,22 @@ fn test_cli_trampolines_wasm_module() -> Result<()> {
 #[test]
 fn test_outputs_error_if_input_does_not_exist() -> Result<()> {
     let output_path = generate_output_path();
-    let output = Command::cargo_bin(env!("CARGO_PKG_NAME"))?
+
+    Command::cargo_bin(env!("CARGO_PKG_NAME"))?
         .args([
             "--input",
             "non-existent-module.wasm",
             "--output",
             output_path.to_str().unwrap(),
         ])
-        .output()?;
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicates::str::contains(
+            "No such file or directory (os error 2)\n",
+        ));
 
-    assert!(
-        !output.status.success(),
-        "Trampoline CLI should have failed"
-    );
     assert!(!output_path.exists(), "An output file was created");
-    assert!(
-        String::from_utf8(output.stderr)?.contains("No such file or directory"),
-        "Expected missing file error"
-    );
 
     Ok(())
 }
@@ -103,23 +101,20 @@ fn test_overwrites_existing_output_file() -> Result<()> {
 
     // Create empty file at output path
     std::fs::write(&output_path, "")?;
-    assert_eq!(
-        output_path.metadata()?.len(),
-        0,
-        "Initial output file should be empty"
-    );
 
-    // Run the trampoline-cli on the example
-    let status = Command::cargo_bin(env!("CARGO_PKG_NAME"))?
+    // Run the trampoline CLI on the example
+    Command::cargo_bin(env!("CARGO_PKG_NAME"))?
         .args([
             "--input",
             echo_module_path().to_str().unwrap(),
             "--output",
             output_path.to_str().unwrap(),
         ])
-        .status()?;
+        .assert()
+        .success()
+        .code(0);
 
-    assert!(status.success(), "Trampoline CLI failed to run");
+    // Check that the output file is not empty anymore
     assert_ne!(
         output_path.metadata()?.len(),
         0,

@@ -12,3 +12,4 @@ clap = { version = "4.5.32", features = ["derive"] }
 [dev-dependencies]
 uuid = { version = "1.16.0", features = ["v4"] }
 assert_cmd = "2.0.16"
+predicates = "3.1.3"
