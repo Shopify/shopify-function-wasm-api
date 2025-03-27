@@ -7,10 +7,15 @@ use walrus::{
 
 pub const PROVIDER_MODULE_NAME: &str = concat!("shopify_function_v", env!("CARGO_PKG_VERSION"));
 
-pub fn trampoline_existing_module(path: impl AsRef<Path>) -> walrus::Result<Module> {
-    let module = Module::from_file(path)?;
+pub fn trampoline_existing_module(
+    source_path: impl AsRef<Path>,
+    destination_path: impl AsRef<Path>,
+) -> anyhow::Result<()> {
+    let module = Module::from_file(source_path)?;
 
-    TrampolineCodegen::new(module)?.apply()
+    TrampolineCodegen::new(module)?
+        .apply()?
+        .emit_wasm_file(destination_path)
 }
 
 struct TrampolineCodegen {

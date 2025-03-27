@@ -51,9 +51,7 @@ fn apply_trampoline_to_example(name: &str) -> Result<()> {
     let examples_dir = workspace_root.join("target/wasm32-wasip1/release/examples");
     let example_path = examples_dir.join(name).with_extension("wasm");
     let merged_path = example_path.with_extension("merged.wasm");
-    let mut merged_module =
-        shopify_function_wasm_api_trampoline::trampoline_existing_module(example_path)?;
-    merged_module.emit_wasm_file(merged_path)?;
+    shopify_function_wasm_api_trampoline::trampoline_existing_module(example_path, merged_path)?;
 
     Ok(())
 }
