@@ -292,3 +292,18 @@ fn test_echo_with_utf8_str_input() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_echo_with_obj_input() -> Result<()> {
+    ECHO_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    assert_eq!(
+        run_example_with_input_and_msgpack_output(
+            "echo",
+            serde_json::json!({ "foo": 1, "bar": 2 })
+        )?,
+        serde_json::json!({ "foo": 1, "bar": 2 })
+    );
+    Ok(())
+}
