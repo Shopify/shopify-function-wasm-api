@@ -11,6 +11,7 @@ use state::State;
 struct WriteContext {
     bytes: ByteBuf,
     state: State,
+    parent_state_stack: Vec<State>,
 }
 
 impl WriteContext {
@@ -66,7 +67,7 @@ impl WriteContext {
     }
 
     fn start_object(&mut self, len: usize) -> WriteResult {
-        let result = self.state.start_object(len);
+        let result = self.state.start_object(len, &mut self.parent_state_stack);
         if result != WriteResult::Ok {
             return result;
         }
@@ -75,7 +76,7 @@ impl WriteContext {
     }
 
     fn finish_object(&mut self) -> WriteResult {
-        let result = self.state.finish_object();
+        let result = self.state.finish_object(&mut self.parent_state_stack);
         if result != WriteResult::Ok {
             return result;
         }
