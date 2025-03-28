@@ -82,6 +82,23 @@ impl WriteContext {
         }
         WriteResult::Ok
     }
+
+    fn start_array(&mut self, len: usize) -> WriteResult {
+        let result = self.state.start_array(len, &mut self.parent_state_stack);
+        if result != WriteResult::Ok {
+            return result;
+        }
+        encode::write_array_len(&mut self.bytes, len as u32).unwrap(); // infallible unwrap
+        WriteResult::Ok
+    }
+
+    fn finish_array(&mut self) -> WriteResult {
+        let result = self.state.finish_array(&mut self.parent_state_stack);
+        if result != WriteResult::Ok {
+            return result;
+        }
+        WriteResult::Ok
+    }
 }
 
 fn write_context_from_raw(context: WriteContextPtr) -> NonNull<WriteContext> {
@@ -140,9 +157,13 @@ extern "C" fn shopify_function_output_finish_object(context: WriteContextPtr) ->
 #[export_name = "_shopify_function_output_new_array"]
 fn shopify_function_output_new_array(context: WriteContextPtr, len: usize) -> WriteResult {
     let mut context = write_context_from_raw(context);
-    let bytes = unsafe { &mut context.as_mut().bytes };
-    encode::write_array_len(bytes, len as u32).unwrap(); // infallible unwrap
-    WriteResult::Ok
+    unsafe { context.as_mut().start_array(len) }
+}
+
+#[export_name = "_shopify_function_output_finish_array"]
+extern "C" fn shopify_function_output_finish_array(context: WriteContextPtr) -> WriteResult {
+    let mut context = write_context_from_raw(context);
+    unsafe { context.as_mut().finish_array() }
 }
 
 #[export_name = "_shopify_function_output_finalize"]
@@ -243,8 +264,7 @@ mod tests {
     #[test]
     fn test_write_context_object() {
         let mut context = WriteContext::default();
-        let result = context.start_object(2);
-        assert_eq!(result, WriteResult::Ok);
+        assert_eq!(context.start_object(2), WriteResult::Ok);
         assert_eq!(context.write_bool(true), WriteResult::ExpectedKey);
         assert_eq!(write_key(&mut context, "key"), WriteResult::Ok);
         assert_eq!(context.write_bool(false), WriteResult::Ok);
@@ -256,5 +276,19 @@ mod tests {
         assert_eq!(context.start_object(0), WriteResult::ValueAlreadyWritten);
         let json = bytes_to_json(context.bytes.as_slice());
         assert_eq!(json, serde_json::json!({ "key": false, "other_key": {} }));
+    }
+
+    #[test]
+    fn test_write_context_array() {
+        let mut context = WriteContext::default();
+        assert_eq!(context.start_array(2), WriteResult::Ok);
+        assert_eq!(context.write_bool(true), WriteResult::Ok);
+        assert_eq!(context.finish_array(), WriteResult::ArrayLengthError);
+        assert_eq!(context.start_array(0), WriteResult::Ok);
+        assert_eq!(context.finish_array(), WriteResult::Ok);
+        assert_eq!(context.finish_array(), WriteResult::Ok);
+        assert_eq!(context.start_array(0), WriteResult::ValueAlreadyWritten);
+        let json = bytes_to_json(context.bytes.as_slice());
+        assert_eq!(json, serde_json::json!([true, []]));
     }
 }
