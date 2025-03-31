@@ -1,4 +1,4 @@
-use core::ffi::c_void;
+use crate::Context;
 use shopify_function_wasm_api_core::write::WriteResult;
 
 #[derive(Debug, thiserror::Error)]
@@ -35,13 +35,7 @@ fn map_result(result: WriteResult) -> Result<(), Error> {
     }
 }
 
-pub struct ValueSerializer(*mut c_void);
-
-impl ValueSerializer {
-    pub fn new() -> Self {
-        Self(unsafe { crate::shopify_function_output_new() as *mut _ })
-    }
-
+impl Context {
     pub fn write_bool(&mut self, value: bool) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_new_bool(self.0 as _, value as u32) })
     }
@@ -84,13 +78,7 @@ impl ValueSerializer {
         map_result(unsafe { crate::shopify_function_output_finish_array(self.0 as _) })
     }
 
-    pub fn finalize(&mut self) -> Result<(), Error> {
+    pub fn finalize_output(&mut self) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_finalize(self.0 as _) })
-    }
-}
-
-impl Default for ValueSerializer {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -336,8 +336,6 @@ impl<T: AsRef<[u8]>> MsgpackInput<T> {
     }
 }
 
-unsafe impl<T: AsRef<[u8]>> Sync for MsgpackInput<T> {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
