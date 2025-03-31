@@ -1,23 +1,19 @@
-use shopify_function_wasm_api::{
-    input_get,
-    write::{Error as WriteError, ValueSerializer},
-    Value,
-};
+use shopify_function_wasm_api::{write::Error as WriteError, Context, Value};
 use std::error::Error;
 
 const KNOWN_KEYS: [&str; 2] = ["foo", "bar"];
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input = input_get();
+    let mut context = Context::new();
+    let input = context.input_get();
 
-    let mut out = ValueSerializer::new();
-    serialize_value(input, &mut out)?;
-    out.finalize()?;
+    serialize_value(input, &mut context)?;
+    context.finalize_output()?;
 
     Ok(())
 }
 
-fn serialize_value(value: Value, out: &mut ValueSerializer) -> Result<(), WriteError> {
+fn serialize_value(value: Value, out: &mut Context) -> Result<(), WriteError> {
     if let Some(b) = value.as_bool() {
         out.write_bool(b)
     } else if let Some(()) = value.as_null() {

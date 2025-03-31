@@ -171,8 +171,10 @@ impl TrampolineCodegen {
             return Ok(());
         };
 
-        let shopify_function_input_get_utf8_str_addr =
-            self.module.types.add(&[ValType::I32], &[ValType::I32]);
+        let shopify_function_input_get_utf8_str_addr = self
+            .module
+            .types
+            .add(&[ValType::I32, ValType::I32], &[ValType::I32]);
 
         let (shopify_function_input_get_utf8_str_addr, _) = self.module.add_import_func(
             PROVIDER_MODULE_NAME,
@@ -185,12 +187,18 @@ impl TrampolineCodegen {
         self.module.replace_imported_func(
             imported_shopify_function_input_read_utf8_str,
             |(builder, arg_locals)| {
+                let context = arg_locals[0];
+                let dst_ptr = arg_locals[1];
+                let src_ptr = arg_locals[2];
+                let len = arg_locals[3];
+
                 builder
                     .func_body()
-                    .local_get(arg_locals[1])
-                    .local_get(arg_locals[0])
+                    .local_get(src_ptr)
+                    .local_get(context)
+                    .local_get(dst_ptr)
                     .call(shopify_function_input_get_utf8_str_addr)
-                    .local_get(arg_locals[2])
+                    .local_get(len)
                     .call(memcpy_to_guest);
             },
         )?;
@@ -204,10 +212,10 @@ impl TrampolineCodegen {
             .imports
             .get_func(PROVIDER_MODULE_NAME, "shopify_function_input_get_obj_prop")
         {
-            let shopify_function_input_get_obj_prop_type = self
-                .module
-                .types
-                .add(&[ValType::I64, ValType::I32, ValType::I32], &[ValType::I64]);
+            let shopify_function_input_get_obj_prop_type = self.module.types.add(
+                &[ValType::I32, ValType::I64, ValType::I32, ValType::I32],
+                &[ValType::I64],
+            );
 
             let (provider_shopify_function_input_get_obj_prop, _) = self.module.add_import_func(
                 PROVIDER_MODULE_NAME,
@@ -223,9 +231,10 @@ impl TrampolineCodegen {
             self.module.replace_imported_func(
                 imported_shopify_function_input_get_obj_prop,
                 |(builder, arg_locals)| {
-                    let scope = arg_locals[0];
-                    let src_ptr = arg_locals[1];
-                    let len = arg_locals[2];
+                    let context = arg_locals[0];
+                    let scope = arg_locals[1];
+                    let src_ptr = arg_locals[2];
+                    let len = arg_locals[3];
 
                     builder
                         .func_body()
@@ -235,6 +244,7 @@ impl TrampolineCodegen {
                         .local_get(src_ptr)
                         .local_get(len)
                         .call(memcpy_to_provider)
+                        .local_get(context)
                         .local_get(scope)
                         .local_get(dst_ptr)
                         .local_get(len)
@@ -301,6 +311,10 @@ impl TrampolineCodegen {
     }
 
     fn apply(mut self) -> walrus::Result<Module> {
+        self.rename_imported_func(
+            "shopify_function_context_new",
+            "_shopify_function_context_new",
+        )?;
         self.rename_imported_func("shopify_function_input_get", "_shopify_function_input_get")?;
         self.rename_imported_func(
             "shopify_function_input_get_val_len",
@@ -311,10 +325,6 @@ impl TrampolineCodegen {
         self.rename_imported_func(
             "shopify_function_input_get_at_index",
             "_shopify_function_input_get_at_index",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_output_new",
-            "_shopify_function_output_new",
         )?;
         self.rename_imported_func(
             "shopify_function_output_new_bool",
