@@ -18,4 +18,8 @@ pub enum WriteResult {
     NotAnObject = 5,
     /// Value not finished.
     ValueNotFinished = 6,
+    /// The array length was not honoured.
+    ArrayLengthError = 7,
+    /// The value is not an array, but an operation expected an array.
+    NotAnArray = 8,
 }

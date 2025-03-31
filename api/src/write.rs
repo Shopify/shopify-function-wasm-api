@@ -15,6 +15,10 @@ pub enum Error {
     NotAnObject,
     #[error("Value not finished")]
     ValueNotFinished,
+    #[error("Array length error")]
+    ArrayLengthError,
+    #[error("Not an array")]
+    NotAnArray,
 }
 
 fn map_result(result: WriteResult) -> Result<(), Error> {
@@ -26,6 +30,8 @@ fn map_result(result: WriteResult) -> Result<(), Error> {
         WriteResult::ValueAlreadyWritten => Err(Error::ValueAlreadyWritten),
         WriteResult::NotAnObject => Err(Error::NotAnObject),
         WriteResult::ValueNotFinished => Err(Error::ValueNotFinished),
+        WriteResult::ArrayLengthError => Err(Error::ArrayLengthError),
+        WriteResult::NotAnArray => Err(Error::NotAnArray),
     }
 }
 
@@ -66,6 +72,16 @@ impl ValueSerializer {
         map_result(unsafe { crate::shopify_function_output_new_object(self.0 as _, len) })?;
         f(self)?;
         map_result(unsafe { crate::shopify_function_output_finish_object(self.0 as _) })
+    }
+
+    pub fn write_array<F: FnOnce(&mut Self) -> Result<(), Error>>(
+        &mut self,
+        f: F,
+        len: usize,
+    ) -> Result<(), Error> {
+        map_result(unsafe { crate::shopify_function_output_new_array(self.0 as _, len) })?;
+        f(self)?;
+        map_result(unsafe { crate::shopify_function_output_finish_array(self.0 as _) })
     }
 
     pub fn finalize(&mut self) -> Result<(), Error> {

@@ -42,6 +42,16 @@ fn serialize_value(value: Value, out: &mut ValueSerializer) -> Result<(), WriteE
             },
             2,
         )
+    } else if let Some(len) = value.array_len() {
+        out.write_array(
+            |out| {
+                for i in 0..len {
+                    serialize_value(value.get_at_index(i), out)?;
+                }
+                Ok(())
+            },
+            len,
+        )
     } else {
         panic!("unexpected value");
     }
