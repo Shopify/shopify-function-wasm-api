@@ -1,17 +1,7 @@
-use rmp::{
-    decode::{self, read_marker, Bytes},
-    Marker,
-};
-
-trait BytesExt {
-    fn advance(&mut self, len: usize);
-}
-
-impl BytesExt for Bytes<'_> {
-    fn advance(&mut self, len: usize) {
-        *self = Bytes::new(&self.remaining_slice()[len..]);
-    }
-}
+use super::CursorExt;
+use rmp::Marker;
+use shopify_function_wasm_api_core::read::ErrorCode;
+use std::io::Cursor;
 
 /// Skips a value in the reader.
 ///
@@ -20,86 +10,72 @@ impl BytesExt for Bytes<'_> {
 /// # Errors
 ///
 ///  This function will return an error if the reader runs out of bytes before the value is read.
-pub(crate) fn skip_value(
-    reader: &mut Bytes,
-) -> Result<(), decode::MarkerReadError<decode::bytes::BytesReadError>> {
+pub(crate) fn skip_value(cursor: &mut Cursor<&[u8]>) -> Result<(), ErrorCode> {
     // `read_marker` will advance the reader by 1 byte if it's a marker
-    match read_marker(reader)? {
+    match cursor.read_marker()? {
         Marker::False | Marker::True | Marker::Null | Marker::FixPos(_) | Marker::FixNeg(_) => {
             Ok(())
         }
         Marker::U8 | Marker::I8 => {
-            reader.advance(1);
+            cursor.advance(1);
             Ok(())
         }
         Marker::U16 | Marker::I16 => {
-            reader.advance(2);
+            cursor.advance(2);
             Ok(())
         }
         Marker::F32 | Marker::U32 | Marker::I32 => {
-            reader.advance(4);
+            cursor.advance(4);
             Ok(())
         }
         Marker::F64 | Marker::U64 | Marker::I64 => {
-            reader.advance(8);
+            cursor.advance(8);
             Ok(())
         }
         Marker::FixStr(len) => {
-            reader.advance(len as usize);
+            cursor.advance(len as usize);
             Ok(())
         }
         Marker::Str8 => {
-            let len = reader.remaining_slice()[0];
-            reader.advance(len as usize + 1);
+            let len = cursor.read_byte(0)? as usize;
+            cursor.advance(len);
             Ok(())
         }
         Marker::Str16 => {
-            let remaining = reader.remaining_slice();
-            let len = u16::from_be_bytes([remaining[0], remaining[1]]);
-            reader.advance(len as usize + 2);
+            let len = cursor.read_u16(0)? as usize;
+            cursor.advance(len);
             Ok(())
         }
         Marker::Str32 => {
-            let remaining = reader.remaining_slice();
-            let len = u32::from_be_bytes([remaining[0], remaining[1], remaining[2], remaining[3]]);
-            reader.advance(len as usize + 4);
+            let len = cursor.read_u32(0)? as usize;
+            cursor.advance(len);
             Ok(())
         }
         Marker::FixMap(len) => {
             let len = len as usize;
-            (0..len * 2).try_for_each(|_| skip_value(reader))
+            (0..len * 2).try_for_each(|_| skip_value(cursor))
         }
         Marker::Map16 => {
-            let remaining = reader.remaining_slice();
-            let len = u16::from_be_bytes([remaining[0], remaining[1]]) as usize;
-            reader.advance(2);
-            (0..len * 2).try_for_each(|_| skip_value(reader))
+            let len = cursor.read_u16(0)? as usize;
+            (0..len * 2).try_for_each(|_| skip_value(cursor))
         }
         Marker::Map32 => {
-            let remaining = reader.remaining_slice();
-            let len = u32::from_be_bytes([remaining[0], remaining[1], remaining[2], remaining[3]])
-                as usize;
-            reader.advance(4);
-            (0..len * 2).try_for_each(|_| skip_value(reader))
+            let len = cursor.read_u32(0)? as usize;
+            (0..len * 2).try_for_each(|_| skip_value(cursor))
         }
         Marker::FixArray(len) => {
             let len = len as usize;
-            (0..len).try_for_each(|_| skip_value(reader))
+            (0..len).try_for_each(|_| skip_value(cursor))
         }
         Marker::Array16 => {
-            let remaining = reader.remaining_slice();
-            let len = u16::from_be_bytes([remaining[0], remaining[1]]) as usize;
-            reader.advance(2);
-            (0..len).try_for_each(|_| skip_value(reader))
+            let len = cursor.read_u16(0)? as usize;
+            (0..len).try_for_each(|_| skip_value(cursor))
         }
         Marker::Array32 => {
-            let remaining = reader.remaining_slice();
-            let len = u32::from_be_bytes([remaining[0], remaining[1], remaining[2], remaining[3]])
-                as usize;
-            reader.advance(4);
-            (0..len).try_for_each(|_| skip_value(reader))
+            let len = cursor.read_u32(0)? as usize;
+            (0..len).try_for_each(|_| skip_value(cursor))
         }
-        marker => todo!("marker not yet supported: {:?}", marker),
+        _ => Err(ErrorCode::ReadError),
     }
 }
 
@@ -117,10 +93,10 @@ mod tests {
     }
 
     fn test_skip_value(bytes: &[u8]) {
-        let mut reader = Bytes::new(bytes);
-        skip_value(&mut reader).unwrap();
+        let mut cursor = Cursor::new(bytes);
+        skip_value(&mut cursor).unwrap();
         let expected: &[u8] = &[];
-        assert_eq!(reader.remaining_slice(), expected);
+        assert_eq!(cursor.remainder(), expected);
     }
 
     #[test]
@@ -223,7 +199,7 @@ mod tests {
     #[test]
     fn test_skip_value_run_out_of_bytes() {
         let bytes = build_msgpack(|w| encode::write_map_len(w, 1).map(|_| ())).unwrap();
-        let mut reader = Bytes::new(&bytes);
-        skip_value(&mut reader).unwrap_err();
+        let mut cursor = Cursor::new(bytes.as_slice());
+        skip_value(&mut cursor).unwrap_err();
     }
 }
