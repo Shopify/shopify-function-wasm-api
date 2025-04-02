@@ -171,13 +171,13 @@ impl TrampolineCodegen {
             return Ok(());
         };
 
-        let shopify_function_input_get_utf8_str_offset =
+        let shopify_function_input_get_utf8_str_addr =
             self.module.types.add(&[ValType::I32], &[ValType::I32]);
 
         let (shopify_function_input_get_utf8_str_addr, _) = self.module.add_import_func(
             PROVIDER_MODULE_NAME,
             "_shopify_function_input_get_utf8_str_addr",
-            shopify_function_input_get_utf8_str_offset,
+            shopify_function_input_get_utf8_str_addr,
         );
 
         let memcpy_to_guest = self.emit_memcpy_to_guest();

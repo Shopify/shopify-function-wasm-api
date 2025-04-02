@@ -33,6 +33,7 @@ trait CursorExt<'a> {
     fn remainder(&self) -> &'a [u8];
     fn advance(&mut self, len: usize);
     fn peek_marker(&self) -> Result<Marker, ErrorCode>;
+    fn read_marker(&mut self) -> Result<Marker, ErrorCode>;
     fn read_byte(&mut self, offset: usize) -> Result<u8, ErrorCode>;
     fn read_u16(&mut self, offset: usize) -> Result<u16, ErrorCode>;
     fn read_u32(&mut self, offset: usize) -> Result<u32, ErrorCode>;
@@ -55,11 +56,17 @@ impl<'a> CursorExt<'a> for Cursor<&'a [u8]> {
         Ok(Marker::from_u8(bytes[0]))
     }
 
+    fn read_marker(&mut self) -> Result<Marker, ErrorCode> {
+        let byte = self.read_byte(0)?;
+        Ok(Marker::from_u8(byte))
+    }
+
     fn read_byte(&mut self, offset: usize) -> Result<u8, ErrorCode> {
         let bytes = self.remainder();
         if offset >= bytes.len() {
             return Err(ErrorCode::ReadError);
         }
+        self.advance(offset + 1);
         Ok(bytes[offset])
     }
 
@@ -68,6 +75,7 @@ impl<'a> CursorExt<'a> for Cursor<&'a [u8]> {
             return Err(ErrorCode::ReadError);
         }
         let bytes = &self.get_ref()[self.position() as usize + offset..];
+        self.advance(offset + 2);
         Ok(u16::from_be_bytes([bytes[0], bytes[1]]))
     }
 
@@ -76,6 +84,7 @@ impl<'a> CursorExt<'a> for Cursor<&'a [u8]> {
             return Err(ErrorCode::ReadError);
         }
         let bytes = &self.get_ref()[self.position() as usize + offset..];
+        self.advance(offset + 4);
         Ok(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
     }
 }
@@ -158,6 +167,7 @@ extern "C" fn shopify_function_input_get_at_index(scope: u64, index: u32) -> u64
 }
 
 fn encode_value(cursor: &mut Cursor<&[u8]>) -> NanBox {
+    let marker_position = cursor.position() as usize;
     match cursor.peek_marker() {
         Ok(Marker::False) => NanBox::bool(false),
         Ok(Marker::True) => NanBox::bool(true),
@@ -176,36 +186,31 @@ fn encode_value(cursor: &mut Cursor<&[u8]>) -> NanBox {
         Ok(Marker::FixNeg(n)) => NanBox::number(n as f64),
         Ok(Marker::FixStr(len)) => {
             let len = len as usize;
-            NanBox::string(cursor.position() as usize, len)
+            NanBox::string(marker_position, len)
         }
         Ok(Marker::Str8) => match cursor.read_byte(1) {
-            Ok(len) => NanBox::string(cursor.position() as usize, len as usize),
+            Ok(len) => NanBox::string(marker_position, len as usize),
             Err(e) => NanBox::error(e),
         },
         Ok(Marker::Str16) => match cursor.read_u16(1) {
-            Ok(len) => NanBox::string(cursor.position() as usize, len as usize),
+            Ok(len) => NanBox::string(marker_position, len as usize),
             Err(e) => NanBox::error(e),
         },
         Ok(Marker::Str32) => match cursor.read_u32(1) {
-            Ok(len) => NanBox::string(cursor.position() as usize, len as usize),
+            Ok(len) => NanBox::string(marker_position, len as usize),
             Err(e) => NanBox::error(e),
         },
-        Ok(Marker::FixMap(_) | Marker::Map16 | Marker::Map32) => {
-            NanBox::obj(cursor.position() as usize)
-        }
-        Ok(Marker::FixArray(len)) => NanBox::array(cursor.position() as usize, len as usize),
+        Ok(Marker::FixMap(_) | Marker::Map16 | Marker::Map32) => NanBox::obj(marker_position),
+        Ok(Marker::FixArray(len)) => NanBox::array(marker_position, len as usize),
         Ok(Marker::Array16) => match cursor.read_u16(1) {
-            Ok(len) => NanBox::array(cursor.position() as usize, len as usize),
+            Ok(len) => NanBox::array(marker_position, len as usize),
             Err(e) => NanBox::error(e),
         },
         Ok(Marker::Array32) => match cursor.read_u32(1) {
-            Ok(len) => NanBox::array(cursor.position() as usize, len as usize),
+            Ok(len) => NanBox::array(marker_position, len as usize),
             Err(e) => NanBox::error(e),
         },
-        Ok(marker) => {
-            eprintln!("Unsupported marker: {:?}", marker);
-            todo!("marker not yet supported: {:?}", marker)
-        }
+        Ok(_) => NanBox::error(ErrorCode::ReadError),
         Err(e) => NanBox::error(e),
     }
 }
@@ -221,11 +226,11 @@ extern "C" fn shopify_function_input_get_val_len(scope: u64) -> usize {
                 Ok(cursor) => cursor,
                 Err(_) => return 0,
             };
-            match cursor.peek_marker() {
+            match cursor.read_marker() {
                 Ok(Marker::FixStr(len) | Marker::FixArray(len)) => len as usize,
-                Ok(Marker::Str8) => cursor.read_byte(1).unwrap_or(0) as usize,
-                Ok(Marker::Str16 | Marker::Array16) => cursor.read_u16(1).unwrap_or(0) as usize,
-                Ok(Marker::Str32 | Marker::Array32) => cursor.read_u32(1).unwrap_or(0) as usize,
+                Ok(Marker::Str8) => cursor.read_byte(0).unwrap_or(0) as usize,
+                Ok(Marker::Str16 | Marker::Array16) => cursor.read_u16(0).unwrap_or(0) as usize,
+                Ok(Marker::Str32 | Marker::Array32) => cursor.read_u32(0).unwrap_or(0) as usize,
                 _ => 0,
             }
         }
