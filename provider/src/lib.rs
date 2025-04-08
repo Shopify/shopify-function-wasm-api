@@ -37,13 +37,13 @@ impl Context {
 
         Self::new(input_bytes)
     }
+
+    fn new_from_raw(raw: ContextPtr) -> &'static mut Self {
+        unsafe { NonNull::new_unchecked(raw as _).as_mut() }
+    }
 }
 
 #[export_name = "_shopify_function_context_new"]
 extern "C" fn shopify_function_context_new() -> ContextPtr {
     Box::into_raw(Box::new(Context::new_from_stdin())) as _
-}
-
-fn context_from_raw(context: ContextPtr) -> NonNull<Context> {
-    unsafe { NonNull::new_unchecked(context as _) }
 }

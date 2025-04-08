@@ -1,4 +1,4 @@
-use crate::{context_from_raw, Context};
+use crate::Context;
 use rmp::encode;
 use shopify_function_wasm_api_core::{write::WriteResult, ContextPtr};
 use std::io::Write;
@@ -104,68 +104,68 @@ impl Context {
 
 #[export_name = "_shopify_function_output_new_bool"]
 extern "C" fn shopify_function_output_new_bool(context: ContextPtr, bool: u32) -> WriteResult {
-    let mut context = context_from_raw(context);
-    unsafe { context.as_mut().write_bool(bool != 0) }
+    let context = Context::new_from_raw(context);
+    context.write_bool(bool != 0)
 }
 
 #[export_name = "_shopify_function_output_new_null"]
 extern "C" fn shopify_function_output_new_null(context: ContextPtr) -> WriteResult {
-    let mut context = context_from_raw(context);
-    unsafe { context.as_mut().write_nil() }
+    let context = Context::new_from_raw(context);
+    context.write_nil()
 }
 
 #[export_name = "_shopify_function_output_new_i32"]
 extern "C" fn shopify_function_output_new_i32(context: ContextPtr, int: i32) -> WriteResult {
-    let mut context = context_from_raw(context);
-    unsafe { context.as_mut().write_i32(int) }
+    let context = Context::new_from_raw(context);
+    context.write_i32(int)
 }
 
 #[export_name = "_shopify_function_output_new_f64"]
 extern "C" fn shopify_function_output_new_f64(context: ContextPtr, float: f64) -> WriteResult {
-    let mut context = context_from_raw(context);
-    unsafe { context.as_mut().write_f64(float) }
+    let context = Context::new_from_raw(context);
+    context.write_f64(float)
 }
 
 /// The most significant 32 bits are the result, the least significant 32 bits are the pointer.
 #[export_name = "_shopify_function_output_new_utf8_str"]
 extern "C" fn shopify_function_output_new_utf8_str(context: ContextPtr, len: usize) -> u64 {
-    let mut context = context_from_raw(context);
-    let (result, ptr) = unsafe { context.as_mut().allocate_utf8_str(len) };
+    let context = Context::new_from_raw(context);
+    let (result, ptr) = context.allocate_utf8_str(len);
     ((result as u64) << 32) | ptr as u64
 }
 
 #[export_name = "_shopify_function_output_new_object"]
 extern "C" fn shopify_function_output_new_object(context: ContextPtr, len: usize) -> WriteResult {
-    let mut context = context_from_raw(context);
-    unsafe { context.as_mut().start_object(len) }
+    let context = Context::new_from_raw(context);
+    context.start_object(len)
 }
 
 #[export_name = "_shopify_function_output_finish_object"]
 extern "C" fn shopify_function_output_finish_object(context: ContextPtr) -> WriteResult {
-    let mut context = context_from_raw(context);
-    unsafe { context.as_mut().finish_object() }
+    let context = Context::new_from_raw(context);
+    context.finish_object()
 }
 
 #[export_name = "_shopify_function_output_new_array"]
 extern "C" fn shopify_function_output_new_array(context: ContextPtr, len: usize) -> WriteResult {
-    let mut context = context_from_raw(context);
-    unsafe { context.as_mut().start_array(len) }
+    let context = Context::new_from_raw(context);
+    context.start_array(len)
 }
 
 #[export_name = "_shopify_function_output_finish_array"]
 extern "C" fn shopify_function_output_finish_array(context: ContextPtr) -> WriteResult {
-    let mut context = context_from_raw(context);
-    unsafe { context.as_mut().finish_array() }
+    let context = Context::new_from_raw(context);
+    context.finish_array()
 }
 
 #[export_name = "_shopify_function_output_finalize"]
 extern "C" fn shopify_function_output_finalize(context: ContextPtr) -> WriteResult {
-    let mut context = context_from_raw(context);
+    let context = Context::new_from_raw(context);
     let Context {
         output_bytes,
         write_state,
         ..
-    } = unsafe { &mut context.as_mut() };
+    } = &context;
     if *write_state != State::End {
         return WriteResult::ValueNotFinished;
     }
@@ -179,7 +179,7 @@ extern "C" fn shopify_function_output_finalize(context: ContextPtr) -> WriteResu
     if stdout.flush().is_err() {
         return WriteResult::IoError;
     }
-    let _ = unsafe { Box::from_raw(context.as_ptr()) }; // drop the context
+    let _ = unsafe { Box::from_raw(context as *mut Context) }; // drop the context
     WriteResult::Ok
 }
 
