@@ -82,7 +82,7 @@ jobs:
             target: aarch64-apple-darwin
           - name: windows
             os: windows-latest
-            path: target\x86_64-pc-windows-msvc\release\shopify_function_wasm_api_trampoline.exe
+            path: target\x86_64-pc-windows-msvc\release\wasm-trampoline-cli.exe
             asset_name: shopify-function-wasm-api-trampoline-x86_64-windows-${{ inputs.tag_name || github.event.release.tag_name }}
             shasum_cmd: sha256sum
             target: x86_64-pc-windows-msvc
