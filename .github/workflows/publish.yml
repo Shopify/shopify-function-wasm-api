@@ -24,7 +24,7 @@ jobs:
       - name: Extract provider version
         id: provider_version
         run: |
-          VERSION=$(grep -m 1 '^version = ' provider/Cargo.toml | cut -d '"' -f 2)
+          VERSION=$(cargo metadata --format-version=1 --locked | jq '.packages[] | select(.name == "shopify_function_wasm_api_provider") | .version' -r)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build provider asset
