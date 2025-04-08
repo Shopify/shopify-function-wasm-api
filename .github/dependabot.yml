@@ -5,7 +5,7 @@ updates:
     reviewers:
       - "@Shopify/functions-dependabot-reviewers"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
     open-pull-requests-limit: 100
   - package-ecosystem: "github-actions"
     directory: "/"
