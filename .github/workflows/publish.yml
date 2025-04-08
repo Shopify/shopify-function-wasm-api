@@ -18,40 +18,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install wasm32-wasi target
+      - name: Install wasm32-wasip1 target
         run: rustup target add wasm32-wasip1
+
+      - name: Extract provider version
+        id: provider_version
+        run: |
+          VERSION=$(grep -m 1 '^version = ' provider/Cargo.toml | cut -d '"' -f 2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build provider asset
         run: cargo build --release --target wasm32-wasip1 --package shopify_function_wasm_api_provider
 
       - name: Archive asset
-        run: gzip -k -f target/wasm32-wasip1/release/shopify_function_wasm_api_provider.wasm && mv target/wasm32-wasip1/release/shopify_function_wasm_api_provider.wasm.gz shopify-function-wasm-api-provider.wasm.gz
+        run: gzip -k -f target/wasm32-wasip1/release/shopify_function_wasm_api_provider.wasm && mv target/wasm32-wasip1/release/shopify_function_wasm_api_provider.wasm.gz shopify-function-wasm-api-provider-${{ steps.provider_version.outputs.version }}.wasm.gz
 
       - name: Generate asset hash
-        run: sha256sum shopify-function-wasm-api-provider.wasm.gz | awk '{ print $1 }' > shopify-function-wasm-api-provider.wasm.gz.sha256
+        run: sha256sum shopify-function-wasm-api-provider-${{ steps.provider_version.outputs.version }}.wasm.gz | awk '{ print $1 }' > shopify-function-wasm-api-provider-${{ steps.provider_version.outputs.version }}.wasm.gz.sha256
 
       - name: Upload asset to artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: shopify-function-wasm-api-provider.wasm.gz
-          path: shopify-function-wasm-api-provider.wasm.gz
+          name: shopify-function-wasm-api-provider-${{ steps.provider_version.outputs.version }}.wasm.gz
+          path: shopify-function-wasm-api-provider-${{ steps.provider_version.outputs.version }}.wasm.gz
 
       - name: Upload asset hash to artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: shopify-function-wasm-api-provider.wasm.gz.sha256
-          path: shopify-function-wasm-api-provider.wasm.gz.sha256
+          name: shopify-function-wasm-api-provider-${{ steps.provider_version.outputs.version }}.wasm.gz.sha256
+          path: shopify-function-wasm-api-provider-${{ steps.provider_version.outputs.version }}.wasm.gz.sha256
 
       - name: Upload asset and hash to release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload ${{ inputs.tag_name || github.event.release.tag_name }} shopify-function-wasm-api-provider.wasm.gz
-          gh release upload ${{ inputs.tag_name || github.event.release.tag_name }} shopify-function-wasm-api-provider.wasm.gz.sha256
+          gh release upload ${{ inputs.tag_name || github.event.release.tag_name }} shopify-function-wasm-api-provider-${{ steps.provider_version.outputs.version }}.wasm.gz
+          gh release upload ${{ inputs.tag_name || github.event.release.tag_name }} shopify-function-wasm-api-provider-${{ steps.provider_version.outputs.version }}.wasm.gz.sha256
 
   compile:
     name: Compile trampoline-cli-${{ matrix.name }}
-    needs: compile-provider
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
