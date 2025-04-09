@@ -1,8 +1,9 @@
-use shopify_function_wasm_api::{input_get, Value};
+use shopify_function_wasm_api::{Context, Value};
 use std::{error::Error, io::Write};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input = input_get();
+    let context = Context::new();
+    let input = context.input_get()?;
     let mut out = std::io::stdout();
     let serialized = format!("got value {}\n", serialize_value(input));
     out.write_all(serialized.as_bytes())?;
