@@ -273,10 +273,12 @@ impl TrampolineCodegen {
     }
 
     fn emit_shopify_function_output_new_interned_utf8_str(&mut self) -> walrus::Result<()> {
-        let Ok(imported_shopify_function_output_new_interned_utf8_str) = self.module.imports.get_func(
-            PROVIDER_MODULE_NAME,
-            "shopify_function_output_new_interned_utf8_str",
-        ) else {
+        let Ok(imported_shopify_function_output_new_interned_utf8_str) =
+            self.module.imports.get_func(
+                PROVIDER_MODULE_NAME,
+                "shopify_function_output_new_interned_utf8_str",
+            )
+        else {
             return Ok(());
         };
 
@@ -285,11 +287,12 @@ impl TrampolineCodegen {
             .types
             .add(&[ValType::I32, ValType::I32], &[ValType::I32]);
 
-        let (provider_shopify_function_output_new_interned_utf8_str, _) = self.module.add_import_func(
-            PROVIDER_MODULE_NAME,
-            "_shopify_function_output_new_interned_utf8_str",
-            shopify_function_output_new_interned_utf8_str_type,
-        );
+        let (provider_shopify_function_output_new_interned_utf8_str, _) =
+            self.module.add_import_func(
+                PROVIDER_MODULE_NAME,
+                "_shopify_function_output_new_interned_utf8_str",
+                shopify_function_output_new_interned_utf8_str_type,
+            );
 
         self.module.replace_imported_func(
             imported_shopify_function_output_new_interned_utf8_str,
