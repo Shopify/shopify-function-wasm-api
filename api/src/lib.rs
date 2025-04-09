@@ -3,6 +3,7 @@ use shopify_function_wasm_api_core::{
     write::WriteResult,
     ContextPtr,
 };
+use std::ptr::NonNull;
 
 pub mod write;
 
@@ -46,7 +47,7 @@ extern "C" {
 }
 
 pub struct Value {
-    context: ContextPtr,
+    context: NonNull<ContextPtr>,
     nan_box: NanBox,
 }
 
@@ -77,8 +78,10 @@ impl Value {
             Ok(ValueRef::String { ptr, len }) => {
                 let len = if len as u64 == NanBox::MAX_VALUE_LENGTH {
                     unsafe {
-                        shopify_function_input_get_val_len(self.context, self.nan_box.to_bits())
-                            as usize
+                        shopify_function_input_get_val_len(
+                            self.context.as_ptr() as _,
+                            self.nan_box.to_bits(),
+                        ) as usize
                     }
                 } else {
                     len
@@ -86,7 +89,7 @@ impl Value {
                 let mut buf = vec![0; len];
                 unsafe {
                     shopify_function_input_read_utf8_str(
-                        self.context,
+                        self.context.as_ptr() as _,
                         ptr as _,
                         buf.as_mut_ptr(),
                         len,
@@ -107,7 +110,7 @@ impl Value {
             Ok(ValueRef::Object { .. }) => {
                 let scope = unsafe {
                     shopify_function_input_get_obj_prop(
-                        self.context,
+                        self.context.as_ptr() as _,
                         self.nan_box.to_bits(),
                         prop.as_ptr(),
                         prop.len(),
@@ -134,8 +137,10 @@ impl Value {
             Ok(ValueRef::Array { len, .. }) => {
                 let len = if len as u64 == NanBox::MAX_VALUE_LENGTH {
                     unsafe {
-                        shopify_function_input_get_val_len(self.context, self.nan_box.to_bits())
-                            as usize
+                        shopify_function_input_get_val_len(
+                            self.context.as_ptr() as _,
+                            self.nan_box.to_bits(),
+                        ) as usize
                     }
                 } else {
                     len
@@ -150,7 +155,11 @@ impl Value {
         match self.nan_box.try_decode() {
             Ok(ValueRef::Array { .. }) => {
                 let scope = unsafe {
-                    shopify_function_input_get_at_index(self.context, self.nan_box.to_bits(), index)
+                    shopify_function_input_get_at_index(
+                        self.context.as_ptr() as _,
+                        self.nan_box.to_bits(),
+                        index,
+                    )
                 };
                 Self {
                     context: self.context,
@@ -167,17 +176,34 @@ impl Value {
 
 pub struct Context(ContextPtr);
 
+#[derive(Debug)]
+pub enum ContextError {
+    NullPointer,
+}
+
+impl std::error::Error for ContextError {}
+
+impl std::fmt::Display for ContextError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContextError::NullPointer => write!(f, "Null pointer encountered"),
+        }
+    }
+}
+
 impl Context {
     pub fn new() -> Self {
         Self(unsafe { shopify_function_context_new() })
     }
 
-    pub fn input_get(&self) -> Value {
+    pub fn input_get(&self) -> Result<Value, ContextError> {
         let val = unsafe { shopify_function_input_get(self.0) };
-        Value {
-            context: self.0,
-            nan_box: NanBox::from_bits(val),
-        }
+        NonNull::new(self.0 as _)
+            .ok_or(ContextError::NullPointer)
+            .map(|context| Value {
+                context,
+                nan_box: NanBox::from_bits(val),
+            })
     }
 }
 
