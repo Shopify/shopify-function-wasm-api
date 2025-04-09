@@ -24,8 +24,6 @@ struct TrampolineCodegen {
     provider_memory_id: OnceCell<MemoryId>,
     memcpy_to_guest: OnceCell<FunctionId>,
     memcpy_to_provider: OnceCell<FunctionId>,
-    imported_shopify_function_realloc: OnceCell<FunctionId>,
-    alloc: OnceCell<FunctionId>,
 }
 
 impl TrampolineCodegen {
@@ -38,8 +36,6 @@ impl TrampolineCodegen {
             provider_memory_id: OnceCell::new(),
             memcpy_to_guest: OnceCell::new(),
             memcpy_to_provider: OnceCell::new(),
-            imported_shopify_function_realloc: OnceCell::new(),
-            alloc: OnceCell::new(),
         })
     }
 
@@ -108,44 +104,6 @@ impl TrampolineCodegen {
         })
     }
 
-    fn emit_shopify_function_realloc_import(&mut self) -> FunctionId {
-        *self.imported_shopify_function_realloc.get_or_init(|| {
-            let shopify_function_realloc_type = self.module.types.add(
-                &[ValType::I32, ValType::I32, ValType::I32, ValType::I32],
-                &[ValType::I32],
-            );
-
-            let (imported_shopify_function_realloc, _) = self.module.add_import_func(
-                PROVIDER_MODULE_NAME,
-                "shopify_function_realloc",
-                shopify_function_realloc_type,
-            );
-
-            imported_shopify_function_realloc
-        })
-    }
-
-    fn emit_alloc(&mut self) -> FunctionId {
-        let imported_shopify_function_realloc = self.emit_shopify_function_realloc_import();
-
-        *self.alloc.get_or_init(|| {
-            let mut alloc =
-                FunctionBuilder::new(&mut self.module.types, &[ValType::I32], &[ValType::I32]);
-
-            let size = self.module.locals.add(ValType::I32);
-
-            alloc
-                .func_body()
-                .i32_const(0)
-                .i32_const(0)
-                .i32_const(1)
-                .local_get(size)
-                .call(imported_shopify_function_realloc);
-
-            alloc.finish(vec![size], &mut self.module.funcs)
-        })
-    }
-
     fn rename_imported_func(&mut self, func_name: &str, new_name: &str) -> walrus::Result<()> {
         let Some(import_id) = self.module.imports.find(PROVIDER_MODULE_NAME, func_name) else {
             return Ok(());
@@ -206,52 +164,56 @@ impl TrampolineCodegen {
         Ok(())
     }
 
-    fn emit_shopify_function_input_get_obj_prop(&mut self) -> walrus::Result<()> {
-        if let Ok(imported_shopify_function_input_get_obj_prop) = self
+    fn emit_shopify_function_intern_utf8_str(&mut self) -> walrus::Result<()> {
+        let Ok(imported_shopify_function_intern_utf8_str) = self
             .module
             .imports
-            .get_func(PROVIDER_MODULE_NAME, "shopify_function_input_get_obj_prop")
-        {
-            let shopify_function_input_get_obj_prop_type = self.module.types.add(
-                &[ValType::I32, ValType::I64, ValType::I32, ValType::I32],
-                &[ValType::I64],
-            );
+            .get_func(PROVIDER_MODULE_NAME, "shopify_function_intern_utf8_str")
+        else {
+            return Ok(());
+        };
 
-            let (provider_shopify_function_input_get_obj_prop, _) = self.module.add_import_func(
-                PROVIDER_MODULE_NAME,
-                "_shopify_function_input_get_obj_prop",
-                shopify_function_input_get_obj_prop_type,
-            );
+        let shopify_function_intern_utf8_str_type = self
+            .module
+            .types
+            .add(&[ValType::I32, ValType::I32], &[ValType::I64]);
 
-            let alloc = self.emit_alloc();
-            let memcpy_to_provider = self.emit_memcpy_to_provider();
+        let (provider_shopify_function_intern_utf8_str, _) = self.module.add_import_func(
+            PROVIDER_MODULE_NAME,
+            "_shopify_function_intern_utf8_str",
+            shopify_function_intern_utf8_str_type,
+        );
 
-            let dst_ptr = self.module.locals.add(ValType::I32);
+        let memcpy_to_provider = self.emit_memcpy_to_provider();
 
-            self.module.replace_imported_func(
-                imported_shopify_function_input_get_obj_prop,
-                |(builder, arg_locals)| {
-                    let context = arg_locals[0];
-                    let scope = arg_locals[1];
-                    let src_ptr = arg_locals[2];
-                    let len = arg_locals[3];
+        let output = self.module.locals.add(ValType::I64);
 
-                    builder
-                        .func_body()
-                        .local_get(len)
-                        .call(alloc)
-                        .local_tee(dst_ptr)
-                        .local_get(src_ptr)
-                        .local_get(len)
-                        .call(memcpy_to_provider)
-                        .local_get(context)
-                        .local_get(scope)
-                        .local_get(dst_ptr)
-                        .local_get(len)
-                        .call(provider_shopify_function_input_get_obj_prop);
-                },
-            )?;
-        }
+        self.module.replace_imported_func(
+            imported_shopify_function_intern_utf8_str,
+            |(builder, arg_locals)| {
+                let context = arg_locals[0];
+                let src_ptr = arg_locals[1];
+                let len = arg_locals[2];
+
+                builder
+                    .func_body()
+                    .local_get(context)
+                    .local_get(len)
+                    // most significant 32 bits are the ID, least significant 32 bits are the pointer
+                    .call(provider_shopify_function_intern_utf8_str)
+                    .local_tee(output)
+                    // extract the ID with a bit shift and wrap it to i32
+                    .i64_const(32)
+                    .binop(BinaryOp::I64ShrU)
+                    .unop(UnaryOp::I32WrapI64) // ID is on the stack now
+                    // extract the pointer with a bit shift and wrap it to i32
+                    .local_get(output)
+                    .unop(UnaryOp::I32WrapI64) // dst_ptr is on the stack now
+                    .local_get(src_ptr)
+                    .local_get(len)
+                    .call(memcpy_to_provider);
+            },
+        )?;
 
         Ok(())
     }
@@ -321,7 +283,10 @@ impl TrampolineCodegen {
             "_shopify_function_input_get_val_len",
         )?;
         self.emit_shopify_function_input_read_utf8_str()?;
-        self.emit_shopify_function_input_get_obj_prop()?;
+        self.rename_imported_func(
+            "shopify_function_input_get_obj_prop",
+            "_shopify_function_input_get_obj_prop",
+        )?;
         self.rename_imported_func(
             "shopify_function_input_get_at_index",
             "_shopify_function_input_get_at_index",
@@ -347,6 +312,7 @@ impl TrampolineCodegen {
             "_shopify_function_output_new_f64",
         )?;
         self.emit_shopify_function_output_new_utf8_str()?;
+        self.emit_shopify_function_intern_utf8_str()?;
         self.rename_imported_func(
             "shopify_function_output_new_object",
             "_shopify_function_output_new_object",
