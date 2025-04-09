@@ -39,7 +39,7 @@ extern "C" {
         ptr: *const u8,
         len: usize,
     ) -> WriteResult;
-    fn shopify_function_output_new_interned_str(
+    fn shopify_function_output_new_interned_utf8_str(
         context: ContextPtr,
         id: shopify_function_wasm_api_core::InternedStringId,
     ) -> WriteResult;

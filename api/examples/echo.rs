@@ -37,7 +37,7 @@ fn serialize_value(
             |out| {
                 for key in known_keys {
                     let value = value.get_obj_prop(*key);
-                    out.write_interned_str(*key)?;
+                    out.write_interned_utf8_str(*key)?;
                     serialize_value(value, out, known_keys)?;
                 }
                 Ok(())

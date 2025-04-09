@@ -101,7 +101,7 @@ impl Context {
         WriteResult::Ok
     }
 
-    fn write_interned_str(
+    fn write_interned_utf8_str(
         &mut self,
         id: shopify_function_wasm_api_core::InternedStringId,
     ) -> WriteResult {
@@ -191,13 +191,13 @@ extern "C" fn shopify_function_output_finish_array(context: ContextPtr) -> Write
     }
 }
 
-#[export_name = "_shopify_function_output_new_interned_str"]
-extern "C" fn shopify_function_output_new_interned_str(
+#[export_name = "_shopify_function_output_new_interned_utf8_str"]
+extern "C" fn shopify_function_output_new_interned_utf8_str(
     context: ContextPtr,
     id: shopify_function_wasm_api_core::InternedStringId,
 ) -> WriteResult {
     match Context::mut_from_raw(context) {
-        Ok(context) => context.write_interned_str(id),
+        Ok(context) => context.write_interned_utf8_str(id),
         Err(_) => WriteResult::IoError,
     }
 }

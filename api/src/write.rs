@@ -59,8 +59,8 @@ impl Context {
         })
     }
 
-    pub fn write_interned_str(&mut self, id: InternedStringId) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_interned_str(self.0 as _, id.0) })
+    pub fn write_interned_utf8_str(&mut self, id: InternedStringId) -> Result<(), Error> {
+        map_result(unsafe { crate::shopify_function_output_new_interned_utf8_str(self.0 as _, id.0) })
     }
 
     pub fn write_object<F: FnOnce(&mut Self) -> Result<(), Error>>(
