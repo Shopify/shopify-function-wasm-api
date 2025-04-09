@@ -17,6 +17,11 @@ struct Context {
     write_parent_state_stack: Vec<State>,
 }
 
+#[derive(Debug)]
+pub enum ContextError {
+    NullPointer,
+}
+
 impl Context {
     fn new(input_bytes: Vec<u8>) -> Self {
         Self {
@@ -38,8 +43,16 @@ impl Context {
         Self::new(input_bytes)
     }
 
-    fn new_from_raw(raw: ContextPtr) -> &'static mut Self {
-        unsafe { NonNull::new_unchecked(raw as _).as_mut() }
+    fn ref_from_raw<'a>(raw: ContextPtr) -> Result<&'a Self, ContextError> {
+        NonNull::new(raw as _)
+            .ok_or(ContextError::NullPointer)
+            .map(|ptr| unsafe { ptr.as_ref() })
+    }
+
+    fn mut_from_raw<'a>(raw: ContextPtr) -> Result<&'a mut Self, ContextError> {
+        NonNull::new(raw as _)
+            .ok_or(ContextError::NullPointer)
+            .map(|mut ptr| unsafe { ptr.as_mut() })
     }
 }
 

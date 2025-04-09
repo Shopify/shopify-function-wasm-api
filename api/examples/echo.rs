@@ -5,7 +5,7 @@ const KNOWN_KEYS: [&str; 2] = ["foo", "bar"];
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut context = Context::new();
-    let input = context.input_get();
+    let input = context.input_get()?;
 
     serialize_value(input, &mut context)?;
     context.finalize_output()?;
