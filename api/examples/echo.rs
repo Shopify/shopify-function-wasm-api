@@ -1,24 +1,13 @@
 use shopify_function_wasm_api::{write::Error as WriteError, Context, InternedStringId, Value};
 use std::error::Error;
 
-struct Key {
-    id: InternedStringId,
-    value: &'static str,
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     let mut context = Context::new();
     let input = context.input_get()?;
 
-    let foo_key = Key {
-        id: context.intern_utf8_str("foo"),
-        value: "foo",
-    };
-    let bar_key = Key {
-        id: context.intern_utf8_str("bar"),
-        value: "bar",
-    };
-    let known_keys = [&foo_key, &bar_key];
+    let foo_key = context.intern_utf8_str("foo");
+    let bar_key = context.intern_utf8_str("bar");
+    let known_keys = [foo_key, bar_key];
 
     serialize_value(input, &mut context, &known_keys)?;
     context.finalize_output()?;
@@ -26,7 +15,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn serialize_value(value: Value, out: &mut Context, known_keys: &[&Key]) -> Result<(), WriteError> {
+fn serialize_value(
+    value: Value,
+    out: &mut Context,
+    known_keys: &[InternedStringId],
+) -> Result<(), WriteError> {
     if let Some(b) = value.as_bool() {
         out.write_bool(b)
     } else if let Some(()) = value.as_null() {
@@ -43,8 +36,8 @@ fn serialize_value(value: Value, out: &mut Context, known_keys: &[&Key]) -> Resu
         out.write_object(
             |out| {
                 for key in known_keys {
-                    let value = value.get_obj_prop(key.id);
-                    out.write_utf8_str(key.value)?;
+                    let value = value.get_obj_prop(*key);
+                    out.write_interned_str(*key)?;
                     serialize_value(value, out, known_keys)?;
                 }
                 Ok(())

@@ -39,6 +39,10 @@ extern "C" {
         ptr: *const u8,
         len: usize,
     ) -> WriteResult;
+    fn shopify_function_output_new_interned_str(
+        context: ContextPtr,
+        id: shopify_function_wasm_api_core::InternedStringId,
+    ) -> WriteResult;
     fn shopify_function_output_new_object(context: ContextPtr, len: usize) -> WriteResult;
     fn shopify_function_output_finish_object(context: ContextPtr) -> WriteResult;
     fn shopify_function_output_new_array(context: ContextPtr, len: usize) -> WriteResult;

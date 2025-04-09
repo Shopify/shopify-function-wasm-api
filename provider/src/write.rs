@@ -100,6 +100,19 @@ impl Context {
         }
         WriteResult::Ok
     }
+
+    fn write_interned_str(
+        &mut self,
+        id: shopify_function_wasm_api_core::InternedStringId,
+    ) -> WriteResult {
+        let str_data = self.string_interner.get(id).to_vec();
+        let (result, ptr) = self.allocate_utf8_str(str_data.len());
+        if result != WriteResult::Ok {
+            return result;
+        }
+        unsafe { std::ptr::copy_nonoverlapping(str_data.as_ptr(), ptr as *mut u8, str_data.len()) };
+        WriteResult::Ok
+    }
 }
 
 #[export_name = "_shopify_function_output_new_bool"]
@@ -174,6 +187,17 @@ extern "C" fn shopify_function_output_new_array(context: ContextPtr, len: usize)
 extern "C" fn shopify_function_output_finish_array(context: ContextPtr) -> WriteResult {
     match Context::mut_from_raw(context) {
         Ok(context) => context.finish_array(),
+        Err(_) => WriteResult::IoError,
+    }
+}
+
+#[export_name = "_shopify_function_output_new_interned_str"]
+extern "C" fn shopify_function_output_new_interned_str(
+    context: ContextPtr,
+    id: shopify_function_wasm_api_core::InternedStringId,
+) -> WriteResult {
+    match Context::mut_from_raw(context) {
+        Ok(context) => context.write_interned_str(id),
         Err(_) => WriteResult::IoError,
     }
 }
