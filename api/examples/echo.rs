@@ -1,6 +1,4 @@
-use shopify_function_wasm_api::{
-    write::Error as WriteError, Context, InternedStringId, Value,
-};
+use shopify_function_wasm_api::{write::Error as WriteError, Context, InternedStringId, Value};
 use std::error::Error;
 
 struct Key {
