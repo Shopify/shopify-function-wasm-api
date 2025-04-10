@@ -24,6 +24,12 @@ extern "C" {
     fn shopify_function_input_get_obj_prop(
         context: ContextPtr,
         scope: Val,
+        ptr: *const u8,
+        len: usize,
+    ) -> Val;
+    fn shopify_function_input_get_interned_obj_prop(
+        context: ContextPtr,
+        scope: Val,
         interned_string_id: shopify_function_wasm_api_core::InternedStringId,
     ) -> Val;
     fn shopify_function_input_get_at_index(context: ContextPtr, scope: Val, index: usize) -> Val;
@@ -124,11 +130,34 @@ impl Value {
         matches!(self.nan_box.try_decode(), Ok(ValueRef::Object { .. }))
     }
 
-    pub fn get_obj_prop(&self, interned_string_id: InternedStringId) -> Self {
+    pub fn get_obj_prop(&self, prop: &str) -> Self {
         match self.nan_box.try_decode() {
             Ok(ValueRef::Object { .. }) => {
                 let scope = unsafe {
                     shopify_function_input_get_obj_prop(
+                        self.context.as_ptr() as _,
+                        self.nan_box.to_bits(),
+                        prop.as_ptr(),
+                        prop.len(),
+                    )
+                };
+                Self {
+                    context: self.context,
+                    nan_box: NanBox::from_bits(scope),
+                }
+            }
+            _ => Self {
+                context: self.context,
+                nan_box: NanBox::from_bits(self.nan_box.to_bits()),
+            },
+        }
+    }
+
+    pub fn get_interned_obj_prop(&self, interned_string_id: InternedStringId) -> Self {
+        match self.nan_box.try_decode() {
+            Ok(ValueRef::Object { .. }) => {
+                let scope = unsafe {
+                    shopify_function_input_get_interned_obj_prop(
                         self.context.as_ptr() as _,
                         self.nan_box.to_bits(),
                         interned_string_id.as_usize(),

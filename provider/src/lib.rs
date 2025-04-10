@@ -1,3 +1,4 @@
+mod alloc;
 mod read;
 mod string_interner;
 mod write;

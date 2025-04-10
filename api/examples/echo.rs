@@ -1,6 +1,7 @@
 use shopify_function_wasm_api::{write::Error as WriteError, Context, InternedStringId, Value};
 use std::error::Error;
 
+// Uses interned strings
 fn main() -> Result<(), Box<dyn Error>> {
     let mut context = Context::new();
     let input = context.input_get()?;
@@ -36,7 +37,7 @@ fn serialize_value(
         out.write_object(
             |out| {
                 for key in known_keys {
-                    let value = value.get_obj_prop(*key);
+                    let value = value.get_interned_obj_prop(*key);
                     out.write_interned_utf8_str(*key)?;
                     serialize_value(value, out, known_keys)?;
                 }
