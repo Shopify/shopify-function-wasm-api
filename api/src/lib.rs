@@ -55,6 +55,16 @@ extern "C" {
 #[derive(Clone, Copy)]
 pub struct InternedStringId(shopify_function_wasm_api_core::InternedStringId);
 
+impl InternedStringId {
+    pub fn from_usize(id: usize) -> Self {
+        Self(id)
+    }
+
+    pub fn as_usize(&self) -> usize {
+        self.0
+    }
+}
+
 pub struct Value {
     context: NonNull<ContextPtr>,
     nan_box: NanBox,
@@ -121,7 +131,7 @@ impl Value {
                     shopify_function_input_get_obj_prop(
                         self.context.as_ptr() as _,
                         self.nan_box.to_bits(),
-                        interned_string_id.0,
+                        interned_string_id.as_usize(),
                     )
                 };
                 Self {
