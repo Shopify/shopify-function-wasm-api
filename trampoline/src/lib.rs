@@ -364,45 +364,6 @@ impl TrampolineCodegen {
         Ok(())
     }
 
-    fn emit_shopify_function_output_new_interned_utf8_str(&mut self) -> walrus::Result<()> {
-        let Ok(imported_shopify_function_output_new_interned_utf8_str) =
-            self.module.imports.get_func(
-                PROVIDER_MODULE_NAME,
-                "shopify_function_output_new_interned_utf8_str",
-            )
-        else {
-            return Ok(());
-        };
-
-        let shopify_function_output_new_interned_utf8_str_type = self
-            .module
-            .types
-            .add(&[ValType::I32, ValType::I32], &[ValType::I32]);
-
-        let (provider_shopify_function_output_new_interned_utf8_str, _) =
-            self.module.add_import_func(
-                PROVIDER_MODULE_NAME,
-                "_shopify_function_output_new_interned_utf8_str",
-                shopify_function_output_new_interned_utf8_str_type,
-            );
-
-        self.module.replace_imported_func(
-            imported_shopify_function_output_new_interned_utf8_str,
-            |(builder, arg_locals)| {
-                let context = arg_locals[0];
-                let id = arg_locals[1];
-
-                builder
-                    .func_body()
-                    .local_get(context)
-                    .local_get(id)
-                    .call(provider_shopify_function_output_new_interned_utf8_str);
-            },
-        )?;
-
-        Ok(())
-    }
-
     fn apply(mut self) -> walrus::Result<Module> {
         self.rename_imported_func(
             "shopify_function_context_new",
@@ -445,7 +406,10 @@ impl TrampolineCodegen {
         )?;
         self.emit_shopify_function_output_new_utf8_str()?;
         self.emit_shopify_function_intern_utf8_str()?;
-        self.emit_shopify_function_output_new_interned_utf8_str()?;
+        self.rename_imported_func(
+            "shopify_function_output_new_interned_utf8_str",
+            "_shopify_function_output_new_interned_utf8_str",
+        )?;
         self.rename_imported_func(
             "shopify_function_output_new_object",
             "_shopify_function_output_new_object",

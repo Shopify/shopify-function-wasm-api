@@ -105,12 +105,13 @@ impl Context {
         &mut self,
         id: shopify_function_wasm_api_core::InternedStringId,
     ) -> WriteResult {
-        let str_data = self.string_interner.get(id).to_vec();
-        let (result, ptr) = self.allocate_utf8_str(str_data.len());
+        let len = self.string_interner.get(id).len();
+        let (result, ptr) = self.allocate_utf8_str(len);
         if result != WriteResult::Ok {
             return result;
         }
-        unsafe { std::ptr::copy_nonoverlapping(str_data.as_ptr(), ptr as *mut u8, str_data.len()) };
+        let str_data = self.string_interner.get(id);
+        unsafe { std::ptr::copy_nonoverlapping(str_data.as_ptr(), ptr as *mut u8, len) };
         WriteResult::Ok
     }
 }

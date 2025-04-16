@@ -28,10 +28,6 @@ impl StringInterner {
     }
 }
 
-/// SAFETY: We know the Wasm environment is single-threaded, so the concept of
-/// `Sync` is basically meaningless.
-unsafe impl Sync for StringInterner {}
-
 #[cfg(test)]
 mod tests {
     use super::*;

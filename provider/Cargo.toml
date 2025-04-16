@@ -7,7 +7,6 @@ edition = "2021"
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-once_cell = "1.20.3"
 rmp = "0.8.14"
 shopify_function_wasm_api_core = { path = "../core", version = "0.0.1" }
 
