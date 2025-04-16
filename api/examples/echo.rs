@@ -23,7 +23,7 @@ fn serialize_value(
 ) -> Result<(), WriteError> {
     if let Some(b) = value.as_bool() {
         out.write_bool(b)
-    } else if let Some(()) = value.as_null() {
+    } else if value.is_null() {
         out.write_null()
     } else if let Some(n) = value.as_number() {
         if n.trunc() == n && n >= i32::MIN as f64 && n <= i32::MAX as f64 {

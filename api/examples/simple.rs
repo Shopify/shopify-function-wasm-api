@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn serialize_value(value: Value) -> String {
     if let Some(boolean) = value.as_bool() {
         format!("{}", boolean)
-    } else if value.as_null().is_some() {
+    } else if value.is_null() {
         "null".to_string()
     } else if let Some(number) = value.as_number() {
         format!("{}", number)

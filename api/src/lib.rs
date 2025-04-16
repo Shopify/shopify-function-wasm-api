@@ -5,7 +5,11 @@ use shopify_function_wasm_api_core::{
 };
 use std::ptr::NonNull;
 
+pub mod read;
 pub mod write;
+
+pub use read::Deserialize;
+pub use write::Serialize;
 
 #[link(wasm_import_module = "shopify_function_v0.0.1")]
 extern "C" {
@@ -71,6 +75,7 @@ impl InternedStringId {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Value {
     context: NonNull<ContextPtr>,
     nan_box: NanBox,
@@ -84,11 +89,8 @@ impl Value {
         }
     }
 
-    pub fn as_null(&self) -> Option<()> {
-        match self.nan_box.try_decode() {
-            Ok(ValueRef::Null) => Some(()),
-            _ => None,
-        }
+    pub fn is_null(&self) -> bool {
+        matches!(self.nan_box.try_decode(), Ok(ValueRef::Null))
     }
 
     pub fn as_number(&self) -> Option<f64> {
