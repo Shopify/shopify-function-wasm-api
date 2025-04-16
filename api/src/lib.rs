@@ -148,7 +148,7 @@ impl Value {
             }
             _ => Self {
                 context: self.context,
-                nan_box: NanBox::from_bits(self.nan_box.to_bits()),
+                nan_box: NanBox::null(),
             },
         }
     }
@@ -170,7 +170,7 @@ impl Value {
             }
             _ => Self {
                 context: self.context,
-                nan_box: NanBox::from_bits(self.nan_box.to_bits()),
+                nan_box: NanBox::null(),
             },
         }
     }
