@@ -1,11 +1,13 @@
 mod alloc;
 mod read;
+mod string_interner;
 mod write;
 
 use read::MsgpackInput;
 use rmp::encode::ByteBuf;
 use shopify_function_wasm_api_core::ContextPtr;
 use std::{io::Read, ptr::NonNull};
+use string_interner::StringInterner;
 use write::State;
 
 pub const PROVIDER_MODULE_NAME: &str = concat!("shopify_function_v", env!("CARGO_PKG_VERSION"));
@@ -15,6 +17,7 @@ struct Context {
     output_bytes: ByteBuf,
     write_state: State,
     write_parent_state_stack: Vec<State>,
+    string_interner: StringInterner,
 }
 
 #[derive(Debug)]
@@ -29,6 +32,7 @@ impl Context {
             output_bytes: ByteBuf::new(),
             write_state: State::Start,
             write_parent_state_stack: Vec::new(),
+            string_interner: StringInterner::new(),
         }
     }
 
@@ -59,4 +63,15 @@ impl Context {
 #[export_name = "_shopify_function_context_new"]
 extern "C" fn shopify_function_context_new() -> ContextPtr {
     Box::into_raw(Box::new(Context::new_from_stdin())) as _
+}
+
+#[export_name = "_shopify_function_intern_utf8_str"]
+extern "C" fn shopify_function_intern_utf8_str(context: ContextPtr, len: usize) -> u64 {
+    match Context::mut_from_raw(context) {
+        Ok(context) => {
+            let (id, ptr) = context.string_interner.preallocate(len);
+            ((id as u64) << 32) | (ptr as u64)
+        }
+        Err(_) => 0,
+    }
 }

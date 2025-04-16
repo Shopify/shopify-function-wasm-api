@@ -1,10 +1,12 @@
 use shopify_function_wasm_api::{Context, Value};
 use std::{error::Error, io::Write};
 
+// Does not use interned strings
 fn main() -> Result<(), Box<dyn Error>> {
     let context = Context::new();
     let input = context.input_get()?;
     let mut out = std::io::stdout();
+
     let serialized = format!("got value {}\n", serialize_value(input));
     out.write_all(serialized.as_bytes())?;
     out.flush()?;

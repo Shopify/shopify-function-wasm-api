@@ -27,6 +27,11 @@ extern "C" {
         ptr: *const u8,
         len: usize,
     ) -> Val;
+    fn shopify_function_input_get_interned_obj_prop(
+        context: ContextPtr,
+        scope: Val,
+        interned_string_id: shopify_function_wasm_api_core::InternedStringId,
+    ) -> Val;
     fn shopify_function_input_get_at_index(context: ContextPtr, scope: Val, index: usize) -> Val;
 
     // Write API.
@@ -40,10 +45,30 @@ extern "C" {
         ptr: *const u8,
         len: usize,
     ) -> WriteResult;
+    fn shopify_function_output_new_interned_utf8_str(
+        context: ContextPtr,
+        id: shopify_function_wasm_api_core::InternedStringId,
+    ) -> WriteResult;
     fn shopify_function_output_new_object(context: ContextPtr, len: usize) -> WriteResult;
     fn shopify_function_output_finish_object(context: ContextPtr) -> WriteResult;
     fn shopify_function_output_new_array(context: ContextPtr, len: usize) -> WriteResult;
     fn shopify_function_output_finish_array(context: ContextPtr) -> WriteResult;
+
+    // Other.
+    fn shopify_function_intern_utf8_str(context: ContextPtr, ptr: *const u8, len: usize) -> usize;
+}
+
+#[derive(Clone, Copy)]
+pub struct InternedStringId(shopify_function_wasm_api_core::InternedStringId);
+
+impl InternedStringId {
+    pub fn from_usize(id: usize) -> Self {
+        Self(id)
+    }
+
+    pub fn as_usize(&self) -> usize {
+        self.0
+    }
 }
 
 pub struct Value {
@@ -123,7 +148,29 @@ impl Value {
             }
             _ => Self {
                 context: self.context,
-                nan_box: NanBox::from_bits(self.nan_box.to_bits()),
+                nan_box: NanBox::null(),
+            },
+        }
+    }
+
+    pub fn get_interned_obj_prop(&self, interned_string_id: InternedStringId) -> Self {
+        match self.nan_box.try_decode() {
+            Ok(ValueRef::Object { .. }) => {
+                let scope = unsafe {
+                    shopify_function_input_get_interned_obj_prop(
+                        self.context.as_ptr() as _,
+                        self.nan_box.to_bits(),
+                        interned_string_id.as_usize(),
+                    )
+                };
+                Self {
+                    context: self.context,
+                    nan_box: NanBox::from_bits(scope),
+                }
+            }
+            _ => Self {
+                context: self.context,
+                nan_box: NanBox::null(),
             },
         }
     }
@@ -204,6 +251,13 @@ impl Context {
                 context,
                 nan_box: NanBox::from_bits(val),
             })
+    }
+
+    pub fn intern_utf8_str(&self, s: &str) -> InternedStringId {
+        let len = s.len();
+        let ptr = s.as_ptr();
+        let id = unsafe { shopify_function_intern_utf8_str(self.0 as _, ptr, len) };
+        InternedStringId(id)
     }
 }
 

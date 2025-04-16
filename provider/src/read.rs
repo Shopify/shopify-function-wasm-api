@@ -1,6 +1,9 @@
 use crate::Context;
-use shopify_function_wasm_api_core::read::{ErrorCode, NanBox, ValueRef as NanBoxValueRef};
 use shopify_function_wasm_api_core::ContextPtr;
+use shopify_function_wasm_api_core::{
+    read::{ErrorCode, NanBox, ValueRef as NanBoxValueRef},
+    InternedStringId,
+};
 
 mod msgpack_input;
 
@@ -30,6 +33,29 @@ extern "C" fn shopify_function_input_get_obj_prop(
             match v.try_decode() {
                 Ok(NanBoxValueRef::Object { ptr: obj_ptr }) => {
                     let query = unsafe { std::slice::from_raw_parts(ptr as *const u8, len) };
+                    let input = &context.msgpack_input;
+                    input.get_object_property(obj_ptr, query).to_bits()
+                }
+                Ok(_) => NanBox::error(ErrorCode::NotAnObject).to_bits(),
+                Err(_) => NanBox::error(ErrorCode::DecodeError).to_bits(),
+            }
+        }
+        Err(_) => NanBox::error(ErrorCode::ReadError).to_bits(),
+    }
+}
+
+#[export_name = "_shopify_function_input_get_interned_obj_prop"]
+extern "C" fn shopify_function_input_get_interned_obj_prop(
+    context: ContextPtr,
+    scope: u64,
+    interned_string_id: InternedStringId,
+) -> u64 {
+    match Context::ref_from_raw(context) {
+        Ok(context) => {
+            let v = NanBox::from_bits(scope);
+            match v.try_decode() {
+                Ok(NanBoxValueRef::Object { ptr: obj_ptr }) => {
+                    let query = context.string_interner.get(interned_string_id);
                     let input = &context.msgpack_input;
                     input.get_object_property(obj_ptr, query).to_bits()
                 }

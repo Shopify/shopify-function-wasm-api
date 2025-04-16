@@ -1,4 +1,5 @@
 use crate::Context;
+use crate::InternedStringId;
 use shopify_function_wasm_api_core::write::WriteResult;
 
 #[derive(Debug, thiserror::Error)]
@@ -55,6 +56,12 @@ impl Context {
     pub fn write_utf8_str(&mut self, value: &str) -> Result<(), Error> {
         map_result(unsafe {
             crate::shopify_function_output_new_utf8_str(self.0 as _, value.as_ptr(), value.len())
+        })
+    }
+
+    pub fn write_interned_utf8_str(&mut self, id: InternedStringId) -> Result<(), Error> {
+        map_result(unsafe {
+            crate::shopify_function_output_new_interned_utf8_str(self.0 as _, id.as_usize())
         })
     }
 

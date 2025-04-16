@@ -1,19 +1,26 @@
-use shopify_function_wasm_api::{write::Error as WriteError, Context, Value};
+use shopify_function_wasm_api::{write::Error as WriteError, Context, InternedStringId, Value};
 use std::error::Error;
 
-const KNOWN_KEYS: [&str; 2] = ["foo", "bar"];
-
+// Uses interned strings
 fn main() -> Result<(), Box<dyn Error>> {
     let mut context = Context::new();
     let input = context.input_get()?;
 
-    serialize_value(input, &mut context)?;
+    let foo_key = context.intern_utf8_str("foo");
+    let bar_key = context.intern_utf8_str("bar");
+    let known_keys = [foo_key, bar_key];
+
+    serialize_value(input, &mut context, &known_keys)?;
     context.finalize_output()?;
 
     Ok(())
 }
 
-fn serialize_value(value: Value, out: &mut Context) -> Result<(), WriteError> {
+fn serialize_value(
+    value: Value,
+    out: &mut Context,
+    known_keys: &[InternedStringId],
+) -> Result<(), WriteError> {
     if let Some(b) = value.as_bool() {
         out.write_bool(b)
     } else if let Some(()) = value.as_null() {
@@ -29,10 +36,10 @@ fn serialize_value(value: Value, out: &mut Context) -> Result<(), WriteError> {
     } else if value.is_obj() {
         out.write_object(
             |out| {
-                for key in KNOWN_KEYS {
-                    let value = value.get_obj_prop(key);
-                    out.write_utf8_str(key)?;
-                    serialize_value(value, out)?;
+                for key in known_keys {
+                    let value = value.get_interned_obj_prop(*key);
+                    out.write_interned_utf8_str(*key)?;
+                    serialize_value(value, out, known_keys)?;
                 }
                 Ok(())
             },
@@ -42,7 +49,7 @@ fn serialize_value(value: Value, out: &mut Context) -> Result<(), WriteError> {
         out.write_array(
             |out| {
                 for i in 0..len {
-                    serialize_value(value.get_at_index(i), out)?;
+                    serialize_value(value.get_at_index(i), out, known_keys)?;
                 }
                 Ok(())
             },
