@@ -78,7 +78,7 @@ impl Context {
         map_result(unsafe { crate::shopify_function_output_finish_array(self.0 as _) })
     }
 
-    pub fn finalize_output(&mut self) -> Result<(), Error> {
+    pub fn finalize_output(self) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_finalize(self.0 as _) })
     }
 }
