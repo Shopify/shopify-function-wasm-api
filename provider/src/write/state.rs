@@ -43,7 +43,7 @@ impl State {
                     return result;
                 }
                 self.swap_and_push(
-                    Self::Array(ArrayState {
+                    Self::Object(ObjectState {
                         length,
                         num_inserted: 0,
                     }),
@@ -228,7 +228,7 @@ mod tests {
         let mut state = State::Start;
         let mut parent_state_stack = Vec::new();
         assert_eq!(
-            state.start_object(2, &mut parent_state_stack),
+            state.start_object(3, &mut parent_state_stack),
             WriteResult::Ok
         );
         assert_eq!(state.write_non_string_scalar(), WriteResult::ExpectedKey);
@@ -243,6 +243,12 @@ mod tests {
             state.finish_object(&mut parent_state_stack),
             WriteResult::Ok
         );
+        assert_eq!(state.write_string(), WriteResult::Ok);
+        assert_eq!(
+            state.start_array(0, &mut parent_state_stack),
+            WriteResult::Ok
+        );
+        assert_eq!(state.finish_array(&mut parent_state_stack), WriteResult::Ok);
         assert_eq!(state.write_string(), WriteResult::ObjectLengthError);
         assert_eq!(
             state.finish_object(&mut parent_state_stack),
@@ -261,7 +267,7 @@ mod tests {
         let mut state = State::Start;
         let mut parent_state_stack = Vec::new();
         assert_eq!(
-            state.start_array(2, &mut parent_state_stack),
+            state.start_array(3, &mut parent_state_stack),
             WriteResult::Ok
         );
         assert_eq!(state.write_non_string_scalar(), WriteResult::Ok);
@@ -274,6 +280,14 @@ mod tests {
             WriteResult::Ok
         );
         assert_eq!(state.finish_array(&mut parent_state_stack), WriteResult::Ok);
+        assert_eq!(
+            state.start_object(0, &mut parent_state_stack),
+            WriteResult::Ok
+        );
+        assert_eq!(
+            state.finish_object(&mut parent_state_stack),
+            WriteResult::Ok
+        );
         assert_eq!(state.finish_array(&mut parent_state_stack), WriteResult::Ok);
         assert_eq!(state, State::End);
         assert_eq!(
