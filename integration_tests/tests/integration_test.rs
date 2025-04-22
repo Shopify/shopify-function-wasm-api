@@ -335,13 +335,14 @@ fn test_serialization() -> Result<()> {
         serde_json::json!({
             "my_string": "Hello, world!",
             "my_i32": 42,
-            "my_f64": 3.14,
+            "my_f64": 1.23,
             "my_bool": true,
             "my_vec": [1, 2, 3],
             "my_hash_map": {
                 "foo": 1,
                 "bar": 2,
             },
+            "my_option": null,
         })
     );
     Ok(())

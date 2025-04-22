@@ -167,3 +167,12 @@ impl<K: AsRef<str>, V: Serialize> Serialize for HashMap<K, V> {
         )
     }
 }
+
+impl<T: Serialize> Serialize for Option<T> {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+        match self {
+            Some(value) => value.serialize(context),
+            None => context.write_null(),
+        }
+    }
+}

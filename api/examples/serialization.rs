@@ -9,6 +9,7 @@ struct MyData {
     my_bool: bool,
     my_vec: Vec<i32>,
     my_hash_map: HashMap<String, i32>,
+    my_option: Option<String>,
 }
 
 impl Serialize for MyData {
@@ -27,10 +28,12 @@ impl Serialize for MyData {
                 self.my_vec.serialize(context)?;
                 context.write_utf8_str("my_hash_map")?;
                 self.my_hash_map.serialize(context)?;
+                context.write_utf8_str("my_option")?;
+                self.my_option.serialize(context)?;
 
                 Ok(())
             },
-            6,
+            7,
         )?;
         Ok(())
     }
@@ -40,10 +43,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let my_data = MyData {
         my_string: "Hello, world!".to_string(),
         my_i32: 42,
-        my_f64: 3.14,
+        my_f64: 1.23,
         my_bool: true,
         my_vec: vec![1, 2, 3],
         my_hash_map: HashMap::from([("foo".to_string(), 1), ("bar".to_string(), 2)]),
+        my_option: None,
     };
 
     let mut context = Context::new();
