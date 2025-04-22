@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::Context;
 use crate::InternedStringId;
 use shopify_function_wasm_api_core::write::WriteResult;
@@ -87,5 +89,97 @@ impl Context {
 
     pub fn finalize_output(self) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_finalize(self.0 as _) })
+    }
+}
+
+pub trait Serialize {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error>;
+}
+
+impl Serialize for bool {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+        context.write_bool(*self)
+    }
+}
+
+impl Serialize for () {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+        context.write_null()
+    }
+}
+
+impl Serialize for i32 {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+        context.write_i32(*self)
+    }
+}
+
+impl Serialize for f64 {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+        context.write_f64(*self)
+    }
+}
+
+impl Serialize for str {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+        context.write_utf8_str(self)
+    }
+}
+
+impl Serialize for String {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+        context.write_utf8_str(self)
+    }
+}
+
+impl<T: Serialize> Serialize for Vec<T> {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+        context.write_array(
+            |context| {
+                for item in self {
+                    item.serialize(context)?;
+                }
+                Ok(())
+            },
+            self.len(),
+        )
+    }
+}
+
+impl<T: Serialize> Serialize for [T] {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+        context.write_array(
+            |context| {
+                for item in self {
+                    item.serialize(context)?;
+                }
+                Ok(())
+            },
+            self.len(),
+        )
+    }
+}
+
+impl<K: AsRef<str>, V: Serialize> Serialize for HashMap<K, V> {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+        context.write_object(
+            |context| {
+                for (key, value) in self {
+                    key.as_ref().serialize(context)?;
+                    value.serialize(context)?;
+                }
+                Ok(())
+            },
+            self.len(),
+        )
+    }
+}
+
+impl<T: Serialize> Serialize for Option<T> {
+    fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+        match self {
+            Some(value) => value.serialize(context),
+            None => context.write_null(),
+        }
     }
 }

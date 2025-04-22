@@ -14,3 +14,7 @@ path = "examples/simple.rs"
 [[example]]
 name = "echo"
 path = "examples/echo.rs"
+
+[[example]]
+name = "serialization"
+path = "examples/serialization.rs"

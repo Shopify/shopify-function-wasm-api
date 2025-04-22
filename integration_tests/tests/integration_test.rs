@@ -93,6 +93,8 @@ fn run_example_with_input_and_msgpack_output(
 
 static SIMPLE_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("simple"));
 static ECHO_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("echo"));
+static SERIALIZATION_EXAMPLE_RESULT: LazyLock<Result<()>> =
+    LazyLock::new(|| prepare_example("serialization"));
 
 #[test]
 fn test_simple_with_bool_input() -> Result<()> {
@@ -324,6 +326,32 @@ fn test_echo_with_array_input() -> Result<()> {
     assert_eq!(
         run_example_with_input_and_msgpack_output("echo", serde_json::json!([1, 2, 3]))?,
         serde_json::json!([1, 2, 3])
+    );
+    Ok(())
+}
+
+#[test]
+fn test_serialization() -> Result<()> {
+    SERIALIZATION_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+
+    let output = run_example_with_input_and_msgpack_output("serialization", serde_json::json!({}))?;
+
+    assert_eq!(
+        output,
+        serde_json::json!({
+            "my_string": "Hello, world!",
+            "my_i32": 42,
+            "my_f64": 1.23,
+            "my_bool": true,
+            "my_vec": [1, 2, 3],
+            "my_hash_map": {
+                "foo": 1,
+                "bar": 2,
+            },
+            "my_option": null,
+        })
     );
     Ok(())
 }
