@@ -1,8 +1,11 @@
 use anyhow::Result;
 use integration_tests::prepare_example;
-use std::io::Cursor;
 use std::sync::LazyLock;
 use wasmtime::{Config, Engine, Linker, Module, Store};
+use wasmtime_wasi::{
+    pipe::{MemoryInputPipe, MemoryOutputPipe},
+    WasiCtxBuilder,
+};
 
 fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<Vec<u8>> {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
@@ -21,16 +24,27 @@ fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<Vec
 
     let input = rmp_serde::to_vec(&input)?;
 
-    let input_stream = wasi_common::pipe::ReadPipe::new(Cursor::new(input));
-    let output_stream = wasi_common::pipe::WritePipe::new_in_memory();
-    let error_stream = wasi_common::pipe::WritePipe::new_in_memory();
-
     let mut linker = Linker::new(&engine);
-    wasi_common::sync::add_to_linker(&mut linker, |ctx| ctx)?;
-    let wasi = deterministic_wasi_ctx::build_wasi_ctx();
-    wasi.set_stdin(Box::new(input_stream));
-    wasi.set_stdout(Box::new(output_stream.clone()));
-    wasi.set_stderr(Box::new(error_stream.clone()));
+    wasmtime_wasi::preview0::add_to_linker_sync(&mut linker, |ctx| ctx)
+        .expect("Failed to define wasi-ctx");
+    wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |ctx| ctx)
+        .expect("Failed to define wasi-ctx");
+    deterministic_wasi_ctx::replace_scheduling_functions(&mut linker)
+        .expect("Failed to replace scheduling functions in wasi-ctx");
+    deterministic_wasi_ctx::replace_scheduling_functions_for_wasi_preview_0(&mut linker)
+        .expect("Failed to replace scheduling functions in wasi-ctx");
+
+    let stdin = MemoryInputPipe::new(input);
+    let stderr = MemoryOutputPipe::new(usize::MAX);
+    let stdout = MemoryOutputPipe::new(usize::MAX);
+    let mut wasi_builder = WasiCtxBuilder::new();
+    wasi_builder
+        .stdin(stdin)
+        .stdout(stdout.clone())
+        .stderr(stderr.clone());
+    deterministic_wasi_ctx::add_determinism_to_wasi_ctx_builder(&mut wasi_builder);
+    let wasi = wasi_builder.build_p1();
+
     let mut store = Store::new(&engine, wasi);
 
     let provider_instance = linker.instantiate(&mut store, &provider)?;
@@ -49,10 +63,7 @@ fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<Vec
     drop(store);
 
     if let Err(e) = result {
-        let error = error_stream
-            .try_into_inner()
-            .map_err(|_| anyhow::anyhow!("Error stream reference still exists"))?
-            .into_inner();
+        let error = stderr.contents().to_vec();
         return Err(anyhow::anyhow!(
             "{}\n\nSTDERR:\n{}",
             e,
@@ -60,10 +71,7 @@ fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<Vec
         ));
     }
 
-    let output = output_stream
-        .try_into_inner()
-        .map_err(|_| anyhow::anyhow!("Output stream reference still exists"))?
-        .into_inner();
+    let output = stdout.contents().to_vec();
     Ok(output)
 }
 
