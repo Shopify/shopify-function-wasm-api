@@ -10,6 +10,12 @@ pub trait Deserialize: Sized {
     fn deserialize(value: &Value) -> Result<Self, Error>;
 }
 
+impl Deserialize for Value {
+    fn deserialize(value: &Value) -> Result<Self, Error> {
+        Ok(*value)
+    }
+}
+
 impl Deserialize for bool {
     fn deserialize(value: &Value) -> Result<Self, Error> {
         value.as_bool().ok_or(Error::InvalidType)
