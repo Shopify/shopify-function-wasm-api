@@ -1,4 +1,3 @@
-#[cfg(target_family = "wasm")]
 pub mod read;
 #[cfg(target_family = "wasm")]
 pub mod write;

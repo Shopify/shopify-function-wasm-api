@@ -1,6 +1,8 @@
 #[cfg(target_family = "wasm")]
 use shopify_function_wasm_api::{write::Error as WriteError, write::Serialize, Context};
-use std::{collections::HashMap, error::Error};
+#[cfg(target_family = "wasm")]
+use std::collections::HashMap;
+use std::error::Error;
 
 #[cfg(not(target_family = "wasm"))]
 fn main() -> Result<(), Box<dyn Error>> {

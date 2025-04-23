@@ -1,10 +1,12 @@
 #[cfg(target_family = "wasm")]
 use shopify_function_wasm_api::{Context, InternedStringId, Value};
+#[cfg(target_family = "wasm")]
+use std::io::Write;
 
 #[cfg(not(target_family = "wasm"))]
 use shopify_function_wasm_api::{InternedStringId, Value};
 
-use std::{error::Error, io::Write};
+use std::error::Error;
 
 // Uses a mix of interned and non-interned strings
 #[cfg(target_family = "wasm")]
@@ -26,6 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     panic!("This example is only supported in a WASM target");
 }
 
+#[allow(dead_code)]
 fn serialize_value(value: Value, interned_key: InternedStringId) -> String {
     if let Some(boolean) = value.as_bool() {
         format!("{}", boolean)
@@ -64,7 +67,7 @@ mod test {
     #[test]
     fn test_serialize_value_with_obj_input() {
         let input = json!({"other_key": "other_value", "key": "Hello, world!"});
-        let mut value = Value::new(input, vec![]);
+        let mut value = Value::new(input);
         let interned_key = value.intern_utf8_str("key");
         let result = serialize_value(value, interned_key);
         assert_eq!(result, "obj; key: Hello, world!, other_key: other_value");
@@ -73,7 +76,7 @@ mod test {
     #[test]
     fn test_serialize_value_with_array_input() {
         let input = json!([1, 2, 3]);
-        let mut value = Value::new(input, vec![]);
+        let mut value = Value::new(input);
         let interned_key = value.intern_utf8_str("key");
         let result = serialize_value(value, interned_key);
         assert_eq!(result, "array; [1, 2, 3]");
@@ -82,7 +85,7 @@ mod test {
     #[test]
     fn test_serialize_value_with_string_input() {
         let input = json!("Hello, world!");
-        let mut value = Value::new(input, vec![]);
+        let mut value = Value::new(input);
         let interned_key = value.intern_utf8_str("key");
         let result = serialize_value(value, interned_key);
         assert_eq!(result, "Hello, world!");
@@ -91,7 +94,7 @@ mod test {
     #[test]
     fn test_serialize_value_with_number_input() {
         let input = json!(123);
-        let mut value = Value::new(input, vec![]);
+        let mut value = Value::new(input);
         let interned_key = value.intern_utf8_str("key");
         let result = serialize_value(value, interned_key);
         assert_eq!(result, "123");
@@ -100,7 +103,7 @@ mod test {
     #[test]
     fn test_serialize_value_with_boolean_input() {
         let input = json!(true);
-        let mut value = Value::new(input, vec![]);
+        let mut value = Value::new(input);
         let interned_key = value.intern_utf8_str("key");
         let result = serialize_value(value, interned_key);
         assert_eq!(result, "true");
@@ -109,7 +112,7 @@ mod test {
     #[test]
     fn test_serialize_value_with_null_input() {
         let input = json!(null);
-        let mut value = Value::new(input, vec![]);
+        let mut value = Value::new(input);
         let interned_key = value.intern_utf8_str("key");
         let result = serialize_value(value, interned_key);
         assert_eq!(result, "null");

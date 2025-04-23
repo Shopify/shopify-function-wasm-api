@@ -7,13 +7,17 @@ up:
 
 commands:
   test:
-    run: cargo test --workspace --exclude shopify_function_wasm_api
+    run: |
+      cargo test
+      cargo test --examples
   style:
     run: |
       cargo fmt
       cargo clippy --all-features -- -D warnings
+      cargo clippy -p shopify_function_wasm_api --target wasm32-wasip1 --all-features -- -D warnings
       cargo clippy --tests --all-features
       cargo clippy --benches --all-features
       cargo clippy --examples --all-features
+      cargo clippy -p shopify_function_wasm_api --target wasm32-wasip1 --examples --all-features
   build:
     run: cargo build --release --all-features

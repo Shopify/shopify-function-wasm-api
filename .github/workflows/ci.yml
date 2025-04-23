@@ -35,6 +35,8 @@ jobs:
         run: cargo clippy --benches --all-features
       - name: Run clippy (examples)
         run: cargo clippy --examples --all-features
+      - name: Run clippy (examples, wasm32-wasip1)
+        run: cargo clippy -p shopify_function_wasm_api --target wasm32-wasip1 --examples --all-features
 
   test:
     runs-on: shopify-ubuntu-latest
@@ -57,9 +59,9 @@ jobs:
             cargo-target-${{ hashFiles('Cargo.toml') }}
             cargo-target
       - name: Run tests
-        # we exclude the api crate because it cannot be tested in isolation
-        # due to needing the trampoline wasm to be merged into it
-        run: cargo test --workspace --exclude shopify_function_wasm_api
+        run: cargo test
+      - name: Run tests (examples)
+        run: cargo test --examples
 
   build:
     runs-on: shopify-ubuntu-latest

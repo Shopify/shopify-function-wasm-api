@@ -1,24 +1,26 @@
+use std::{cell::RefCell, rc::Rc};
+
 use serde_json::Value as JsonValue;
 
 use crate::InternedStringId;
 
-#[derive(Clone)]
 pub struct Value {
     value: JsonValue,
-    interned_strings: Vec<String>,
+    interned_strings: Rc<RefCell<Vec<String>>>,
 }
 
 impl Value {
-    pub fn new(value: JsonValue, interned_strings: Vec<String>) -> Self {
+    pub fn new(value: JsonValue) -> Self {
         Self {
             value,
-            interned_strings,
+            interned_strings: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
     pub fn intern_utf8_str(&mut self, s: &str) -> InternedStringId {
-        self.interned_strings.push(s.to_string());
-        InternedStringId(self.interned_strings.len() - 1)
+        let mut interned_strings = self.interned_strings.borrow_mut();
+        interned_strings.push(s.to_string());
+        InternedStringId(interned_strings.len() - 1)
     }
 
     pub fn as_bool(&self) -> Option<bool> {
@@ -55,7 +57,7 @@ impl Value {
     }
 
     pub fn get_interned_obj_prop(&self, interned_string_id: InternedStringId) -> Self {
-        let interned_strings = &self.interned_strings;
+        let interned_strings = self.interned_strings.borrow();
         let prop = &interned_strings[interned_string_id.as_usize()];
 
         self.value
