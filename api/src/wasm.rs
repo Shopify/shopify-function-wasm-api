@@ -38,6 +38,7 @@ extern "C" {
     fn shopify_function_intern_utf8_str(context: ContextPtr, ptr: *const u8, len: usize) -> usize;
 }
 
+#[derive(Copy, Clone)]
 pub struct Value {
     pub(crate) context: NonNull<ContextPtr>,
     pub(crate) nan_box: NanBox,

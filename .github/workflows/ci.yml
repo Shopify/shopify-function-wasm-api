@@ -27,6 +27,8 @@ jobs:
         run: cargo fmt --check
       - name: Run clippy
         run: cargo clippy --all-features -- -D warnings
+      - name: Run clippy (wasm32-wasip1)
+        run: cargo clippy -p shopify_function_wasm_api --target wasm32-wasip1 --all-features -- -D warnings
       - name: Run clippy (tests)
         run: cargo clippy --tests --all-features
       - name: Run clippy (benches)

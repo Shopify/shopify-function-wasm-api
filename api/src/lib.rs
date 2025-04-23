@@ -1,3 +1,6 @@
+#[cfg(target_family = "wasm")]
+pub mod read;
+#[cfg(target_family = "wasm")]
 pub mod write;
 
 #[derive(Clone, Copy)]
@@ -36,4 +39,4 @@ pub use wasm::{Context, Value};
 #[cfg(not(target_family = "wasm"))]
 mod local;
 #[cfg(not(target_family = "wasm"))]
-pub use local::{Context, Value};
+pub use local::Value;

@@ -1,4 +1,6 @@
+#[cfg(target_family = "wasm")]
 use shopify_function_wasm_api::write::Error as WriteError;
+#[cfg(target_family = "wasm")]
 use shopify_function_wasm_api::{Context, InternedStringId, Value};
 use std::error::Error;
 

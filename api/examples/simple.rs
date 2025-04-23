@@ -1,4 +1,9 @@
+#[cfg(target_family = "wasm")]
 use shopify_function_wasm_api::{Context, InternedStringId, Value};
+
+#[cfg(not(target_family = "wasm"))]
+use shopify_function_wasm_api::{InternedStringId, Value};
+
 use std::{error::Error, io::Write};
 
 // Uses a mix of interned and non-interned strings

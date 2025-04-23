@@ -1,7 +1,13 @@
+#[cfg(target_family = "wasm")]
+use shopify_function_wasm_api::{write::Error as WriteError, write::Serialize, Context};
 use std::{collections::HashMap, error::Error};
 
-use shopify_function_wasm_api::{write::Error as WriteError, write::Serialize, Context};
+#[cfg(not(target_family = "wasm"))]
+fn main() -> Result<(), Box<dyn Error>> {
+    panic!("This example is only supported in a WASM target");
+}
 
+#[cfg(target_family = "wasm")]
 struct MyData {
     my_string: String,
     my_i32: i32,
@@ -12,6 +18,7 @@ struct MyData {
     my_option: Option<String>,
 }
 
+#[cfg(target_family = "wasm")]
 impl Serialize for MyData {
     fn serialize(&self, context: &mut Context) -> Result<(), WriteError> {
         context.write_object(
@@ -38,7 +45,7 @@ impl Serialize for MyData {
         Ok(())
     }
 }
-
+#[cfg(target_family = "wasm")]
 fn main() -> Result<(), Box<dyn Error>> {
     let my_data = MyData {
         my_string: "Hello, world!".to_string(),

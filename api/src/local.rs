@@ -1,8 +1,8 @@
 use serde_json::Value as JsonValue;
-use shopify_function_wasm_api_core::ContextPtr;
 
 use crate::InternedStringId;
 
+#[derive(Clone)]
 pub struct Value {
     value: JsonValue,
     interned_strings: Vec<String>,
@@ -22,106 +22,72 @@ impl Value {
     }
 
     pub fn as_bool(&self) -> Option<bool> {
-        match self.value {
-            JsonValue::Bool(b) => Some(b),
-            _ => None,
-        }
+        self.value.as_bool()
     }
 
     pub fn is_null(&self) -> bool {
-        matches!(self.value, JsonValue::Null)
+        self.value.is_null()
     }
 
     pub fn as_number(&self) -> Option<f64> {
-        match &self.value {
-            JsonValue::Number(n) => Some(n.as_f64().unwrap()),
-            _ => None,
-        }
+        self.value.as_number().map(|n| n.as_f64().unwrap())
     }
 
     pub fn as_string(&self) -> Option<String> {
-        match &self.value {
-            JsonValue::String(s) => Some(s.clone()),
-            _ => None,
-        }
+        self.value.as_str().map(|s| s.to_string())
     }
 
     pub fn is_obj(&self) -> bool {
-        matches!(self.value, JsonValue::Object { .. })
+        self.value.is_object()
     }
 
     pub fn get_obj_prop(&self, prop: &str) -> Self {
-        match &self.value {
-            JsonValue::Object(obj) => {
-                let value = obj.get(prop).unwrap();
-                Self {
-                    value: value.clone(),
-                    interned_strings: self.interned_strings.clone(),
-                }
-            }
-            _ => Self {
+        self.value
+            .get(prop)
+            .map(|value| Self {
+                value: value.clone(),
+                interned_strings: self.interned_strings.clone(),
+            })
+            .unwrap_or_else(|| Self {
                 value: JsonValue::Null,
                 interned_strings: self.interned_strings.clone(),
-            },
-        }
+            })
     }
 
     pub fn get_interned_obj_prop(&self, interned_string_id: InternedStringId) -> Self {
-        match &self.value {
-            JsonValue::Object(obj) => {
-                let interned_strings = &self.interned_strings;
-                let prop = &interned_strings[interned_string_id.as_usize()];
-                let value = obj.get(prop).unwrap();
-                Self {
-                    value: value.clone(),
-                    interned_strings: self.interned_strings.clone(),
-                }
-            }
-            _ => Self {
+        let interned_strings = &self.interned_strings;
+        let prop = &interned_strings[interned_string_id.as_usize()];
+
+        self.value
+            .get(prop)
+            .map(|value| Self {
+                value: value.clone(),
+                interned_strings: self.interned_strings.clone(),
+            })
+            .unwrap_or_else(|| Self {
                 value: JsonValue::Null,
                 interned_strings: self.interned_strings.clone(),
-            },
-        }
+            })
     }
 
     pub fn is_array(&self) -> bool {
-        matches!(self.value, JsonValue::Array { .. })
+        self.value.is_array()
     }
 
     pub fn array_len(&self) -> Option<usize> {
-        match &self.value {
-            JsonValue::Array(arr) => Some(arr.len()),
-            _ => None,
-        }
+        self.value.as_array().map(|arr| arr.len())
     }
 
     pub fn get_at_index(&self, index: usize) -> Value {
-        match &self.value {
-            JsonValue::Array(arr) => {
-                let value = &arr[index];
-                Self {
-                    value: value.clone(),
-                    interned_strings: self.interned_strings.clone(),
-                }
-            }
-            _ => Self {
+        self.value.as_array().and_then(|arr| arr.get(index)).map_or(
+            Self {
                 value: JsonValue::Null,
                 interned_strings: self.interned_strings.clone(),
             },
-        }
-    }
-}
-
-pub struct Context(pub ContextPtr);
-
-impl Context {
-    pub fn new() -> Self {
-        Self(std::ptr::null_mut())
-    }
-}
-
-impl Default for Context {
-    fn default() -> Self {
-        Self::new()
+            |value| Self {
+                value: value.clone(),
+                interned_strings: self.interned_strings.clone(),
+            },
+        )
     }
 }
