@@ -1,8 +1,10 @@
 use anyhow::Result;
 use assert_cmd::prelude::*;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::LazyLock;
+use tempfile::NamedTempFile;
 use uuid::Uuid;
 
 fn workspace_root() -> PathBuf {
@@ -120,6 +122,47 @@ fn test_overwrites_existing_output_file() -> Result<()> {
         0,
         "Initial output file was not overwritten"
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_disassemble_trampoline() -> Result<()> {
+    let consumer_bytes = wat::parse_file(workspace_root().join("trampoline/tests/consumer.wat"))?;
+    let mut source = NamedTempFile::new()?;
+    source.write_all(&consumer_bytes)?;
+
+    let dest = NamedTempFile::new()?;
+
+    Command::cargo_bin(env!("CARGO_PKG_NAME"))?
+        .args([
+            "--input",
+            source
+                .path()
+                .to_str()
+                .expect("Temporary file to contain a path"),
+            "--output",
+            dest.path()
+                .to_str()
+                .expect("Temporary file to contain a path"),
+        ])
+        .assert()
+        .success()
+        .code(0);
+
+    let bless = std::env::var("TRAMPOLINE_TEST_BLESS");
+
+    let expected_path = workspace_root().join("trampoline/tests/trampoline.wat");
+    let actual = wasmprinter::print_file(dest.path())?;
+
+    if bless.is_ok() && bless.unwrap() == "1" {
+        std::fs::write(&expected_path, &actual)?;
+    }
+
+    let expected_bytes = wat::parse_file(&expected_path)?;
+    let expected = wasmprinter::print_bytes(&expected_bytes)?;
+
+    text_diff::assert_diff(&expected, &actual, "", 0);
 
     Ok(())
 }
