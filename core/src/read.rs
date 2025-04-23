@@ -153,13 +153,10 @@ impl NanBox {
     }
 
     fn encode(ptr: u64, len: u64, tag: Tag) -> Self {
-        if len == 0 {
-            Self(Self::NAN_MASK | (tag.as_u64() << Self::VALUE_SIZE) | (ptr & Self::POINTER_MASK))
-        } else {
-            let trimmed_len = len.min(Self::MAX_VALUE_LENGTH);
-            let val = (trimmed_len << Self::VALUE_ENCODING_SIZE) | (ptr & Self::POINTER_MASK);
-            Self(Self::NAN_MASK | (tag.as_u64() << Self::VALUE_SIZE) | val)
-        }
+        let trimmed_len = len.min(Self::MAX_VALUE_LENGTH);
+        let ptr = ptr & Self::POINTER_MASK;
+        let val = (trimmed_len << Self::VALUE_ENCODING_SIZE) | ptr;
+        Self(Self::NAN_MASK | (tag.as_u64() << Self::VALUE_SIZE) | val)
     }
 }
 

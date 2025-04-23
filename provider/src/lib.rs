@@ -3,7 +3,6 @@ mod read;
 mod string_interner;
 mod write;
 
-use read::MsgpackInput;
 use rmp::encode::ByteBuf;
 use shopify_function_wasm_api_core::ContextPtr;
 use std::{io::Read, ptr::NonNull};
@@ -13,7 +12,8 @@ use write::State;
 pub const PROVIDER_MODULE_NAME: &str = concat!("shopify_function_v", env!("CARGO_PKG_VERSION"));
 
 struct Context {
-    msgpack_input: MsgpackInput<Vec<u8>>,
+    bump_allocator: bumpalo::Bump,
+    input_bytes: Vec<u8>,
     output_bytes: ByteBuf,
     write_state: State,
     write_parent_state_stack: Vec<State>,
@@ -27,8 +27,10 @@ pub enum ContextError {
 
 impl Context {
     fn new(input_bytes: Vec<u8>) -> Self {
+        let bump_allocator = bumpalo::Bump::new();
         Self {
-            msgpack_input: MsgpackInput::new(input_bytes),
+            bump_allocator,
+            input_bytes,
             output_bytes: ByteBuf::new(),
             write_state: State::Start,
             write_parent_state_stack: Vec::new(),

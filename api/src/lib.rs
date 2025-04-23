@@ -1,5 +1,5 @@
 use shopify_function_wasm_api_core::{
-    read::{NanBox, Val, ValueRef},
+    read::{ErrorCode, NanBox, Val, ValueRef},
     write::WriteResult,
     ContextPtr,
 };
@@ -226,6 +226,13 @@ impl Value {
                 context: self.context,
                 nan_box: NanBox::from_bits(self.nan_box.to_bits()),
             },
+        }
+    }
+
+    pub fn as_error(&self) -> Option<ErrorCode> {
+        match self.nan_box.try_decode() {
+            Ok(ValueRef::Error(e)) => Some(e),
+            _ => None,
         }
     }
 }
