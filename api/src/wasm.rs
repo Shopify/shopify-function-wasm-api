@@ -1,16 +1,42 @@
 use std::ptr::NonNull;
 
 use shopify_function_wasm_api_core::{
-    read::{NanBox, ValueRef},
+    read::{NanBox, Val, ValueRef},
     ContextPtr,
 };
 
-use crate::{
-    shopify_function_context_new, shopify_function_input_get, shopify_function_input_get_at_index,
-    shopify_function_input_get_interned_obj_prop, shopify_function_input_get_obj_prop,
-    shopify_function_input_get_val_len, shopify_function_input_read_utf8_str,
-    shopify_function_intern_utf8_str, ContextError, InternedStringId,
-};
+use crate::{ContextError, InternedStringId};
+
+#[link(wasm_import_module = "shopify_function_v0.0.1")]
+extern "C" {
+    // Common API.
+    fn shopify_function_context_new() -> ContextPtr;
+
+    // Read API.
+    fn shopify_function_input_get(context: ContextPtr) -> Val;
+    fn shopify_function_input_get_val_len(context: ContextPtr, scope: Val) -> usize;
+    fn shopify_function_input_read_utf8_str(
+        context: ContextPtr,
+        src: usize,
+        out: *mut u8,
+        len: usize,
+    );
+    fn shopify_function_input_get_obj_prop(
+        context: ContextPtr,
+        scope: Val,
+        ptr: *const u8,
+        len: usize,
+    ) -> Val;
+    fn shopify_function_input_get_interned_obj_prop(
+        context: ContextPtr,
+        scope: Val,
+        interned_string_id: shopify_function_wasm_api_core::InternedStringId,
+    ) -> Val;
+    fn shopify_function_input_get_at_index(context: ContextPtr, scope: Val, index: usize) -> Val;
+
+    // Other.
+    fn shopify_function_intern_utf8_str(context: ContextPtr, ptr: *const u8, len: usize) -> usize;
+}
 
 pub struct Value {
     pub(crate) context: NonNull<ContextPtr>,

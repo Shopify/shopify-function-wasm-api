@@ -3,67 +3,59 @@ use std::collections::HashMap;
 use crate::Context;
 use crate::InternedStringId;
 use shopify_function_wasm_api_core::write::WriteResult;
+use shopify_function_wasm_api_core::ContextPtr;
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("I/O error")]
-    IoError,
-    #[error("Expected a key")]
-    ExpectedKey,
-    #[error("Object length error")]
-    ObjectLengthError,
-    #[error("Value already written")]
-    ValueAlreadyWritten,
-    #[error("Not an object")]
-    NotAnObject,
-    #[error("Value not finished")]
-    ValueNotFinished,
-    #[error("Array length error")]
-    ArrayLengthError,
-    #[error("Not an array")]
-    NotAnArray,
-}
+#[link(wasm_import_module = "shopify_function_v0.0.1")]
+extern "C" {
+    // Common API & Read API are defined in wasm.rs for conditional compilation.
 
-fn map_result(result: WriteResult) -> Result<(), Error> {
-    match result {
-        WriteResult::Ok => Ok(()),
-        WriteResult::IoError => Err(Error::IoError),
-        WriteResult::ExpectedKey => Err(Error::ExpectedKey),
-        WriteResult::ObjectLengthError => Err(Error::ObjectLengthError),
-        WriteResult::ValueAlreadyWritten => Err(Error::ValueAlreadyWritten),
-        WriteResult::NotAnObject => Err(Error::NotAnObject),
-        WriteResult::ValueNotFinished => Err(Error::ValueNotFinished),
-        WriteResult::ArrayLengthError => Err(Error::ArrayLengthError),
-        WriteResult::NotAnArray => Err(Error::NotAnArray),
-    }
+    // Write API.
+    fn shopify_function_output_new_bool(context: ContextPtr, bool: u32) -> WriteResult;
+    fn shopify_function_output_new_null(context: ContextPtr) -> WriteResult;
+    fn shopify_function_output_finalize(context: ContextPtr) -> WriteResult;
+    fn shopify_function_output_new_i32(context: ContextPtr, int: i32) -> WriteResult;
+    fn shopify_function_output_new_f64(context: ContextPtr, float: f64) -> WriteResult;
+    fn shopify_function_output_new_utf8_str(
+        context: ContextPtr,
+        ptr: *const u8,
+        len: usize,
+    ) -> WriteResult;
+    fn shopify_function_output_new_interned_utf8_str(
+        context: ContextPtr,
+        id: shopify_function_wasm_api_core::InternedStringId,
+    ) -> WriteResult;
+    fn shopify_function_output_new_object(context: ContextPtr, len: usize) -> WriteResult;
+    fn shopify_function_output_finish_object(context: ContextPtr) -> WriteResult;
+    fn shopify_function_output_new_array(context: ContextPtr, len: usize) -> WriteResult;
+    fn shopify_function_output_finish_array(context: ContextPtr) -> WriteResult;
 }
 
 impl Context {
     pub fn write_bool(&mut self, value: bool) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_bool(self.0 as _, value as u32) })
+        map_result(unsafe { shopify_function_output_new_bool(self.0 as _, value as u32) })
     }
 
     pub fn write_null(&mut self) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_null(self.0 as _) })
+        map_result(unsafe { shopify_function_output_new_null(self.0 as _) })
     }
 
     pub fn write_i32(&mut self, value: i32) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_i32(self.0 as _, value) })
+        map_result(unsafe { shopify_function_output_new_i32(self.0 as _, value) })
     }
 
     pub fn write_f64(&mut self, value: f64) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_f64(self.0 as _, value) })
+        map_result(unsafe { shopify_function_output_new_f64(self.0 as _, value) })
     }
 
     pub fn write_utf8_str(&mut self, value: &str) -> Result<(), Error> {
         map_result(unsafe {
-            crate::shopify_function_output_new_utf8_str(self.0 as _, value.as_ptr(), value.len())
+            shopify_function_output_new_utf8_str(self.0 as _, value.as_ptr(), value.len())
         })
     }
 
     pub fn write_interned_utf8_str(&mut self, id: InternedStringId) -> Result<(), Error> {
         map_result(unsafe {
-            crate::shopify_function_output_new_interned_utf8_str(self.0 as _, id.as_usize())
+            shopify_function_output_new_interned_utf8_str(self.0 as _, id.as_usize())
         })
     }
 
@@ -72,9 +64,9 @@ impl Context {
         f: F,
         len: usize,
     ) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_object(self.0 as _, len) })?;
+        map_result(unsafe { shopify_function_output_new_object(self.0 as _, len) })?;
         f(self)?;
-        map_result(unsafe { crate::shopify_function_output_finish_object(self.0 as _) })
+        map_result(unsafe { shopify_function_output_finish_object(self.0 as _) })
     }
 
     pub fn write_array<F: FnOnce(&mut Self) -> Result<(), Error>>(
@@ -82,13 +74,13 @@ impl Context {
         f: F,
         len: usize,
     ) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_array(self.0 as _, len) })?;
+        map_result(unsafe { shopify_function_output_new_array(self.0 as _, len) })?;
         f(self)?;
-        map_result(unsafe { crate::shopify_function_output_finish_array(self.0 as _) })
+        map_result(unsafe { shopify_function_output_finish_array(self.0 as _) })
     }
 
     pub fn finalize_output(self) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_finalize(self.0 as _) })
+        map_result(unsafe { shopify_function_output_finalize(self.0 as _) })
     }
 }
 
@@ -181,5 +173,39 @@ impl<T: Serialize> Serialize for Option<T> {
             Some(value) => value.serialize(context),
             None => context.write_null(),
         }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("I/O error")]
+    IoError,
+    #[error("Expected a key")]
+    ExpectedKey,
+    #[error("Object length error")]
+    ObjectLengthError,
+    #[error("Value already written")]
+    ValueAlreadyWritten,
+    #[error("Not an object")]
+    NotAnObject,
+    #[error("Value not finished")]
+    ValueNotFinished,
+    #[error("Array length error")]
+    ArrayLengthError,
+    #[error("Not an array")]
+    NotAnArray,
+}
+
+fn map_result(result: WriteResult) -> Result<(), Error> {
+    match result {
+        WriteResult::Ok => Ok(()),
+        WriteResult::IoError => Err(Error::IoError),
+        WriteResult::ExpectedKey => Err(Error::ExpectedKey),
+        WriteResult::ObjectLengthError => Err(Error::ObjectLengthError),
+        WriteResult::ValueAlreadyWritten => Err(Error::ValueAlreadyWritten),
+        WriteResult::NotAnObject => Err(Error::NotAnObject),
+        WriteResult::ValueNotFinished => Err(Error::ValueNotFinished),
+        WriteResult::ArrayLengthError => Err(Error::ArrayLengthError),
+        WriteResult::NotAnArray => Err(Error::NotAnArray),
     }
 }
