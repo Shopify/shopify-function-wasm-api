@@ -1,7 +1,14 @@
-use shopify_function_wasm_api::{write::Error as WriteError, Context, InternedStringId, Value};
+use shopify_function_wasm_api::write::Error as WriteError;
+use shopify_function_wasm_api::{Context, InternedStringId, Value};
 use std::error::Error;
 
 // Uses interned strings
+#[cfg(not(target_family = "wasm"))]
+fn main() -> Result<(), Box<dyn Error>> {
+    panic!("This example is only supported in a WASM target");
+}
+
+#[cfg(target_family = "wasm")]
 fn main() -> Result<(), Box<dyn Error>> {
     let mut context = Context::new();
     let input = context.input_get()?;
@@ -16,6 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[cfg(target_family = "wasm")]
 fn serialize_value(
     value: Value,
     out: &mut Context,
