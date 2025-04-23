@@ -1,63 +1,115 @@
-use shopify_function_wasm_api::{write::Error as WriteError, Context, InternedStringId, Value};
-use std::error::Error;
+use shopify_function_wasm_api::{
+    read::Error as ReadError, write::Error as WriteError, Context, Deserialize, InternedStringId,
+    Serialize, Value as ApiValue,
+};
+use std::{error::Error, sync::OnceLock};
 
-// Uses interned strings
 fn main() -> Result<(), Box<dyn Error>> {
     let mut context = Context::new();
     let input = context.input_get()?;
 
-    let foo_key = context.intern_utf8_str("foo");
-    let bar_key = context.intern_utf8_str("bar");
-    let known_keys = [foo_key, bar_key];
-
-    serialize_value(input, &mut context, &known_keys)?;
+    let value = Value::deserialize(&input)?;
+    let result = echo(value);
+    result.serialize(&mut context)?;
     context.finalize_output()?;
 
     Ok(())
 }
 
-fn serialize_value(
-    value: Value,
-    out: &mut Context,
-    known_keys: &[InternedStringId],
-) -> Result<(), WriteError> {
-    if let Some(b) = value.as_bool() {
-        out.write_bool(b)
-    } else if value.is_null() {
-        out.write_null()
-    } else if let Some(n) = value.as_number() {
-        if n.trunc() == n && n >= i32::MIN as f64 && n <= i32::MAX as f64 {
-            out.write_i32(n as i32)
+fn echo(value: Value) -> Value {
+    value
+}
+
+enum Value {
+    Null,
+    Bool(bool),
+    Integer(i32),
+    Float(f64),
+    String(String),
+    /// There is no way to dynamically get the keys of an object, so we just hardcode these two known keys.
+    Object {
+        foo_value: Box<Self>,
+        bar_value: Box<Self>,
+    },
+    Array(Vec<Self>),
+}
+
+static FOO_INTERNED_STRING_ID: OnceLock<InternedStringId> = OnceLock::new();
+static BAR_INTERNED_STRING_ID: OnceLock<InternedStringId> = OnceLock::new();
+
+impl Deserialize for Value {
+    fn deserialize(value: &ApiValue) -> Result<Self, ReadError> {
+        if value.is_null() {
+            Ok(Value::Null)
+        } else if let Some(b) = value.as_bool() {
+            Ok(Value::Bool(b))
+        } else if let Some(n) = value.as_number() {
+            if n.trunc() == n && n >= i32::MIN as f64 && n <= i32::MAX as f64 {
+                Ok(Value::Integer(n as i32))
+            } else {
+                Ok(Value::Float(n))
+            }
+        } else if let Some(s) = value.as_string() {
+            Ok(Value::String(s.to_string()))
+        } else if value.is_obj() {
+            let foo_interned_string_id =
+                *FOO_INTERNED_STRING_ID.get_or_init(|| value.intern_utf8_str("foo"));
+            let bar_interned_string_id =
+                *BAR_INTERNED_STRING_ID.get_or_init(|| value.intern_utf8_str("bar"));
+            Ok(Value::Object {
+                foo_value: Box::new(Self::deserialize(
+                    &value.get_interned_obj_prop(foo_interned_string_id),
+                )?),
+                bar_value: Box::new(Self::deserialize(
+                    &value.get_interned_obj_prop(bar_interned_string_id),
+                )?),
+            })
+        } else if let Some(arr_len) = value.array_len() {
+            let mut arr = Vec::with_capacity(arr_len);
+            for i in 0..arr_len {
+                arr.push(Self::deserialize(&value.get_at_index(i))?);
+            }
+            Ok(Value::Array(arr))
         } else {
-            out.write_f64(n)
+            Err(ReadError::InvalidType)
         }
-    } else if let Some(s) = value.as_string() {
-        out.write_utf8_str(&s)
-    } else if value.is_obj() {
-        out.write_object(
-            |out| {
-                for key in known_keys {
-                    let value = value.get_interned_obj_prop(*key);
-                    out.write_interned_utf8_str(*key)?;
-                    serialize_value(value, out, known_keys)?;
-                }
-                Ok(())
-            },
-            2,
-        )
-    } else if let Some(len) = value.array_len() {
-        out.write_array(
-            |out| {
-                for i in 0..len {
-                    serialize_value(value.get_at_index(i), out, known_keys)?;
-                }
-                Ok(())
-            },
-            len,
-        )
-    } else if let Some(error) = value.as_error() {
-        panic!("error: {:?}", error);
-    } else {
-        panic!("unexpected value");
+    }
+}
+
+impl Serialize for Value {
+    fn serialize(&self, out: &mut Context) -> Result<(), WriteError> {
+        match self {
+            Value::Null => out.write_null(),
+            Value::Bool(b) => out.write_bool(*b),
+            Value::Integer(n) => out.write_i32(*n),
+            Value::Float(n) => out.write_f64(*n),
+            Value::String(s) => out.write_utf8_str(s),
+            Value::Object {
+                foo_value,
+                bar_value,
+            } => out.write_object(
+                |ctx| {
+                    let foo_interned_string_id =
+                        *FOO_INTERNED_STRING_ID.get_or_init(|| ctx.intern_utf8_str("foo"));
+                    let bar_interned_string_id =
+                        *BAR_INTERNED_STRING_ID.get_or_init(|| ctx.intern_utf8_str("bar"));
+                    ctx.write_interned_utf8_str(foo_interned_string_id)?;
+                    foo_value.serialize(ctx)?;
+                    ctx.write_interned_utf8_str(bar_interned_string_id)?;
+                    bar_value.serialize(ctx)?;
+                    Ok(())
+                },
+                2,
+            ),
+            Value::Array(arr) => out.write_array(
+                |out| {
+                    for value in arr {
+                        value.serialize(out)?;
+                    }
+                    Ok(())
+                },
+                arr.len(),
+            ),
+        }
     }
 }
