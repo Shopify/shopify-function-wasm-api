@@ -82,6 +82,13 @@ pub struct Value {
 }
 
 impl Value {
+    pub fn intern_utf8_str(&self, s: &str) -> InternedStringId {
+        let len = s.len();
+        let ptr = s.as_ptr();
+        let id = unsafe { shopify_function_intern_utf8_str(self.context.as_ptr() as _, ptr, len) };
+        InternedStringId(id)
+    }
+
     pub fn as_bool(&self) -> Option<bool> {
         match self.nan_box.try_decode() {
             Ok(ValueRef::Bool(b)) => Some(b),
