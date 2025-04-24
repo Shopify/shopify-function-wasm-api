@@ -84,8 +84,6 @@ fn run_example_with_input_and_msgpack_output(
 }
 
 static ECHO_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("echo"));
-static SERIALIZATION_EXAMPLE_RESULT: LazyLock<Result<()>> =
-    LazyLock::new(|| prepare_example("serialization"));
 
 #[test]
 fn test_echo_with_bool_input() -> Result<()> {
