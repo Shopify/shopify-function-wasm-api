@@ -1,6 +1,5 @@
 use crate::read::{ErrorCode, NanBox};
 use bumpalo::{collections::Vec, Bump};
-use polonius_the_crab::prelude::*;
 use rmp::Marker;
 
 pub(crate) type LazyValueRefPtr<'a> = *mut LazyValueRef<'a>;
@@ -456,54 +455,55 @@ impl<'a> LazyValueRef<'a> {
                 len,
                 end_position_of_last_processed_element,
             } => {
-                let mut processed_elements = processed_elements;
-                polonius!(
-                    |processed_elements| -> Result<Option<&'polonius LazyValueRef>, ErrorCode> {
-                        if let Some(value) =
-                            processed_elements
-                                .iter()
-                                .find_map(|(StringRef { ptr, len }, v)| {
-                                    let key_bytes = &bytes[*ptr..*ptr + *len];
-                                    (key_bytes == key).then_some(v)
-                                })
-                        {
-                            polonius_return!(Ok(Some(value)));
+                let index_of_value_in_existing =
+                    processed_elements
+                        .iter()
+                        .position(|(StringRef { ptr, len }, _)| {
+                            let key_bytes = &bytes[*ptr..*ptr + *len];
+                            key_bytes == key
+                        });
+
+                let index_of_value = match index_of_value_in_existing {
+                    Some(index) => Some(index),
+                    None => {
+                        let count = *len - processed_elements.len();
+                        let mut matched = false;
+
+                        for _ in 0..count {
+                            if let Some((_, last)) = processed_elements.last_mut() {
+                                if let Some(end_position) = last.finish_processing(bytes, bump)? {
+                                    *end_position_of_last_processed_element = end_position;
+                                }
+                            }
+
+                            let (Self::String(key_string_ref), Some(key_end_position)) =
+                                Self::new(bytes, *end_position_of_last_processed_element, bump)?
+                            else {
+                                return Err(ErrorCode::ReadError);
+                            };
+
+                            matched = &bytes
+                                [key_string_ref.ptr..key_string_ref.ptr + key_string_ref.len]
+                                == key;
+
+                            let (lazy_value, value_end_position) =
+                                Self::new(bytes, key_end_position, bump)?;
+
+                            *end_position_of_last_processed_element =
+                                value_end_position.unwrap_or(key_end_position);
+
+                            processed_elements.push((key_string_ref, lazy_value));
+
+                            if matched {
+                                break;
+                            }
                         }
+
+                        matched.then(|| processed_elements.len() - 1)
                     }
-                );
+                };
 
-                let count = *len - processed_elements.len();
-
-                for _ in 0..count {
-                    if let Some((_, last)) = processed_elements.last_mut() {
-                        if let Some(end_position) = last.finish_processing(bytes, bump)? {
-                            *end_position_of_last_processed_element = end_position;
-                        }
-                    }
-
-                    let (Self::String(key_string_ref), Some(key_end_position)) =
-                        Self::new(bytes, *end_position_of_last_processed_element, bump)?
-                    else {
-                        return Err(ErrorCode::ReadError);
-                    };
-
-                    let matched =
-                        &bytes[key_string_ref.ptr..key_string_ref.ptr + key_string_ref.len] == key;
-
-                    let (lazy_value, value_end_position) =
-                        Self::new(bytes, key_end_position, bump)?;
-
-                    *end_position_of_last_processed_element =
-                        value_end_position.unwrap_or(key_end_position);
-
-                    processed_elements.push((key_string_ref, lazy_value));
-
-                    if matched {
-                        return Ok(processed_elements.last().map(|(_, v)| v));
-                    }
-                }
-
-                Ok(None)
+                Ok(index_of_value.map(|i| &processed_elements[i].1))
             }
             _ => Err(ErrorCode::NotAnObject),
         }
