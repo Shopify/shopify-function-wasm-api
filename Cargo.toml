@@ -1,3 +1,7 @@
 [workspace]
 members = ["api", "core", "integration_tests", "provider", "trampoline"]
 resolver = "2"
+
+[profile.release]
+lto = true
+codegen-units = 1

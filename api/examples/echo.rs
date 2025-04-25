@@ -55,6 +55,8 @@ fn serialize_value(
             },
             len,
         )
+    } else if let Some(error) = value.as_error() {
+        panic!("error: {:?}", error);
     } else {
         panic!("unexpected value");
     }
