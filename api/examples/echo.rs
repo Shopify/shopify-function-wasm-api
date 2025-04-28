@@ -20,6 +20,7 @@ fn echo(value: Value) -> Value {
     value
 }
 
+#[derive(Debug, PartialEq)]
 enum Value {
     Null,
     Bool(bool),
@@ -111,5 +112,27 @@ impl Serialize for Value {
                 arr.len(),
             ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_echo() {
+        let input = serde_json::json!({});
+        let context = Context::new_with_input(input);
+        let api_value = context.input_get().unwrap();
+        let input: Value = Deserialize::deserialize(&api_value).unwrap();
+        let result = echo(input);
+
+        assert_eq!(
+            result,
+            Value::Object {
+                foo_value: Box::new(Value::Null),
+                bar_value: Box::new(Value::Null),
+            }
+        );
     }
 }
