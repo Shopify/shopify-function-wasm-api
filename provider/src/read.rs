@@ -150,7 +150,7 @@ decorate_for_target! {
                             &context.input_bytes,
                             &context.bump_allocator,
                         ) {
-                            Ok(value) => LazyValueRef::String(*value).encode().to_bits(),
+                            Ok(value) => value.encode().to_bits(),
                             Err(e) => NanBox::error(e).to_bits(),
                         }
                     }

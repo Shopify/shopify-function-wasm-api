@@ -143,7 +143,7 @@ impl<'a> Cursor<'a> {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct StringRef {
     ptr: usize,
     len: usize,
@@ -152,7 +152,9 @@ pub(crate) struct StringRef {
 #[derive(PartialEq, Debug)]
 pub(crate) struct ObjectRef<'a> {
     len: usize,
-    processed_elements: Vec<'a, (StringRef, LazyValueRef<'a>)>,
+    /// The key will always be a `StringRef`, but we type it as a `LazyValueRef` so that we can
+    /// return it as a `NanBox`.
+    processed_elements: Vec<'a, (LazyValueRef<'a>, LazyValueRef<'a>)>,
     end_position_of_last_processed_element: usize,
 }
 
@@ -162,7 +164,7 @@ impl<'a> ObjectRef<'a> {
         index: usize,
         bytes: &[u8],
         bump: &'a Bump,
-    ) -> Result<&(StringRef, LazyValueRef<'a>), ErrorCode> {
+    ) -> Result<&(LazyValueRef<'a>, LazyValueRef<'a>), ErrorCode> {
         if index >= self.len {
             return Err(ErrorCode::IndexOutOfBounds);
         }
@@ -183,11 +185,15 @@ impl<'a> ObjectRef<'a> {
                 }
             }
 
-            let (LazyValueRef::String(key_string_ref), Some(key_end_position)) =
+            let (key_string_ref, Some(key_end_position)) =
                 LazyValueRef::new(bytes, self.end_position_of_last_processed_element, bump)?
             else {
                 return Err(ErrorCode::ReadError);
             };
+
+            if !matches!(key_string_ref, LazyValueRef::String(_)) {
+                return Err(ErrorCode::ReadError);
+            }
 
             let (lazy_value, end_position) = LazyValueRef::new(bytes, key_end_position, bump)?;
 
@@ -206,12 +212,12 @@ impl<'a> ObjectRef<'a> {
         bump: &'a Bump,
     ) -> Result<Option<&LazyValueRef<'a>>, ErrorCode> {
         let index_of_value_in_existing =
-            self.processed_elements
-                .iter()
-                .position(|(StringRef { ptr, len }, _)| {
+            self.processed_elements.iter().position(|(key_value, _)| {
+                matches!(key_value, LazyValueRef::String(StringRef { ptr, len }) if {
                     let key_bytes = &bytes[*ptr..*ptr + *len];
                     key_bytes == key
-                });
+                })
+            });
 
         let index_of_value = match index_of_value_in_existing {
             Some(index) => Some(index),
@@ -226,13 +232,16 @@ impl<'a> ObjectRef<'a> {
                         }
                     }
 
-                    let (LazyValueRef::String(key_string_ref), Some(key_end_position)) =
-                        LazyValueRef::new(
-                            bytes,
-                            self.end_position_of_last_processed_element,
-                            bump,
-                        )?
+                    let (key_ref, Some(key_end_position)) = LazyValueRef::new(
+                        bytes,
+                        self.end_position_of_last_processed_element,
+                        bump,
+                    )?
                     else {
+                        return Err(ErrorCode::ReadError);
+                    };
+
+                    let LazyValueRef::String(key_string_ref) = &key_ref else {
                         return Err(ErrorCode::ReadError);
                     };
 
@@ -245,7 +254,7 @@ impl<'a> ObjectRef<'a> {
                     self.end_position_of_last_processed_element =
                         value_end_position.unwrap_or(key_end_position);
 
-                    self.processed_elements.push((key_string_ref, lazy_value));
+                    self.processed_elements.push((key_ref, lazy_value));
 
                     if matched {
                         break;
@@ -273,11 +282,15 @@ impl<'a> ObjectRef<'a> {
         let count = self.len - self.processed_elements.len();
 
         for _ in 0..count {
-            let (LazyValueRef::String(key), Some(end_position)) =
+            let (key, Some(end_position)) =
                 LazyValueRef::new(bytes, self.end_position_of_last_processed_element, bump)?
             else {
                 return Err(ErrorCode::ReadError);
             };
+
+            if !matches!(key, LazyValueRef::String(_)) {
+                return Err(ErrorCode::ReadError);
+            }
 
             let (mut lazy_value, end_position) = LazyValueRef::new(bytes, end_position, bump)?;
 
@@ -625,7 +638,7 @@ impl<'a> LazyValueRef<'a> {
         index: usize,
         bytes: &[u8],
         bump: &'a Bump,
-    ) -> Result<&StringRef, ErrorCode> {
+    ) -> Result<&LazyValueRef, ErrorCode> {
         match self {
             Self::Object(obj_ref) => obj_ref.get_at_index(index, bytes, bump).map(|v| &v.0),
             _ => Err(ErrorCode::NotAnObject),
@@ -1035,12 +1048,12 @@ mod tests {
 
         let key = value.get_key_at_index(0, &bytes, &bump).unwrap();
         // 1 byte for the map marker, 1 byte for the fixstr marker/length, so the key is at offset 2
-        assert_eq!(key, &StringRef { len: 1, ptr: 2 });
+        assert_eq!(key, &LazyValueRef::String(StringRef { len: 1, ptr: 2 }));
 
         let key = value.get_key_at_index(1, &bytes, &bump).unwrap();
         // from the start of the previous key (2), we have 1 byte for the contents of the previous key,
         // 1 byte for the fixnum marker/length, and 1 byte for the fixstr marker/length, so the key is at offset 5
-        assert_eq!(key, &StringRef { len: 1, ptr: 5 });
+        assert_eq!(key, &LazyValueRef::String(StringRef { len: 1, ptr: 5 }));
     }
 
     #[test]
