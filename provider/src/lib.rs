@@ -9,7 +9,8 @@ use std::ptr::NonNull;
 use string_interner::StringInterner;
 use write::State;
 
-pub const PROVIDER_MODULE_NAME: &str = concat!("shopify_function_v", env!("CARGO_PKG_VERSION"));
+pub const PROVIDER_MODULE_NAME: &str =
+    concat!("shopify_function_v", env!("CARGO_PKG_VERSION_MAJOR"));
 
 #[cfg(target_pointer_width = "64")]
 type DoubleUsize = u128;
