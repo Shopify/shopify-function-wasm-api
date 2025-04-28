@@ -8,13 +8,5 @@ shopify_function_wasm_api_core = { path = "../core", version = "0.0.1" }
 thiserror = "2.0"
 
 [[example]]
-name = "simple"
-path = "examples/simple.rs"
-
-[[example]]
 name = "echo"
 path = "examples/echo.rs"
-
-[[example]]
-name = "serialization"
-path = "examples/serialization.rs"
