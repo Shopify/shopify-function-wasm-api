@@ -110,12 +110,12 @@ impl NanBox {
 
     /// Create a new NaN-boxed string.
     pub fn string(ptr: usize, len: usize) -> Self {
-        Self::encode(ptr as _, len as _, Tag::String)
+        Self::encode(ptr as _, len, Tag::String)
     }
 
     /// Create a new NaN-boxed object.
-    pub fn obj(ptr: usize) -> Self {
-        Self::encode(ptr as _, 0, Tag::Object)
+    pub fn obj(ptr: usize, len: usize) -> Self {
+        Self::encode(ptr as _, len, Tag::Object)
     }
 
     /// Create a new NaN-boxed error.
@@ -125,7 +125,7 @@ impl NanBox {
 
     /// Create a new NaN-boxed array.
     pub fn array(ptr: usize, len: usize) -> Self {
-        Self::encode(ptr as _, len as _, Tag::Array)
+        Self::encode(ptr as _, len, Tag::Array)
     }
 
     pub fn try_decode(&self) -> Result<ValueRef, Box<dyn Error>> {
@@ -152,7 +152,7 @@ impl NanBox {
             Tag::Number => unreachable!("Number values are not NaN-boxed."),
             Tag::Array => Ok(ValueRef::Array { ptr, len }),
             Tag::String => Ok(ValueRef::String { ptr, len }),
-            Tag::Object => Ok(ValueRef::Object { ptr }),
+            Tag::Object => Ok(ValueRef::Object { ptr, len }),
             Tag::Error => ErrorCode::from_repr(val as usize)
                 .map(ValueRef::Error)
                 .ok_or_else(|| "Invalid error code.".into()),
@@ -178,7 +178,7 @@ pub enum ValueRef {
     Bool(bool),
     Number(f64),
     String { ptr: usize, len: usize },
-    Object { ptr: usize },
+    Object { ptr: usize, len: usize },
     Array { ptr: usize, len: usize },
     Error(ErrorCode),
 }
@@ -231,6 +231,8 @@ pub enum ErrorCode {
     NotAnArray = 4,
     /// The index is out of bounds for the array.
     IndexOutOfBounds = 5,
+    /// The value is not indexable. Indexable values are objects and arrays.
+    NotIndexable = 6,
 }
 
 #[cfg(test)]
@@ -336,9 +338,10 @@ mod tests {
     #[test]
     fn test_object_roundtrip() {
         let ptr = 0x12345678;
-        let boxed = NanBox::obj(ptr);
+        let len = 10;
+        let boxed = NanBox::obj(ptr, len);
         let value_ref = boxed.try_decode().unwrap();
-        assert_eq!(value_ref, ValueRef::Object { ptr });
+        assert_eq!(value_ref, ValueRef::Object { ptr, len });
     }
 
     #[test]

@@ -157,7 +157,7 @@ fn test_echo_with_utf8_str_input() -> Result<()> {
 }
 
 #[test]
-fn test_echo_with_obj_input() -> Result<()> {
+fn test_echo_with_obj_input_with_interned_strings() -> Result<()> {
     ECHO_EXAMPLE_RESULT
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
@@ -167,6 +167,36 @@ fn test_echo_with_obj_input() -> Result<()> {
             serde_json::json!({ "foo": 1, "bar": 2 })
         )?,
         serde_json::json!({ "foo": 1, "bar": 2 })
+    );
+    Ok(())
+}
+
+#[test]
+fn test_echo_with_obj_input_with_get_obj_prop() -> Result<()> {
+    ECHO_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    assert_eq!(
+        run_example_with_input_and_msgpack_output(
+            "echo",
+            serde_json::json!({ "abc": 1, "def": 2 })
+        )?,
+        serde_json::json!({ "abc": 1, "def": 2 })
+    );
+    Ok(())
+}
+
+#[test]
+fn test_echo_with_obj_input_with_get_at_index() -> Result<()> {
+    ECHO_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    assert_eq!(
+        run_example_with_input_and_msgpack_output(
+            "echo",
+            serde_json::json!({ "uvw": 1, "xyz": 2 })
+        )?,
+        serde_json::json!({ "uvw": 1, "xyz": 2 })
     );
     Ok(())
 }

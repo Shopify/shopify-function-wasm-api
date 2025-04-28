@@ -385,6 +385,10 @@ impl TrampolineCodegen {
             "_shopify_function_input_get_at_index",
         )?;
         self.rename_imported_func(
+            "shopify_function_input_get_obj_key_at_index",
+            "_shopify_function_input_get_obj_key_at_index",
+        )?;
+        self.rename_imported_func(
             "shopify_function_output_new_bool",
             "_shopify_function_output_new_bool",
         )?;

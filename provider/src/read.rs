@@ -37,7 +37,7 @@ decorate_for_target! {
             Ok(context) => {
                 let v = NanBox::from_bits(scope);
                 match v.try_decode() {
-                    Ok(NanBoxValueRef::Object { ptr: obj_ptr }) => {
+                    Ok(NanBoxValueRef::Object { ptr: obj_ptr, .. }) => {
                         let query = unsafe { std::slice::from_raw_parts(ptr as *const u8, len) };
                         let value = match LazyValueRef::mut_from_raw(obj_ptr as _) {
                             Ok(value) => value,
@@ -72,7 +72,7 @@ decorate_for_target! {
             Ok(context) => {
                 let v = NanBox::from_bits(scope);
                 match v.try_decode() {
-                    Ok(NanBoxValueRef::Object { ptr: obj_ptr }) => {
+                    Ok(NanBoxValueRef::Object { ptr: obj_ptr, .. }) => {
                         let query = context.string_interner.get(interned_string_id);
                         let value = match LazyValueRef::mut_from_raw(obj_ptr as _) {
                             Ok(value) => value,
@@ -107,7 +107,7 @@ decorate_for_target! {
             Ok(context) => {
                 let v = NanBox::from_bits(scope);
                 match v.try_decode() {
-                    Ok(NanBoxValueRef::Array { ptr, len: _ }) => {
+                    Ok(NanBoxValueRef::Array { ptr, len: _ } | NanBoxValueRef::Object { ptr, len: _ }) => {
                         let value = match LazyValueRef::mut_from_raw(ptr as _) {
                             Ok(value) => value,
                             Err(e) => return NanBox::error(e).to_bits(),
@@ -121,7 +121,40 @@ decorate_for_target! {
                             Err(e) => NanBox::error(e).to_bits(),
                         }
                     }
-                    Ok(_) => NanBox::error(ErrorCode::NotAnArray).to_bits(),
+                    Ok(_) => NanBox::error(ErrorCode::NotIndexable).to_bits(),
+                    Err(_) => NanBox::error(ErrorCode::ReadError).to_bits(),
+                }
+            }
+            Err(_) => NanBox::error(ErrorCode::ReadError).to_bits(),
+        }
+    }
+}
+
+decorate_for_target! {
+    fn shopify_function_input_get_obj_key_at_index(
+        context: ContextPtr,
+        scope: Val,
+        index: usize,
+    ) -> Val {
+        match Context::ref_from_raw(context) {
+            Ok(context) => {
+                let v = NanBox::from_bits(scope);
+                match v.try_decode() {
+                    Ok(NanBoxValueRef::Object { ptr, .. }) => {
+                        let value = match LazyValueRef::mut_from_raw(ptr as _) {
+                            Ok(value) => value,
+                            Err(e) => return NanBox::error(e).to_bits(),
+                        };
+                        match value.get_key_at_index(
+                            index,
+                            &context.input_bytes,
+                            &context.bump_allocator,
+                        ) {
+                            Ok(value) => LazyValueRef::String(*value).encode().to_bits(),
+                            Err(e) => NanBox::error(e).to_bits(),
+                        }
+                    }
+                    Ok(_) => NanBox::error(ErrorCode::NotAnObject).to_bits(),
                     Err(_) => NanBox::error(ErrorCode::ReadError).to_bits(),
                 }
             }
@@ -137,7 +170,7 @@ decorate_for_target! {
                 // don't actually need the context, but keeping it for consistency and to make it possible to use in the future if needed
                 let v = NanBox::from_bits(scope);
                 match v.try_decode() {
-                    Ok(NanBoxValueRef::String { ptr, .. } | NanBoxValueRef::Array { ptr, .. }) => {
+                    Ok(NanBoxValueRef::String { ptr, .. } | NanBoxValueRef::Array { ptr, .. } | NanBoxValueRef::Object { ptr, .. }) => {
                         let Ok(value) = LazyValueRef::mut_from_raw(ptr as _) else {
                             return 0;
                         };

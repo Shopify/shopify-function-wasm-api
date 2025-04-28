@@ -143,10 +143,230 @@ impl<'a> Cursor<'a> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub(crate) struct StringRef {
     ptr: usize,
     len: usize,
+}
+
+#[derive(PartialEq, Debug)]
+pub(crate) struct ObjectRef<'a> {
+    len: usize,
+    processed_elements: Vec<'a, (StringRef, LazyValueRef<'a>)>,
+    end_position_of_last_processed_element: usize,
+}
+
+impl<'a> ObjectRef<'a> {
+    fn get_at_index(
+        &mut self,
+        index: usize,
+        bytes: &[u8],
+        bump: &'a Bump,
+    ) -> Result<&(StringRef, LazyValueRef<'a>), ErrorCode> {
+        if index >= self.len {
+            return Err(ErrorCode::IndexOutOfBounds);
+        }
+
+        // Fast path: element already processed
+        if index < self.processed_elements.len() {
+            return Ok(&self.processed_elements[index]);
+        }
+
+        // We need to process more elements
+        let count = index + 1 - self.processed_elements.len();
+
+        // Process elements one by one until we reach the desired index
+        for _ in 0..count {
+            if let Some((_, last)) = self.processed_elements.last_mut() {
+                if let Some(end_position) = last.finish_processing(bytes, bump)? {
+                    self.end_position_of_last_processed_element = end_position;
+                }
+            }
+
+            let (LazyValueRef::String(key_string_ref), Some(key_end_position)) =
+                LazyValueRef::new(bytes, self.end_position_of_last_processed_element, bump)?
+            else {
+                return Err(ErrorCode::ReadError);
+            };
+
+            let (lazy_value, end_position) = LazyValueRef::new(bytes, key_end_position, bump)?;
+
+            self.end_position_of_last_processed_element = end_position.unwrap_or(key_end_position);
+
+            self.processed_elements.push((key_string_ref, lazy_value));
+        }
+
+        Ok(self.processed_elements.last().unwrap())
+    }
+
+    fn get_property(
+        &mut self,
+        key: &[u8],
+        bytes: &[u8],
+        bump: &'a Bump,
+    ) -> Result<Option<&LazyValueRef<'a>>, ErrorCode> {
+        let index_of_value_in_existing =
+            self.processed_elements
+                .iter()
+                .position(|(StringRef { ptr, len }, _)| {
+                    let key_bytes = &bytes[*ptr..*ptr + *len];
+                    key_bytes == key
+                });
+
+        let index_of_value = match index_of_value_in_existing {
+            Some(index) => Some(index),
+            None => {
+                let count = self.len - self.processed_elements.len();
+                let mut matched = false;
+
+                for _ in 0..count {
+                    if let Some((_, last)) = self.processed_elements.last_mut() {
+                        if let Some(end_position) = last.finish_processing(bytes, bump)? {
+                            self.end_position_of_last_processed_element = end_position;
+                        }
+                    }
+
+                    let (LazyValueRef::String(key_string_ref), Some(key_end_position)) =
+                        LazyValueRef::new(
+                            bytes,
+                            self.end_position_of_last_processed_element,
+                            bump,
+                        )?
+                    else {
+                        return Err(ErrorCode::ReadError);
+                    };
+
+                    matched =
+                        &bytes[key_string_ref.ptr..key_string_ref.ptr + key_string_ref.len] == key;
+
+                    let (lazy_value, value_end_position) =
+                        LazyValueRef::new(bytes, key_end_position, bump)?;
+
+                    self.end_position_of_last_processed_element =
+                        value_end_position.unwrap_or(key_end_position);
+
+                    self.processed_elements.push((key_string_ref, lazy_value));
+
+                    if matched {
+                        break;
+                    }
+                }
+
+                matched.then(|| self.processed_elements.len() - 1)
+            }
+        };
+
+        Ok(index_of_value.map(|i| &self.processed_elements[i].1))
+    }
+
+    fn finish_processing(
+        &mut self,
+        bytes: &[u8],
+        bump: &'a Bump,
+    ) -> Result<Option<usize>, ErrorCode> {
+        if let Some((_, last)) = self.processed_elements.last_mut() {
+            if let Some(end_position) = last.finish_processing(bytes, bump)? {
+                self.end_position_of_last_processed_element = end_position;
+            }
+        }
+
+        let count = self.len - self.processed_elements.len();
+
+        for _ in 0..count {
+            let (LazyValueRef::String(key), Some(end_position)) =
+                LazyValueRef::new(bytes, self.end_position_of_last_processed_element, bump)?
+            else {
+                return Err(ErrorCode::ReadError);
+            };
+
+            let (mut lazy_value, end_position) = LazyValueRef::new(bytes, end_position, bump)?;
+
+            self.end_position_of_last_processed_element = lazy_value
+                .finish_processing(bytes, bump)?
+                .or(end_position)
+                .expect("`new` or `finish_processing` must return a valid end position`");
+
+            self.processed_elements.push((key, lazy_value));
+        }
+
+        Ok(Some(self.end_position_of_last_processed_element))
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct ArrayRef<'a> {
+    len: usize,
+    processed_elements: Vec<'a, LazyValueRef<'a>>,
+    end_position_of_last_processed_element: usize,
+}
+
+impl<'a> ArrayRef<'a> {
+    fn get_at_index(
+        &mut self,
+        index: usize,
+        bytes: &[u8],
+        bump: &'a Bump,
+    ) -> Result<&LazyValueRef<'a>, ErrorCode> {
+        if index >= self.len {
+            return Err(ErrorCode::IndexOutOfBounds);
+        }
+
+        // Fast path: element already processed
+        if index < self.processed_elements.len() {
+            return Ok(&self.processed_elements[index]);
+        }
+
+        // We need to process more elements
+        let count = index + 1 - self.processed_elements.len();
+
+        // Process elements one by one until we reach the desired index
+        for _ in 0..count {
+            if let Some(last) = self.processed_elements.last_mut() {
+                if let Some(end_position) = last.finish_processing(bytes, bump)? {
+                    self.end_position_of_last_processed_element = end_position;
+                }
+            }
+
+            let (lazy_value, end_position) =
+                LazyValueRef::new(bytes, self.end_position_of_last_processed_element, bump)?;
+
+            if let Some(end_position) = end_position {
+                self.end_position_of_last_processed_element = end_position;
+            }
+
+            self.processed_elements.push(lazy_value);
+        }
+
+        Ok(self.processed_elements.last().unwrap())
+    }
+
+    fn finish_processing(
+        &mut self,
+        bytes: &[u8],
+        bump: &'a Bump,
+    ) -> Result<Option<usize>, ErrorCode> {
+        if let Some(last) = self.processed_elements.last_mut() {
+            if let Some(end_position) = last.finish_processing(bytes, bump)? {
+                self.end_position_of_last_processed_element = end_position;
+            }
+        }
+
+        let count = self.len - self.processed_elements.len();
+
+        for _ in 0..count {
+            let (mut lazy_value, end_position) =
+                LazyValueRef::new(bytes, self.end_position_of_last_processed_element, bump)?;
+
+            self.end_position_of_last_processed_element = lazy_value
+                .finish_processing(bytes, bump)?
+                .or(end_position)
+                .expect("`new` or `finish_processing` must return a valid end position`");
+
+            self.processed_elements.push(lazy_value);
+        }
+
+        Ok(Some(self.end_position_of_last_processed_element))
+    }
 }
 
 /// A lazy value reference.
@@ -164,16 +384,8 @@ pub(crate) enum LazyValueRef<'a> {
     Bool(bool),
     Number(f64),
     String(StringRef),
-    Array {
-        len: usize,
-        processed_elements: Vec<'a, LazyValueRef<'a>>,
-        end_position_of_last_processed_element: usize,
-    },
-    Object {
-        len: usize,
-        processed_elements: Vec<'a, (StringRef, LazyValueRef<'a>)>,
-        end_position_of_last_processed_element: usize,
-    },
+    Array(ArrayRef<'a>),
+    Object(ObjectRef<'a>),
 }
 
 impl<'a> LazyValueRef<'a> {
@@ -186,13 +398,13 @@ impl<'a> LazyValueRef<'a> {
                 let ptr = self as *const _;
                 NanBox::string(ptr as _, *len)
             }
-            LazyValueRef::Array { len, .. } => {
+            LazyValueRef::Array(ArrayRef { len, .. }) => {
                 let ptr = self as *const _;
                 NanBox::array(ptr as _, *len)
             }
-            LazyValueRef::Object { .. } => {
+            LazyValueRef::Object(ObjectRef { len, .. }) => {
                 let ptr = self as *const _;
-                NanBox::obj(ptr as _)
+                NanBox::obj(ptr as _, *len)
             }
         }
     }
@@ -308,33 +520,33 @@ impl<'a> LazyValueRef<'a> {
             Marker::FixMap(len) => {
                 let len = len as usize;
                 Ok((
-                    Self::Object {
+                    Self::Object(ObjectRef {
                         len,
                         processed_elements: Vec::with_capacity_in(len, bump),
                         end_position_of_last_processed_element: cursor.position,
-                    },
+                    }),
                     None,
                 ))
             }
             Marker::Map16 => {
                 let len = cursor.read_u16().map(|n| n as usize)?;
                 Ok((
-                    Self::Object {
+                    Self::Object(ObjectRef {
                         len,
                         processed_elements: Vec::with_capacity_in(len, bump),
                         end_position_of_last_processed_element: cursor.position,
-                    },
+                    }),
                     None,
                 ))
             }
             Marker::Map32 => {
                 let len = cursor.read_u32().map(|n| n as usize)?;
                 Ok((
-                    Self::Object {
+                    Self::Object(ObjectRef {
                         len,
                         processed_elements: Vec::with_capacity_in(len, bump),
                         end_position_of_last_processed_element: cursor.position,
-                    },
+                    }),
                     None,
                 ))
             }
@@ -343,33 +555,33 @@ impl<'a> LazyValueRef<'a> {
             Marker::FixArray(len) => {
                 let len = len as usize;
                 Ok((
-                    Self::Array {
+                    Self::Array(ArrayRef {
                         len,
                         processed_elements: Vec::with_capacity_in(len, bump),
                         end_position_of_last_processed_element: cursor.position,
-                    },
+                    }),
                     None,
                 ))
             }
             Marker::Array16 => {
                 let len = cursor.read_u16().map(|n| n as usize)?;
                 Ok((
-                    Self::Array {
+                    Self::Array(ArrayRef {
                         len,
                         processed_elements: Vec::with_capacity_in(len, bump),
                         end_position_of_last_processed_element: cursor.position,
-                    },
+                    }),
                     None,
                 ))
             }
             Marker::Array32 => {
                 let len = cursor.read_u32().map(|n| n as usize)?;
                 Ok((
-                    Self::Array {
+                    Self::Array(ArrayRef {
                         len,
                         processed_elements: Vec::with_capacity_in(len, bump),
                         end_position_of_last_processed_element: cursor.position,
-                    },
+                    }),
                     None,
                 ))
             }
@@ -382,8 +594,8 @@ impl<'a> LazyValueRef<'a> {
     pub(crate) fn get_value_length(&self) -> usize {
         match self {
             Self::String(StringRef { len, .. }) => *len,
-            Self::Array { len, .. } => *len,
-            Self::Object { len, .. } => *len,
+            Self::Array(ArrayRef { len, .. }) => *len,
+            Self::Object(ObjectRef { len, .. }) => *len,
             _ => 0,
         }
     }
@@ -402,44 +614,21 @@ impl<'a> LazyValueRef<'a> {
         bump: &'a Bump,
     ) -> Result<&LazyValueRef, ErrorCode> {
         match self {
-            Self::Array {
-                processed_elements,
-                len,
-                end_position_of_last_processed_element,
-            } => {
-                if index >= *len {
-                    return Err(ErrorCode::IndexOutOfBounds);
-                }
+            Self::Array(array_ref) => array_ref.get_at_index(index, bytes, bump),
+            Self::Object(obj_ref) => obj_ref.get_at_index(index, bytes, bump).map(|v| &v.1),
+            _ => Err(ErrorCode::NotIndexable),
+        }
+    }
 
-                // Fast path: element already processed
-                if index < processed_elements.len() {
-                    return Ok(&processed_elements[index]);
-                }
-
-                // We need to process more elements
-                let count = index + 1 - processed_elements.len();
-
-                // Process elements one by one until we reach the desired index
-                for _ in 0..count {
-                    if let Some(last) = processed_elements.last_mut() {
-                        if let Some(end_position) = last.finish_processing(bytes, bump)? {
-                            *end_position_of_last_processed_element = end_position;
-                        }
-                    }
-
-                    let (lazy_value, end_position) =
-                        Self::new(bytes, *end_position_of_last_processed_element, bump)?;
-
-                    if let Some(end_position) = end_position {
-                        *end_position_of_last_processed_element = end_position;
-                    }
-
-                    processed_elements.push(lazy_value);
-                }
-
-                Ok(processed_elements.last().unwrap())
-            }
-            _ => Err(ErrorCode::NotAnArray),
+    pub(crate) fn get_key_at_index(
+        &mut self,
+        index: usize,
+        bytes: &[u8],
+        bump: &'a Bump,
+    ) -> Result<&StringRef, ErrorCode> {
+        match self {
+            Self::Object(obj_ref) => obj_ref.get_at_index(index, bytes, bump).map(|v| &v.0),
+            _ => Err(ErrorCode::NotAnObject),
         }
     }
 
@@ -450,61 +639,7 @@ impl<'a> LazyValueRef<'a> {
         bump: &'a Bump,
     ) -> Result<Option<&'b Self>, ErrorCode> {
         match self {
-            Self::Object {
-                processed_elements,
-                len,
-                end_position_of_last_processed_element,
-            } => {
-                let index_of_value_in_existing =
-                    processed_elements
-                        .iter()
-                        .position(|(StringRef { ptr, len }, _)| {
-                            let key_bytes = &bytes[*ptr..*ptr + *len];
-                            key_bytes == key
-                        });
-
-                let index_of_value = match index_of_value_in_existing {
-                    Some(index) => Some(index),
-                    None => {
-                        let count = *len - processed_elements.len();
-                        let mut matched = false;
-
-                        for _ in 0..count {
-                            if let Some((_, last)) = processed_elements.last_mut() {
-                                if let Some(end_position) = last.finish_processing(bytes, bump)? {
-                                    *end_position_of_last_processed_element = end_position;
-                                }
-                            }
-
-                            let (Self::String(key_string_ref), Some(key_end_position)) =
-                                Self::new(bytes, *end_position_of_last_processed_element, bump)?
-                            else {
-                                return Err(ErrorCode::ReadError);
-                            };
-
-                            matched = &bytes
-                                [key_string_ref.ptr..key_string_ref.ptr + key_string_ref.len]
-                                == key;
-
-                            let (lazy_value, value_end_position) =
-                                Self::new(bytes, key_end_position, bump)?;
-
-                            *end_position_of_last_processed_element =
-                                value_end_position.unwrap_or(key_end_position);
-
-                            processed_elements.push((key_string_ref, lazy_value));
-
-                            if matched {
-                                break;
-                            }
-                        }
-
-                        matched.then(|| processed_elements.len() - 1)
-                    }
-                };
-
-                Ok(index_of_value.map(|i| &processed_elements[i].1))
-            }
+            Self::Object(obj_ref) => obj_ref.get_property(key, bytes, bump),
             _ => Err(ErrorCode::NotAnObject),
         }
     }
@@ -519,66 +654,9 @@ impl<'a> LazyValueRef<'a> {
         bump: &'a Bump,
     ) -> Result<Option<usize>, ErrorCode> {
         match self {
-            Self::Array {
-                processed_elements,
-                len,
-                end_position_of_last_processed_element,
-            } => {
-                if let Some(last) = processed_elements.last_mut() {
-                    if let Some(end_position) = last.finish_processing(bytes, bump)? {
-                        *end_position_of_last_processed_element = end_position;
-                    }
-                }
-
-                let count = *len - processed_elements.len();
-
-                for _ in 0..count {
-                    let (mut lazy_value, end_position) =
-                        Self::new(bytes, *end_position_of_last_processed_element, bump)?;
-
-                    *end_position_of_last_processed_element = lazy_value
-                        .finish_processing(bytes, bump)?
-                        .or(end_position)
-                        .expect("`new` or `finish_processing` must return a valid end position`");
-
-                    processed_elements.push(lazy_value);
-                }
-
-                Ok(Some(*end_position_of_last_processed_element))
-            }
+            Self::Array(array_ref) => array_ref.finish_processing(bytes, bump),
             Self::Null | Self::Bool(_) | Self::Number(_) | Self::String { .. } => Ok(None),
-            Self::Object {
-                processed_elements,
-                len,
-                end_position_of_last_processed_element,
-            } => {
-                if let Some((_, last)) = processed_elements.last_mut() {
-                    if let Some(end_position) = last.finish_processing(bytes, bump)? {
-                        *end_position_of_last_processed_element = end_position;
-                    }
-                }
-
-                let count = *len - processed_elements.len();
-
-                for _ in 0..count {
-                    let (Self::String(key), Some(end_position)) =
-                        Self::new(bytes, *end_position_of_last_processed_element, bump)?
-                    else {
-                        return Err(ErrorCode::ReadError);
-                    };
-
-                    let (mut lazy_value, end_position) = Self::new(bytes, end_position, bump)?;
-
-                    *end_position_of_last_processed_element = lazy_value
-                        .finish_processing(bytes, bump)?
-                        .or(end_position)
-                        .expect("`new` or `finish_processing` must return a valid end position`");
-
-                    processed_elements.push((key, lazy_value));
-                }
-
-                Ok(Some(*end_position_of_last_processed_element))
-            }
+            Self::Object(obj_ref) => obj_ref.finish_processing(bytes, bump),
         }
     }
 }
@@ -724,21 +802,19 @@ mod tests {
         // fixarray so the length and marker are in the same byte
         assert_eq!(
             value,
-            LazyValueRef::Array {
+            LazyValueRef::Array(ArrayRef {
                 len: 3,
                 processed_elements: bumpalo::collections::Vec::new_in(&bump),
                 end_position_of_last_processed_element: 1
-            }
+            })
         );
 
         [1.0, 2.0, 3.0].iter().enumerate().for_each(|(i, n)| {
             let element = value.get_at_index(i, &bytes, &bump).unwrap();
             assert_eq!(element, &LazyValueRef::Number(*n));
             match &value {
-                LazyValueRef::Array {
-                    processed_elements, ..
-                } => {
-                    assert_eq!(processed_elements.len(), i + 1);
+                LazyValueRef::Array(array_ref) => {
+                    assert_eq!(array_ref.processed_elements.len(), i + 1);
                 }
                 _ => panic!("Expected array, got {:?}", value),
             }
@@ -752,18 +828,18 @@ mod tests {
     fn test_encode_array_value() {
         let bump = Bump::new();
         let len = 3;
-        let value = LazyValueRef::Array {
+        let value = LazyValueRef::Array(ArrayRef {
             len,
             processed_elements: bumpalo::collections::Vec::new_in(&bump),
             end_position_of_last_processed_element: 0,
-        };
+        });
         let nanbox = value.encode();
         let ptr = &value as *const _ as usize;
         assert_eq!(nanbox, NanBox::array(ptr, len));
     }
 
     #[test]
-    fn test_get_at_index() {
+    fn test_get_at_index_array() {
         let bytes = build_msgpack(|w| {
             encode::write_array_len(w, 3)?;
             encode::write_i32(w, 1)?;
@@ -786,7 +862,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_at_index_out_of_bounds() {
+    fn test_get_at_index_array_out_of_bounds() {
         let bytes = build_msgpack(|w| encode::write_array_len(w, 0).map(|_| ())).unwrap();
         let bump = Bump::new();
         let mut value = create_lazy_value(&bytes, &bump);
@@ -795,12 +871,42 @@ mod tests {
     }
 
     #[test]
-    fn test_get_at_index_not_an_array() {
-        let bytes = build_msgpack(|w| encode::write_map_len(w, 1).map(|_| ())).unwrap();
+    fn get_at_index_object() {
+        let bytes = build_msgpack(|w| {
+            encode::write_map_len(w, 2)?;
+            encode::write_str(w, "a")?;
+            encode::write_i32(w, 1)?;
+            encode::write_str(w, "b")?;
+            encode::write_i32(w, 2)
+        })
+        .unwrap();
+
+        let bump = Bump::new();
+        let mut value = create_lazy_value(&bytes, &bump);
+
+        let element = value.get_at_index(0, &bytes, &bump).unwrap();
+        assert_eq!(element, &LazyValueRef::Number(1.0));
+
+        let element = value.get_at_index(1, &bytes, &bump).unwrap();
+        assert_eq!(element, &LazyValueRef::Number(2.0));
+    }
+
+    #[test]
+    fn test_get_at_index_object_out_of_bounds() {
+        let bytes = build_msgpack(|w| encode::write_map_len(w, 0).map(|_| ())).unwrap();
         let bump = Bump::new();
         let mut value = create_lazy_value(&bytes, &bump);
         let error = value.get_at_index(0, &bytes, &bump).unwrap_err();
-        assert_eq!(error, ErrorCode::NotAnArray);
+        assert_eq!(error, ErrorCode::IndexOutOfBounds);
+    }
+
+    #[test]
+    fn test_get_at_index_not_indexable() {
+        let bytes = build_msgpack(|w| encode::write_str(w, "")).unwrap();
+        let bump = Bump::new();
+        let mut value = create_lazy_value(&bytes, &bump);
+        let error = value.get_at_index(0, &bytes, &bump).unwrap_err();
+        assert_eq!(error, ErrorCode::NotIndexable);
     }
 
     #[test]
@@ -819,11 +925,11 @@ mod tests {
         // fixmap so the length and marker are in the same byte
         assert_eq!(
             value,
-            LazyValueRef::Object {
+            LazyValueRef::Object(ObjectRef {
                 len: 2,
                 processed_elements: bumpalo::collections::Vec::new_in(&bump),
                 end_position_of_last_processed_element: 1
-            }
+            })
         );
 
         [("a", 1), ("b", 2)]
@@ -836,10 +942,8 @@ mod tests {
                     .unwrap();
                 assert_eq!(property, &LazyValueRef::Number(*v as f64));
                 match &value {
-                    LazyValueRef::Object {
-                        processed_elements, ..
-                    } => {
-                        assert_eq!(processed_elements.len(), i + 1);
+                    LazyValueRef::Object(obj_ref) => {
+                        assert_eq!(obj_ref.processed_elements.len(), i + 1);
                     }
                     _ => panic!("Expected object, got {:?}", value),
                 }
@@ -853,14 +957,14 @@ mod tests {
     fn test_encode_object_value() {
         let bump = Bump::new();
         let len = 2;
-        let value = LazyValueRef::Object {
+        let value = LazyValueRef::Object(ObjectRef {
             len,
             processed_elements: bumpalo::collections::Vec::new_in(&bump),
             end_position_of_last_processed_element: 0,
-        };
+        });
         let nanbox = value.encode();
         let ptr = &value as *const _ as usize;
-        assert_eq!(nanbox, NanBox::obj(ptr));
+        assert_eq!(nanbox, NanBox::obj(ptr, len));
     }
 
     #[test]
@@ -912,6 +1016,48 @@ mod tests {
         let bump = Bump::new();
         let mut value = create_lazy_value(&bytes, &bump);
         let error = value.get_object_property(b"a", &bytes, &bump).unwrap_err();
+        assert_eq!(error, ErrorCode::NotAnObject);
+    }
+
+    #[test]
+    fn test_get_key_at_index() {
+        let bytes = build_msgpack(|w| {
+            encode::write_map_len(w, 2)?;
+            encode::write_str(w, "a")?;
+            encode::write_sint(w, 1)?;
+            encode::write_str(w, "b")?;
+            encode::write_sint(w, 2).map(|_| ())
+        })
+        .unwrap();
+
+        let bump = Bump::new();
+        let mut value = create_lazy_value(&bytes, &bump);
+
+        let key = value.get_key_at_index(0, &bytes, &bump).unwrap();
+        // 1 byte for the map marker, 1 byte for the fixstr marker/length, so the key is at offset 2
+        assert_eq!(key, &StringRef { len: 1, ptr: 2 });
+
+        let key = value.get_key_at_index(1, &bytes, &bump).unwrap();
+        // from the start of the previous key (2), we have 1 byte for the contents of the previous key,
+        // 1 byte for the fixnum marker/length, and 1 byte for the fixstr marker/length, so the key is at offset 5
+        assert_eq!(key, &StringRef { len: 1, ptr: 5 });
+    }
+
+    #[test]
+    fn test_get_key_at_index_out_of_bounds() {
+        let bytes = build_msgpack(|w| encode::write_map_len(w, 0).map(|_| ())).unwrap();
+        let bump = Bump::new();
+        let mut value = create_lazy_value(&bytes, &bump);
+        let error = value.get_key_at_index(0, &bytes, &bump).unwrap_err();
+        assert_eq!(error, ErrorCode::IndexOutOfBounds);
+    }
+
+    #[test]
+    fn test_get_key_at_index_not_an_object() {
+        let bytes = build_msgpack(|w| encode::write_array_len(w, 0).map(|_| ())).unwrap();
+        let bump = Bump::new();
+        let mut value = create_lazy_value(&bytes, &bump);
+        let error = value.get_key_at_index(0, &bytes, &bump).unwrap_err();
         assert_eq!(error, ErrorCode::NotAnObject);
     }
 }
