@@ -90,6 +90,14 @@ impl Context {
     pub fn finalize_output(self) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_finalize(self.0 as _) })
     }
+
+    #[cfg(not(target_family = "wasm"))]
+    /// Finalize the output and return the serialized value as a `serde_json::Value`.
+    /// This is only available in non-WASM targets, and therefore only recommended for use in tests.
+    pub fn finalize_output_and_return(self) -> Result<serde_json::Value, Error> {
+        let (result, bytes) = shopify_function_wasm_api_provider::write::shopify_function_output_finalize_and_return_msgpack_bytes(self.0 as _);
+        map_result(result).and_then(|_| rmp_serde::from_slice(&bytes).map_err(|_| Error::IoError))
+    }
 }
 
 pub trait Serialize {
@@ -181,5 +189,80 @@ impl<T: Serialize> Serialize for Option<T> {
             Some(value) => value.serialize(context),
             None => context.write_null(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn serialize_and_return<T: Serialize + ?Sized>(value: &T) -> serde_json::Value {
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        value.serialize(&mut context).unwrap();
+        context.finalize_output_and_return().unwrap()
+    }
+
+    #[test]
+    fn test_bool_serialize() {
+        [true, false].into_iter().for_each(|value| {
+            let result = serialize_and_return(&value);
+            assert_eq!(result, serde_json::json!(value));
+        });
+    }
+
+    #[test]
+    fn test_void_serialize() {
+        let result = serialize_and_return(&());
+        assert_eq!(result, serde_json::json!(null));
+    }
+
+    #[test]
+    fn test_i32_serialize() {
+        [0, 1, -1, i32::MAX, i32::MIN]
+            .into_iter()
+            .for_each(|value| {
+                let result = serialize_and_return(&value);
+                assert_eq!(result, serde_json::json!(value));
+            });
+    }
+
+    #[test]
+    fn test_f64_serialize() {
+        [0.0, 1.0, -1.0, f64::MAX, f64::MIN]
+            .into_iter()
+            .for_each(|value| {
+                let result = serialize_and_return(&value);
+                assert_eq!(result, serde_json::json!(value));
+            });
+    }
+
+    #[test]
+    fn test_str_serialize() {
+        ["", "a", "Hello, world!"].into_iter().for_each(|value| {
+            let result = serialize_and_return(value);
+            assert_eq!(result, serde_json::json!(value));
+        });
+    }
+
+    #[test]
+    fn test_slice_serialize() {
+        let value: &[i32] = &[1, 2, 3];
+        let result = serialize_and_return(value);
+        assert_eq!(result, serde_json::json!(value));
+    }
+
+    #[test]
+    fn test_string_serialize() {
+        let value = String::from("Hello, world!");
+        let result = serialize_and_return(&value);
+        assert_eq!(result, serde_json::json!(value));
+    }
+
+    #[test]
+    fn test_option_serialize() {
+        [Some(1), None].into_iter().for_each(|option| {
+            let result = serialize_and_return(&option);
+            assert_eq!(result, serde_json::json!(option));
+        });
     }
 }
