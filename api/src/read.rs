@@ -1,12 +1,45 @@
+//! The read API for the Shopify Function Wasm API.
+//!
+//! This consists primarily of the `Deserialize` trait for converting [`Value`] into other types.
+
 use crate::Value;
 
+/// An error that can occur when deserializing a value.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The value is not of the expected type.
     #[error("Invalid type")]
     InvalidType,
 }
 
+/// A trait for types that can be deserialized from a [`Value`].
+///
+/// # Example
+/// ```rust
+/// use shopify_function_wasm_api::{Context, Deserialize, Value, read::Error};
+///
+/// #[derive(Debug, PartialEq)]
+/// struct MyStruct {
+///     value: i32,
+/// }
+///
+/// impl Deserialize for MyStruct {
+///     fn deserialize(value: &Value) -> Result<Self, Error> {
+///         if !value.is_obj() {
+///             return Err(Error::InvalidType);
+///         }
+///         let value = i32::deserialize(&value.get_obj_prop("value"))?;
+///         Ok(MyStruct { value })
+///     }
+/// }
+///
+/// let context = Context::new_with_input(serde_json::json!({ "value": 1 }));
+/// let value = context.input_get().unwrap();
+/// let my_struct = MyStruct::deserialize(&value).unwrap();
+/// assert_eq!(my_struct, MyStruct { value: 1 });
+/// ```
 pub trait Deserialize: Sized {
+    /// Deserialize a value from a [`Value`].
     fn deserialize(value: &Value) -> Result<Self, Error>;
 }
 
