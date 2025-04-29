@@ -1,4 +1,4 @@
-#[repr(u32)]
+#[repr(usize)]
 #[derive(Debug, strum::FromRepr, PartialEq, Eq)]
 pub enum WriteResult {
     /// The write operation was successful.

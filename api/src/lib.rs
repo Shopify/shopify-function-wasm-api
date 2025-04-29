@@ -155,8 +155,8 @@ mod provider_fallback {
                 context, len,
             );
         let write_result =
-            WriteResult::from_repr((result >> 32) as u32).expect("Invalid write result");
-        let dst = result as u32;
+            WriteResult::from_repr((result >> usize::BITS) as usize).expect("Invalid write result");
+        let dst = result as usize;
         if write_result == WriteResult::Ok {
             std::ptr::copy(ptr as _, dst as _, len);
         }

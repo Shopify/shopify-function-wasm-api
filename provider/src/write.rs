@@ -1,4 +1,4 @@
-use crate::{decorate_for_target, Context};
+use crate::{decorate_for_target, Context, DoubleUsize};
 use rmp::encode;
 use shopify_function_wasm_api_core::{write::WriteResult, ContextPtr};
 use std::io::Write;
@@ -155,13 +155,13 @@ decorate_for_target! {
 
 decorate_for_target! {
     /// The most significant 32 bits are the result, the least significant 32 bits are the pointer.
-    fn shopify_function_output_new_utf8_str(context: ContextPtr, len: usize) -> u64 {
+    fn shopify_function_output_new_utf8_str(context: ContextPtr, len: usize) -> DoubleUsize {
         match Context::mut_from_raw(context) {
             Ok(context) => {
                 let (result, ptr) = context.allocate_utf8_str(len);
-                ((result as u64) << 32) | ptr as u64
+                ((result as DoubleUsize) << usize::BITS) | ptr as DoubleUsize
             }
-            Err(_) => (WriteResult::IoError as u64) << 32,
+            Err(_) => (WriteResult::IoError as DoubleUsize) << usize::BITS,
         }
     }
 }
@@ -244,6 +244,28 @@ decorate_for_target! {
             }
             Err(_) => WriteResult::IoError,
         }
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+pub fn shopify_function_output_finalize_and_return_msgpack_bytes(
+    context: ContextPtr,
+) -> (WriteResult, Vec<u8>) {
+    match Context::mut_from_raw(context) {
+        Ok(context) => {
+            let Context {
+                output_bytes,
+                write_state,
+                ..
+            } = &context;
+            if *write_state != State::End {
+                return (WriteResult::ValueNotFinished, Vec::new());
+            }
+            let bytes = output_bytes.as_slice().to_vec();
+            let _ = unsafe { Box::from_raw(context as *mut Context) }; // drop the context
+            (WriteResult::Ok, bytes)
+        }
+        Err(_) => (WriteResult::IoError, Vec::new()),
     }
 }
 
