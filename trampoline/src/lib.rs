@@ -18,7 +18,7 @@ pub fn trampoline_existing_module(
         .emit_wasm_file(destination_path)
 }
 
-struct TrampolineCodegen {
+pub struct TrampolineCodegen {
     module: Module,
     guest_memory_id: MemoryId,
     provider_memory_id: OnceCell<MemoryId>,
@@ -29,7 +29,7 @@ struct TrampolineCodegen {
 }
 
 impl TrampolineCodegen {
-    fn new(module: Module) -> walrus::Result<Self> {
+    pub fn new(module: Module) -> walrus::Result<Self> {
         let guest_memory_id = module.get_memory_id()?;
 
         Ok(Self {
@@ -364,7 +364,7 @@ impl TrampolineCodegen {
         Ok(())
     }
 
-    fn apply(mut self) -> walrus::Result<Module> {
+    pub fn apply(mut self) -> walrus::Result<Module> {
         self.rename_imported_func(
             "shopify_function_context_new",
             "_shopify_function_context_new",
@@ -428,5 +428,37 @@ impl TrampolineCodegen {
         )?;
 
         Ok(self.module)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::TrampolineCodegen;
+    use anyhow::Result;
+    use walrus::Module;
+
+    #[test]
+    fn disassemble_trampoline() -> Result<()> {
+        let consumer_bytes = wat::parse_bytes(include_bytes!("consumer.wat"))?;
+        let module = Module::from_buffer(&consumer_bytes)?;
+        let codegen = TrampolineCodegen::new(module)?;
+        let mut result = codegen.apply()?;
+
+        let bless = std::env::var("TRAMPOLINE_TEST_BLESS");
+
+        let cwd = std::env::current_dir()?;
+        let expected_path = cwd.join("src/trampoline.wat");
+        let actual = wasmprinter::print_bytes(result.emit_wasm())?;
+
+        if matches!(bless.as_deref(), Ok("1")) {
+            std::fs::write(&expected_path, &actual)?;
+        }
+
+        let expected_bytes = wat::parse_file(&expected_path)?;
+        let expected = wasmprinter::print_bytes(&expected_bytes)?;
+
+        text_diff::assert_diff(&expected, &actual, "", 0);
+
+        Ok(())
     }
 }

@@ -31,9 +31,25 @@
   (import "shopify_function_v0.0.1" "shopify_function_realloc" (func (;17;) (type 7)))
   (import "shopify_function_v0.0.1" "memory" (memory (;0;) 1))
   (import "shopify_function_v0.0.1" "_shopify_function_output_new_utf8_str" (func (;18;) (type 4)))
+  (import "shopify_function_v0.0.1" "_shopify_function_intern_utf8_str" (func (;19;) (type 4)))
   (memory (;1;) 1)
   (export "memory" (memory 1))
-  (func (;19;) (type 6) (param i32 i32 i32) (result i32)
+  (func (;20;) (type 6) (param i32 i32 i32) (result i32)
+    (local i64)
+    local.get 0
+    local.get 2
+    call 19
+    local.tee 3
+    i64.const 32
+    i64.shr_u
+    i32.wrap_i64
+    local.get 3
+    i32.wrap_i64
+    local.get 1
+    local.get 2
+    call 24
+  )
+  (func (;21;) (type 6) (param i32 i32 i32) (result i32)
     (local i64)
     local.get 0
     local.get 2
@@ -46,30 +62,30 @@
     i32.wrap_i64
     local.get 1
     local.get 2
-    call 22
+    call 24
   )
-  (func (;20;) (type 10) (param i32 i64 i32 i32) (result i64)
+  (func (;22;) (type 10) (param i32 i64 i32 i32) (result i64)
     (local i32)
     local.get 3
-    call 21
+    call 23
     local.tee 4
     local.get 2
     local.get 3
-    call 22
+    call 24
     local.get 0
     local.get 1
     local.get 4
     local.get 3
     call 16
   )
-  (func (;21;) (type 1) (param i32) (result i32)
+  (func (;23;) (type 1) (param i32) (result i32)
     i32.const 0
     i32.const 0
     i32.const 1
     local.get 0
     call 17
   )
-  (func (;22;) (type 5) (param i32 i32 i32)
+  (func (;24;) (type 5) (param i32 i32 i32)
     local.get 0
     local.get 1
     local.get 2
