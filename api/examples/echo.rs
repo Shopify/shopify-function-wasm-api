@@ -27,11 +27,7 @@ enum Value {
     Integer(i32),
     Float(f64),
     String(String),
-    /// There is no way to dynamically get the keys of an object, so we just hardcode these two known keys.
-    Object {
-        foo_value: Box<Self>,
-        bar_value: Box<Self>,
-    },
+    Object(Vec<(String, Self)>),
     Array(Vec<Self>),
 }
 
@@ -52,19 +48,29 @@ impl Deserialize for Value {
             }
         } else if let Some(s) = value.as_string() {
             Ok(Value::String(s.to_string()))
-        } else if value.is_obj() {
-            let foo_interned_string_id =
-                *FOO_INTERNED_STRING_ID.get_or_init(|| value.intern_utf8_str("foo"));
-            let bar_interned_string_id =
-                *BAR_INTERNED_STRING_ID.get_or_init(|| value.intern_utf8_str("bar"));
-            Ok(Value::Object {
-                foo_value: Box::new(Self::deserialize(
-                    &value.get_interned_obj_prop(foo_interned_string_id),
-                )?),
-                bar_value: Box::new(Self::deserialize(
-                    &value.get_interned_obj_prop(bar_interned_string_id),
-                )?),
-            })
+        } else if let Some(obj_len) = value.obj_len() {
+            let mut object = Vec::new();
+            for i in 0..obj_len {
+                let key = value.get_obj_key_at_index(i).expect("Failed to get key");
+                // special case to exercise string interning and get_obj_prop
+                let raw_value = match key.as_str() {
+                    "foo" => {
+                        let interned_string_id =
+                            *FOO_INTERNED_STRING_ID.get_or_init(|| value.intern_utf8_str("foo"));
+                        value.get_interned_obj_prop(interned_string_id)
+                    }
+                    "bar" => {
+                        let interned_string_id =
+                            *BAR_INTERNED_STRING_ID.get_or_init(|| value.intern_utf8_str("bar"));
+                        value.get_interned_obj_prop(interned_string_id)
+                    }
+                    "abc" | "def" => value.get_obj_prop(key.as_str()),
+                    _ => value.get_at_index(i),
+                };
+                let value = Self::deserialize(&raw_value)?;
+                object.push((key, value));
+            }
+            Ok(Value::Object(object))
         } else if let Some(arr_len) = value.array_len() {
             let mut arr = Vec::with_capacity(arr_len);
             for i in 0..arr_len {
@@ -85,22 +91,27 @@ impl Serialize for Value {
             Value::Integer(n) => out.write_i32(*n),
             Value::Float(n) => out.write_f64(*n),
             Value::String(s) => out.write_utf8_str(s),
-            Value::Object {
-                foo_value,
-                bar_value,
-            } => out.write_object(
+            Value::Object(object) => out.write_object(
                 |ctx| {
-                    let foo_interned_string_id =
-                        *FOO_INTERNED_STRING_ID.get_or_init(|| ctx.intern_utf8_str("foo"));
-                    let bar_interned_string_id =
-                        *BAR_INTERNED_STRING_ID.get_or_init(|| ctx.intern_utf8_str("bar"));
-                    ctx.write_interned_utf8_str(foo_interned_string_id)?;
-                    foo_value.serialize(ctx)?;
-                    ctx.write_interned_utf8_str(bar_interned_string_id)?;
-                    bar_value.serialize(ctx)?;
+                    for (key, value) in object {
+                        match key.as_str() {
+                            "foo" => {
+                                let interned_string_id = *FOO_INTERNED_STRING_ID
+                                    .get_or_init(|| ctx.intern_utf8_str("foo"));
+                                ctx.write_interned_utf8_str(interned_string_id)?;
+                            }
+                            "bar" => {
+                                let interned_string_id = *BAR_INTERNED_STRING_ID
+                                    .get_or_init(|| ctx.intern_utf8_str("bar"));
+                                ctx.write_interned_utf8_str(interned_string_id)?;
+                            }
+                            _ => ctx.write_utf8_str(key)?,
+                        }
+                        value.serialize(ctx)?;
+                    }
                     Ok(())
                 },
-                2,
+                object.len(),
             ),
             Value::Array(arr) => out.write_array(
                 |out| {
@@ -127,12 +138,6 @@ mod tests {
         let input: Value = Deserialize::deserialize(&api_value).unwrap();
         let result = echo(input);
 
-        assert_eq!(
-            result,
-            Value::Object {
-                foo_value: Box::new(Value::Null),
-                bar_value: Box::new(Value::Null),
-            }
-        );
+        assert_eq!(result, Value::Object(Vec::new()));
     }
 }

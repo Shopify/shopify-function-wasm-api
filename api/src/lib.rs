@@ -38,6 +38,11 @@ extern "C" {
         interned_string_id: shopify_function_wasm_api_core::InternedStringId,
     ) -> Val;
     fn shopify_function_input_get_at_index(context: ContextPtr, scope: Val, index: usize) -> Val;
+    fn shopify_function_input_get_obj_key_at_index(
+        context: ContextPtr,
+        scope: Val,
+        index: usize,
+    ) -> Val;
 
     // Write API.
     fn shopify_function_output_new_bool(context: ContextPtr, bool: u32) -> WriteResult;
@@ -116,6 +121,15 @@ mod provider_fallback {
         index: usize,
     ) -> Val {
         shopify_function_wasm_api_provider::read::shopify_function_input_get_at_index(
+            context, scope, index,
+        )
+    }
+    pub(crate) unsafe fn shopify_function_input_get_obj_key_at_index(
+        context: ContextPtr,
+        scope: Val,
+        index: usize,
+    ) -> Val {
+        shopify_function_wasm_api_provider::read::shopify_function_input_get_obj_key_at_index(
             context, scope, index,
         )
     }
@@ -351,25 +365,56 @@ impl Value {
         }
     }
 
-    pub fn get_at_index(&self, index: usize) -> Value {
+    pub fn obj_len(&self) -> Option<usize> {
         match self.nan_box.try_decode() {
-            Ok(ValueRef::Array { .. }) => {
+            Ok(ValueRef::Object { len, .. }) => {
+                let len = if len == NanBox::MAX_VALUE_LENGTH {
+                    unsafe {
+                        shopify_function_input_get_val_len(
+                            self.context.as_ptr() as _,
+                            self.nan_box.to_bits(),
+                        )
+                    }
+                } else {
+                    len
+                };
+                Some(len)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn get_at_index(&self, index: usize) -> Self {
+        let scope = unsafe {
+            shopify_function_input_get_at_index(
+                self.context.as_ptr() as _,
+                self.nan_box.to_bits(),
+                index,
+            )
+        };
+        Self {
+            context: self.context,
+            nan_box: NanBox::from_bits(scope),
+        }
+    }
+
+    pub fn get_obj_key_at_index(&self, index: usize) -> Option<String> {
+        match self.nan_box.try_decode() {
+            Ok(ValueRef::Object { .. }) => {
                 let scope = unsafe {
-                    shopify_function_input_get_at_index(
+                    shopify_function_input_get_obj_key_at_index(
                         self.context.as_ptr() as _,
                         self.nan_box.to_bits(),
                         index,
                     )
                 };
-                Self {
+                let value = Self {
                     context: self.context,
                     nan_box: NanBox::from_bits(scope),
-                }
+                };
+                value.as_string()
             }
-            _ => Self {
-                context: self.context,
-                nan_box: NanBox::from_bits(self.nan_box.to_bits()),
-            },
+            _ => None,
         }
     }
 
