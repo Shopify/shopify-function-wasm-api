@@ -2,6 +2,10 @@
 name = "shopify_function_wasm_api_trampoline"
 version = "1.0.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/Shopify/shopify-function-wasm-api"
+homepage = "https://github.com/Shopify/shopify-function-wasm-api"
+description = "Tool for augmenting Wasm modules to be compatible with the Shopify Function Wasm API"
 
 [dependencies]
 walrus = "0.23.3"
