@@ -1,6 +1,6 @@
 [package]
 name = "shopify_function_wasm_api_trampoline"
-version = "0.0.1"
+version = "1.0.0"
 edition = "2021"
 
 [dependencies]

@@ -5,7 +5,8 @@ use walrus::{
     FunctionBuilder, FunctionId, ImportKind, MemoryId, Module, ValType,
 };
 
-pub const PROVIDER_MODULE_NAME: &str = concat!("shopify_function_v", env!("CARGO_PKG_VERSION"));
+pub const PROVIDER_MODULE_NAME: &str =
+    concat!("shopify_function_v", env!("CARGO_PKG_VERSION_MAJOR"));
 
 pub fn trampoline_existing_module(
     source_path: impl AsRef<Path>,
