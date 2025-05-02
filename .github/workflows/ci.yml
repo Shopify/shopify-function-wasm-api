@@ -12,7 +12,7 @@ env:
 
 jobs:
   lint:
-    runs-on: shopify-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Cargo Target Cache
@@ -39,7 +39,7 @@ jobs:
         run: cargo clippy --examples --target wasm32-wasip1 --all-features
 
   test:
-    runs-on: shopify-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Cargo Cache
@@ -64,7 +64,7 @@ jobs:
         run: cargo test --examples
 
   build:
-    runs-on: shopify-ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Cargo Target Cache
