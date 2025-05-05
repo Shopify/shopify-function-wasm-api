@@ -1,25 +1,40 @@
+//! The write API for the Shopify Function Wasm API.
+//!
+//! This consists primarily of the `Serialize` trait for writing values to a [`Context`].
+
 use std::collections::HashMap;
 
 use crate::Context;
 use crate::InternedStringId;
 use shopify_function_wasm_api_core::write::WriteResult;
 
+/// An error that can occur when writing a value.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// An I/O error occurred.
     #[error("I/O error")]
     IoError,
+    /// Expected a string value, corresponding to a key in an object, but got a different type.
     #[error("Expected a key")]
     ExpectedKey,
+    /// The object length was not honoured. This can occur if you write more key-value pairs than the length specified,
+    /// or if you try to finalize the object without writing the specified number of key-value pairs.
     #[error("Object length error")]
     ObjectLengthError,
+    /// The value was already written. This can occur if you write the value multiple times.
     #[error("Value already written")]
     ValueAlreadyWritten,
+    /// The value is not an object, but was expected to be one based on the current context (e.g. when attempting to finalize an object).
     #[error("Not an object")]
     NotAnObject,
+    /// The value was not finished, but `Context::finalize_output` was called.
     #[error("Value not finished")]
     ValueNotFinished,
+    /// The array length was not honoured. This can occur if you write more values than the length specified,
+    /// or if you try to finalize the array without writing the specified number of values.
     #[error("Array length error")]
     ArrayLengthError,
+    /// The value is not an array, but was expected to be one based on the current context.
     #[error("Not an array")]
     NotAnArray,
 }
@@ -39,34 +54,41 @@ fn map_result(result: WriteResult) -> Result<(), Error> {
 }
 
 impl Context {
+    /// Write a boolean value.
     pub fn write_bool(&mut self, value: bool) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_new_bool(self.0 as _, value as u32) })
     }
 
+    /// Write a null value.
     pub fn write_null(&mut self) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_new_null(self.0 as _) })
     }
 
+    /// Write an i32 value.
     pub fn write_i32(&mut self, value: i32) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_new_i32(self.0 as _, value) })
     }
 
+    /// Write a f64 value.
     pub fn write_f64(&mut self, value: f64) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_new_f64(self.0 as _, value) })
     }
 
+    /// Write a UTF-8 string value.
     pub fn write_utf8_str(&mut self, value: &str) -> Result<(), Error> {
         map_result(unsafe {
             crate::shopify_function_output_new_utf8_str(self.0 as _, value.as_ptr(), value.len())
         })
     }
 
+    /// Write an interned UTF-8 string value.
     pub fn write_interned_utf8_str(&mut self, id: InternedStringId) -> Result<(), Error> {
         map_result(unsafe {
             crate::shopify_function_output_new_interned_utf8_str(self.0 as _, id.as_usize())
         })
     }
 
+    /// Write an object. You must provide the exact number of key-value pairs you will write.
     pub fn write_object<F: FnOnce(&mut Self) -> Result<(), Error>>(
         &mut self,
         f: F,
@@ -77,6 +99,7 @@ impl Context {
         map_result(unsafe { crate::shopify_function_output_finish_object(self.0 as _) })
     }
 
+    /// Write an array. You must provide the exact number of values you will write.
     pub fn write_array<F: FnOnce(&mut Self) -> Result<(), Error>>(
         &mut self,
         f: F,
@@ -87,6 +110,7 @@ impl Context {
         map_result(unsafe { crate::shopify_function_output_finish_array(self.0 as _) })
     }
 
+    /// Finalize the output. This must be called exactly once, and must be called after all other writes.
     pub fn finalize_output(self) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_finalize(self.0 as _) })
     }
@@ -100,7 +124,34 @@ impl Context {
     }
 }
 
+/// A trait for types that can be serialized.
+///
+/// # Example
+/// ```rust
+/// use shopify_function_wasm_api::{Context, Serialize, write::Error};
+///
+/// struct MyStruct {
+///     value: i32,
+/// }
+///
+/// impl Serialize for MyStruct {
+///     fn serialize(&self, context: &mut Context) -> Result<(), Error> {
+///         context.write_object(|ctx| {
+///             ctx.write_utf8_str("value")?;
+///             ctx.write_i32(self.value)
+///         }, 1)
+///     }
+/// }
+///
+/// let mut context = Context::new_with_input(serde_json::json!({}));
+/// let my_struct = MyStruct { value: 1 };
+/// my_struct.serialize(&mut context).unwrap();
+/// let output = context.finalize_output_and_return().unwrap();
+/// let expected = serde_json::json!({ "value": 1 });
+/// assert_eq!(output, expected);
+/// ```
 pub trait Serialize {
+    /// Serialize the value.
     fn serialize(&self, context: &mut Context) -> Result<(), Error>;
 }
 

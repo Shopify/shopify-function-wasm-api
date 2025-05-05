@@ -1,3 +1,25 @@
+//! # Shopify Function Wasm API
+//!
+//! This crate provides a high-level API for interfacing with the Shopify Function Wasm API.
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use shopify_function_wasm_api::{Context, Serialize, Deserialize, Value};
+//! use std::error::Error;
+//!
+//! fn main() -> Result<(), Box<dyn Error>> {
+//!     let mut context = Context::new();
+//!     let input = context.input_get()?;
+//!     let value: i32 = Deserialize::deserialize(&input)?;
+//!     value.serialize(&mut context)?;
+//!     context.finalize_output()?;
+//!     Ok(())
+//! }
+//! ```
+
+#![warn(missing_docs)]
+
 use shopify_function_wasm_api_core::{
     read::{ErrorCode, NanBox, Val, ValueRef},
     write::WriteResult,
@@ -220,19 +242,28 @@ mod provider_fallback {
 #[cfg(not(target_family = "wasm"))]
 use provider_fallback::*;
 
+/// An identifier for an interned UTF-8 string.
+///
+/// This is returned by [`Context::intern_utf8_str`], and can be used for both reading and writing.
 #[derive(Clone, Copy)]
 pub struct InternedStringId(shopify_function_wasm_api_core::InternedStringId);
 
 impl InternedStringId {
-    pub fn from_usize(id: usize) -> Self {
-        Self(id)
-    }
-
-    pub fn as_usize(&self) -> usize {
+    fn as_usize(&self) -> usize {
         self.0
     }
 }
 
+/// A value read from the input.
+///
+/// This can be any of the following types:
+/// - boolean
+/// - number
+/// - string
+/// - null
+/// - object
+/// - array
+/// - error
 #[derive(Copy, Clone)]
 pub struct Value {
     context: NonNull<ContextPtr>,
@@ -240,6 +271,7 @@ pub struct Value {
 }
 
 impl Value {
+    /// Intern a string. This is just a convenience method equivalent to calling [`Context::intern_utf8_str`], if you don't have a [`Context`] easily accessible.
     pub fn intern_utf8_str(&self, s: &str) -> InternedStringId {
         let len = s.len();
         let ptr = s.as_ptr();
@@ -247,6 +279,7 @@ impl Value {
         InternedStringId(id)
     }
 
+    /// Get the value as a boolean, if it is one.
     pub fn as_bool(&self) -> Option<bool> {
         match self.nan_box.try_decode() {
             Ok(ValueRef::Bool(b)) => Some(b),
@@ -254,10 +287,12 @@ impl Value {
         }
     }
 
+    /// Check if the value is null.
     pub fn is_null(&self) -> bool {
         matches!(self.nan_box.try_decode(), Ok(ValueRef::Null))
     }
 
+    /// Get the value as a number, if it is one. Note that this will apply to both integers and floats.
     pub fn as_number(&self) -> Option<f64> {
         match self.nan_box.try_decode() {
             Ok(ValueRef::Number(n)) => Some(n),
@@ -265,6 +300,7 @@ impl Value {
         }
     }
 
+    /// Get the value as a string, if it is one.
     pub fn as_string(&self) -> Option<String> {
         match self.nan_box.try_decode() {
             Ok(ValueRef::String { ptr, len }) => {
@@ -293,59 +329,48 @@ impl Value {
         }
     }
 
+    /// Check if the value is an object.
     pub fn is_obj(&self) -> bool {
         matches!(self.nan_box.try_decode(), Ok(ValueRef::Object { .. }))
     }
 
+    /// Get a property from the object.
     pub fn get_obj_prop(&self, prop: &str) -> Self {
-        match self.nan_box.try_decode() {
-            Ok(ValueRef::Object { .. }) => {
-                let scope = unsafe {
-                    shopify_function_input_get_obj_prop(
-                        self.context.as_ptr() as _,
-                        self.nan_box.to_bits(),
-                        prop.as_ptr(),
-                        prop.len(),
-                    )
-                };
-                Self {
-                    context: self.context,
-                    nan_box: NanBox::from_bits(scope),
-                }
-            }
-            _ => Self {
-                context: self.context,
-                nan_box: NanBox::null(),
-            },
+        let scope = unsafe {
+            shopify_function_input_get_obj_prop(
+                self.context.as_ptr() as _,
+                self.nan_box.to_bits(),
+                prop.as_ptr(),
+                prop.len(),
+            )
+        };
+        Self {
+            context: self.context,
+            nan_box: NanBox::from_bits(scope),
         }
     }
 
+    /// Get a property from the object by its interned string ID.
     pub fn get_interned_obj_prop(&self, interned_string_id: InternedStringId) -> Self {
-        match self.nan_box.try_decode() {
-            Ok(ValueRef::Object { .. }) => {
-                let scope = unsafe {
-                    shopify_function_input_get_interned_obj_prop(
-                        self.context.as_ptr() as _,
-                        self.nan_box.to_bits(),
-                        interned_string_id.as_usize(),
-                    )
-                };
-                Self {
-                    context: self.context,
-                    nan_box: NanBox::from_bits(scope),
-                }
-            }
-            _ => Self {
-                context: self.context,
-                nan_box: NanBox::null(),
-            },
+        let scope = unsafe {
+            shopify_function_input_get_interned_obj_prop(
+                self.context.as_ptr() as _,
+                self.nan_box.to_bits(),
+                interned_string_id.as_usize(),
+            )
+        };
+        Self {
+            context: self.context,
+            nan_box: NanBox::from_bits(scope),
         }
     }
 
+    /// Check if the value is an array.
     pub fn is_array(&self) -> bool {
         matches!(self.nan_box.try_decode(), Ok(ValueRef::Array { .. }))
     }
 
+    /// Get the length of the array, if it is one.
     pub fn array_len(&self) -> Option<usize> {
         match self.nan_box.try_decode() {
             Ok(ValueRef::Array { len, .. }) => {
@@ -365,6 +390,7 @@ impl Value {
         }
     }
 
+    /// Get the length of the object, if it is one.
     pub fn obj_len(&self) -> Option<usize> {
         match self.nan_box.try_decode() {
             Ok(ValueRef::Object { len, .. }) => {
@@ -384,6 +410,7 @@ impl Value {
         }
     }
 
+    /// Get an element from the array or object by its index.
     pub fn get_at_index(&self, index: usize) -> Self {
         let scope = unsafe {
             shopify_function_input_get_at_index(
@@ -398,6 +425,7 @@ impl Value {
         }
     }
 
+    /// Get the key of an object by its index.
     pub fn get_obj_key_at_index(&self, index: usize) -> Option<String> {
         match self.nan_box.try_decode() {
             Ok(ValueRef::Object { .. }) => {
@@ -418,6 +446,7 @@ impl Value {
         }
     }
 
+    /// Get the error code, if it is one.
     pub fn as_error(&self) -> Option<ErrorCode> {
         match self.nan_box.try_decode() {
             Ok(ValueRef::Error(e)) => Some(e),
@@ -426,10 +455,15 @@ impl Value {
     }
 }
 
+/// A context for reading and writing values.
+///
+/// This is created by calling [`Context::new`], and is used to read values from the input and write values to the output.
 pub struct Context(ContextPtr);
 
+/// An error that can occur when creating a [`Context`].
 #[derive(Debug)]
 pub enum ContextError {
+    /// The pointer to the context is null.
     NullPointer,
 }
 
@@ -444,16 +478,23 @@ impl std::fmt::Display for ContextError {
 }
 
 impl Context {
-    #[cfg(target_family = "wasm")]
+    /// Create a new context.
+    ///
+    /// This is only intended to be invoked when compiled to a Wasm target.
+    ///
+    /// # Panics
+    /// This will panic if called from a non-Wasm environment.
     pub fn new() -> Self {
+        #[cfg(not(target_family = "wasm"))]
+        panic!("Cannot run in non-WASM environment; use `new_with_input` instead");
+
+        #[cfg(target_family = "wasm")]
         Self(unsafe { shopify_function_context_new() })
     }
 
-    #[cfg(not(target_family = "wasm"))]
-    pub fn new() -> Self {
-        panic!("Cannot run in non-WASM environment; use `new_with_input` instead")
-    }
-
+    /// Create a new context from a JSON value, which will be the top-level value of the input.
+    ///
+    /// This is only available when compiled to a non-Wasm target, for usage in unit tests.
     #[cfg(not(target_family = "wasm"))]
     pub fn new_with_input(input: serde_json::Value) -> Self {
         let bytes = rmp_serde::to_vec(&input).unwrap();
@@ -464,6 +505,7 @@ impl Context {
         )
     }
 
+    /// Get the top-level value of the input.
     pub fn input_get(&self) -> Result<Value, ContextError> {
         let val = unsafe { shopify_function_input_get(self.0) };
         NonNull::new(self.0 as _)
@@ -474,6 +516,9 @@ impl Context {
             })
     }
 
+    /// Intern a string. This can lead to performance gains if you are using the same string multiple times,
+    /// as it saves unnecessary string copies. For example, if you are reading the same property from multiple objects,
+    /// or serializing the same key on an object, you can intern the string once and reuse it.
     pub fn intern_utf8_str(&self, s: &str) -> InternedStringId {
         let len = s.len();
         let ptr = s.as_ptr();
