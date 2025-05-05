@@ -443,6 +443,10 @@ mod test {
 
     #[test]
     fn disassemble_trampoline() {
+        // to add a new test case, add a new file to the `test_data` directory and run `cargo test`
+        //
+        // to update the snapshots, either run `cargo insta review` or use the `INSTA_UPDATE`
+        // environment variable as documented at https://docs.rs/insta/latest/insta/index.html#updating-snapshots
         insta::glob!("test_data/*.wat", |path| {
             let input = wat::parse_file(path).unwrap();
             let module = Module::from_buffer(&input).unwrap();
