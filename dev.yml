@@ -4,6 +4,10 @@ type: rust
 
 up:
   - rust
+  - custom:
+      name: Install Insta (snapshot testing) for Rust
+      meet: cargo install cargo-insta
+      met?: cargo install --list | grep cargo-insta
 
 commands:
   test:

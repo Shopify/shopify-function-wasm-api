@@ -439,31 +439,17 @@ impl TrampolineCodegen {
 #[cfg(test)]
 mod test {
     use super::TrampolineCodegen;
-    use anyhow::Result;
     use walrus::Module;
 
     #[test]
-    fn disassemble_trampoline() -> Result<()> {
-        let consumer_bytes = wat::parse_bytes(include_bytes!("consumer.wat"))?;
-        let module = Module::from_buffer(&consumer_bytes)?;
-        let codegen = TrampolineCodegen::new(module)?;
-        let mut result = codegen.apply()?;
-
-        let bless = std::env::var("TRAMPOLINE_TEST_BLESS");
-
-        let cwd = std::env::current_dir()?;
-        let expected_path = cwd.join("src/trampoline.wat");
-        let actual = wasmprinter::print_bytes(result.emit_wasm())?;
-
-        if matches!(bless.as_deref(), Ok("1")) {
-            std::fs::write(&expected_path, &actual)?;
-        }
-
-        let expected_bytes = wat::parse_file(&expected_path)?;
-        let expected = wasmprinter::print_bytes(&expected_bytes)?;
-
-        text_diff::assert_diff(&expected, &actual, "", 0);
-
-        Ok(())
+    fn disassemble_trampoline() {
+        insta::glob!("test_data/*.wat", |path| {
+            let input = wat::parse_file(path).unwrap();
+            let module = Module::from_buffer(&input).unwrap();
+            let codegen = TrampolineCodegen::new(module).unwrap();
+            let mut result = codegen.apply().unwrap();
+            let actual = wasmprinter::print_bytes(result.emit_wasm()).unwrap();
+            insta::assert_snapshot!(actual);
+        });
     }
 }
