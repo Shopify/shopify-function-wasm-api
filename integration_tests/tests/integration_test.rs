@@ -19,7 +19,7 @@ fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<Vec
     )?;
     let provider = Module::from_file(
         &engine,
-        workspace_root.join("target/wasm32-wasip1/release/shopify_function_wasm_api_provider.wasm"),
+        workspace_root.join("target/wasm32-wasip1/release/shopify_function_provider.wasm"),
     )?;
 
     let input = rmp_serde::to_vec(&input)?;
@@ -50,7 +50,7 @@ fn run_example_with_input(example: &str, input: serde_json::Value) -> Result<Vec
     let provider_instance = linker.instantiate(&mut store, &provider)?;
     linker.instance(
         &mut store,
-        shopify_function_wasm_api_provider::PROVIDER_MODULE_NAME,
+        shopify_function_provider::PROVIDER_MODULE_NAME,
         provider_instance,
     )?;
 

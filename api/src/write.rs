@@ -119,7 +119,7 @@ impl Context {
     /// Finalize the output and return the serialized value as a `serde_json::Value`.
     /// This is only available in non-WASM targets, and therefore only recommended for use in tests.
     pub fn finalize_output_and_return(self) -> Result<serde_json::Value, Error> {
-        let (result, bytes) = shopify_function_wasm_api_provider::write::shopify_function_output_finalize_and_return_msgpack_bytes(self.0 as _);
+        let (result, bytes) = shopify_function_provider::write::shopify_function_output_finalize_and_return_msgpack_bytes(self.0 as _);
         map_result(result).and_then(|_| rmp_serde::from_slice(&bytes).map_err(|_| Error::IoError))
     }
 }
