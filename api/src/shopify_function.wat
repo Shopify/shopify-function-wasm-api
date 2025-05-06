@@ -5,7 +5,7 @@
 ;; Shopify Functions platform. It enables efficient value passing between the WebAsembly host and guest.
 
 (module
-  ;; Import module name for the shopify_function API
+  ;; Specifies the import module name, which is "shopify_function_v1" for this API
   
   ;; Creates and returns a new context handle as an i32 pointer
   ;; This is the first function called to initialize the API
@@ -15,7 +15,7 @@
     (func (result i32))
   )
 
-  ;; READ API FUNCTIONS - Used to access input data passed to the function
+  ;; Read API Functions - Used to access input data passed to the function
 
   ;; Retrieves the root input value from the context
   ;; This is the main entry point for accessing input data
@@ -41,7 +41,7 @@
     (func (param $context i32) (param $scope i64) (result i64))
   )
 
-  ;; Reads a UTF-8 string from source memory into destination buffer
+  ;; Reads a UTF-8 encoded string from source memory into destination buffer
   ;; Used after determining string length with shopify_function_input_get_val_len
   ;; The caller must allocate a buffer of sufficient size
   ;; No return value - the string is copied directly into the provided buffer
