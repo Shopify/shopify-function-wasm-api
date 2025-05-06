@@ -12,7 +12,7 @@ shopify_function_wasm_api_core = { path = "../core", version = "0.0.1" }
 thiserror = "2.0"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-shopify_function_wasm_api_provider = { path = "../provider", version = "1.0.0" }
+shopify_function_provider = { path = "../provider", version = "1.0.0" }
 serde_json = "1.0"
 rmp-serde = "1.3"
 

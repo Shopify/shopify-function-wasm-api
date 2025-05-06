@@ -1,5 +1,5 @@
 [package]
-name = "shopify_function_wasm_api_provider"
+name = "shopify_function_provider"
 version = "1.0.0"
 edition = "2021"
 license = "MIT"

@@ -16,7 +16,7 @@ fn build_provider() -> Result<()> {
             "--target",
             "wasm32-wasip1",
             "-p",
-            "shopify_function_wasm_api_provider",
+            "shopify_function_provider",
         ])
         .status()?;
     if !status.success() {

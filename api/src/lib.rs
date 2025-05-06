@@ -96,13 +96,13 @@ mod provider_fallback {
 
     // Read API.
     pub(crate) unsafe fn shopify_function_input_get(context: ContextPtr) -> Val {
-        shopify_function_wasm_api_provider::read::shopify_function_input_get(context)
+        shopify_function_provider::read::shopify_function_input_get(context)
     }
     pub(crate) unsafe fn shopify_function_input_get_val_len(
         context: ContextPtr,
         scope: Val,
     ) -> usize {
-        shopify_function_wasm_api_provider::read::shopify_function_input_get_val_len(context, scope)
+        shopify_function_provider::read::shopify_function_input_get_val_len(context, scope)
     }
     pub(crate) unsafe fn shopify_function_input_read_utf8_str(
         context: ContextPtr,
@@ -111,9 +111,7 @@ mod provider_fallback {
         len: usize,
     ) {
         let src =
-            shopify_function_wasm_api_provider::read::shopify_function_input_get_utf8_str_addr(
-                context, src,
-            );
+            shopify_function_provider::read::shopify_function_input_get_utf8_str_addr(context, src);
         std::ptr::copy(src as _, out, len);
     }
     pub(crate) unsafe fn shopify_function_input_get_obj_prop(
@@ -122,7 +120,7 @@ mod provider_fallback {
         ptr: *const u8,
         len: usize,
     ) -> Val {
-        shopify_function_wasm_api_provider::read::shopify_function_input_get_obj_prop(
+        shopify_function_provider::read::shopify_function_input_get_obj_prop(
             context, scope, ptr as _, len,
         )
     }
@@ -131,7 +129,7 @@ mod provider_fallback {
         scope: Val,
         interned_string_id: shopify_function_wasm_api_core::InternedStringId,
     ) -> Val {
-        shopify_function_wasm_api_provider::read::shopify_function_input_get_interned_obj_prop(
+        shopify_function_provider::read::shopify_function_input_get_interned_obj_prop(
             context,
             scope,
             interned_string_id,
@@ -142,16 +140,14 @@ mod provider_fallback {
         scope: Val,
         index: usize,
     ) -> Val {
-        shopify_function_wasm_api_provider::read::shopify_function_input_get_at_index(
-            context, scope, index,
-        )
+        shopify_function_provider::read::shopify_function_input_get_at_index(context, scope, index)
     }
     pub(crate) unsafe fn shopify_function_input_get_obj_key_at_index(
         context: ContextPtr,
         scope: Val,
         index: usize,
     ) -> Val {
-        shopify_function_wasm_api_provider::read::shopify_function_input_get_obj_key_at_index(
+        shopify_function_provider::read::shopify_function_input_get_obj_key_at_index(
             context, scope, index,
         )
     }
@@ -161,25 +157,25 @@ mod provider_fallback {
         context: ContextPtr,
         bool: u32,
     ) -> WriteResult {
-        shopify_function_wasm_api_provider::write::shopify_function_output_new_bool(context, bool)
+        shopify_function_provider::write::shopify_function_output_new_bool(context, bool)
     }
     pub(crate) unsafe fn shopify_function_output_new_null(context: ContextPtr) -> WriteResult {
-        shopify_function_wasm_api_provider::write::shopify_function_output_new_null(context)
+        shopify_function_provider::write::shopify_function_output_new_null(context)
     }
     pub(crate) unsafe fn shopify_function_output_finalize(context: ContextPtr) -> WriteResult {
-        shopify_function_wasm_api_provider::write::shopify_function_output_finalize(context)
+        shopify_function_provider::write::shopify_function_output_finalize(context)
     }
     pub(crate) unsafe fn shopify_function_output_new_i32(
         context: ContextPtr,
         int: i32,
     ) -> WriteResult {
-        shopify_function_wasm_api_provider::write::shopify_function_output_new_i32(context, int)
+        shopify_function_provider::write::shopify_function_output_new_i32(context, int)
     }
     pub(crate) unsafe fn shopify_function_output_new_f64(
         context: ContextPtr,
         float: f64,
     ) -> WriteResult {
-        shopify_function_wasm_api_provider::write::shopify_function_output_new_f64(context, float)
+        shopify_function_provider::write::shopify_function_output_new_f64(context, float)
     }
     pub(crate) unsafe fn shopify_function_output_new_utf8_str(
         context: ContextPtr,
@@ -187,9 +183,7 @@ mod provider_fallback {
         len: usize,
     ) -> WriteResult {
         let result =
-            shopify_function_wasm_api_provider::write::shopify_function_output_new_utf8_str(
-                context, len,
-            );
+            shopify_function_provider::write::shopify_function_output_new_utf8_str(context, len);
         let write_result =
             WriteResult::from_repr((result >> usize::BITS) as usize).expect("Invalid write result");
         let dst = result as usize;
@@ -202,27 +196,25 @@ mod provider_fallback {
         context: ContextPtr,
         id: shopify_function_wasm_api_core::InternedStringId,
     ) -> WriteResult {
-        shopify_function_wasm_api_provider::write::shopify_function_output_new_interned_utf8_str(
-            context, id,
-        )
+        shopify_function_provider::write::shopify_function_output_new_interned_utf8_str(context, id)
     }
     pub(crate) unsafe fn shopify_function_output_new_object(
         context: ContextPtr,
         len: usize,
     ) -> WriteResult {
-        shopify_function_wasm_api_provider::write::shopify_function_output_new_object(context, len)
+        shopify_function_provider::write::shopify_function_output_new_object(context, len)
     }
     pub(crate) unsafe fn shopify_function_output_finish_object(context: ContextPtr) -> WriteResult {
-        shopify_function_wasm_api_provider::write::shopify_function_output_finish_object(context)
+        shopify_function_provider::write::shopify_function_output_finish_object(context)
     }
     pub(crate) unsafe fn shopify_function_output_new_array(
         context: ContextPtr,
         len: usize,
     ) -> WriteResult {
-        shopify_function_wasm_api_provider::write::shopify_function_output_new_array(context, len)
+        shopify_function_provider::write::shopify_function_output_new_array(context, len)
     }
     pub(crate) unsafe fn shopify_function_output_finish_array(context: ContextPtr) -> WriteResult {
-        shopify_function_wasm_api_provider::write::shopify_function_output_finish_array(context)
+        shopify_function_provider::write::shopify_function_output_finish_array(context)
     }
 
     // Other.
@@ -231,8 +223,7 @@ mod provider_fallback {
         ptr: *const u8,
         len: usize,
     ) -> usize {
-        let result =
-            shopify_function_wasm_api_provider::shopify_function_intern_utf8_str(context, len);
+        let result = shopify_function_provider::shopify_function_intern_utf8_str(context, len);
         let id = (result >> usize::BITS) as usize;
         let dst = result as usize;
         std::ptr::copy(ptr as _, dst as _, len);
@@ -498,11 +489,7 @@ impl Context {
     #[cfg(not(target_family = "wasm"))]
     pub fn new_with_input(input: serde_json::Value) -> Self {
         let bytes = rmp_serde::to_vec(&input).unwrap();
-        Self(
-            shopify_function_wasm_api_provider::shopify_function_context_new_from_msgpack_bytes(
-                bytes,
-            ),
-        )
+        Self(shopify_function_provider::shopify_function_context_new_from_msgpack_bytes(bytes))
     }
 
     /// Get the top-level value of the input.
