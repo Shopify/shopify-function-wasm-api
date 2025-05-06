@@ -64,12 +64,12 @@ jobs:
       matrix:
         include:
           - name: x86_64-linux
-            os: ubuntu-20.04 # Use oldest supported non-deprecated version so we link against older glibc version which allows running binary on a wider set of Linux systems
+            os: ubuntu-22.04 # Use oldest supported non-deprecated version so we link against older glibc version which allows running binary on a wider set of Linux systems
             path: target/x86_64-unknown-linux-gnu/release/shopify_function_trampoline
             shasum_cmd: sha256sum
             target: x86_64-unknown-linux-gnu
           - name: arm-linux
-            os: ubuntu-20.04 # Use oldest supported non-deprecated version so we link against older glibc version which allows running binary on a wider set of Linux systems
+            os: ubuntu-22.04 # Use oldest supported non-deprecated version so we link against older glibc version which allows running binary on a wider set of Linux systems
             path: target/aarch64-unknown-linux-gnu/release/shopify_function_trampoline
             shasum_cmd: sha256sum
             target: aarch64-unknown-linux-gnu
@@ -85,12 +85,19 @@ jobs:
             target: aarch64-apple-darwin
           - name: x86_64-windows
             os: windows-latest
-            path: target\x86_64-pc-windows-msvc\release\wasm-trampoline-cli.exe
+            path: target\x86_64-pc-windows-msvc\release\shopify_function_trampoline.exe
             shasum_cmd: sha256sum
             target: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Extract asset name
+        id: asset_name
+        shell: bash
+        run: |
+          VERSION=$(cargo metadata --format-version=1 --locked | jq '.packages[] | select(.name == "shopify_function_trampoline") | .version' -r)
+          echo "asset_name=shopify-function-trampoline-${{ matrix.name }}-v$VERSION" >> $GITHUB_OUTPUT
 
       - name: Install cross compiler
         if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
@@ -111,12 +118,6 @@ jobs:
 
       - name: Build trampoline-cli for ${{ matrix.target }}
         run: cargo build --release --target ${{ matrix.target }} --package shopify_function_trampoline --bin shopify_function_trampoline
-
-      - name: Extract asset name
-        id: asset_name
-        run: |
-          VERSION=$(cargo metadata --format-version=1 --locked | jq '.packages[] | select(.name == "shopify_function_trampoline") | .version' -r)
-          echo "asset_name=shopify-function-trampoline-${{ matrix.name }}-v$VERSION" >> $GITHUB_OUTPUT
 
       - name: Archive assets
         run: gzip -k -f ${{ matrix.path }} && mv ${{ matrix.path }}.gz ${{ steps.asset_name.outputs.asset_name }}.gz
