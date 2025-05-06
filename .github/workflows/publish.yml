@@ -15,6 +15,7 @@ jobs:
   compile-provider:
     name: Compile provider
     runs-on: ubuntu-latest
+    if:  ${{ startsWith(inputs.tag_name || github.event.release.tag_name, 'shopify_function_provider/v') }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -58,37 +59,33 @@ jobs:
   compile:
     name: Compile trampoline-cli-${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    if:  ${{ startsWith(inputs.tag_name || github.event.release.tag_name, 'shopify_function_trampoline/v') }}
     strategy:
       matrix:
         include:
-          - name: linux
+          - name: x86_64-linux
             os: ubuntu-20.04 # Use oldest supported non-deprecated version so we link against older glibc version which allows running binary on a wider set of Linux systems
             path: target/x86_64-unknown-linux-gnu/release/shopify_function_trampoline
-            asset_name: shopify-function-wasm-api-trampoline-x86_64-linux-${{ inputs.tag_name || github.event.release.tag_name }}
             shasum_cmd: sha256sum
             target: x86_64-unknown-linux-gnu
-          - name: linux-arm64
+          - name: arm-linux
             os: ubuntu-20.04 # Use oldest supported non-deprecated version so we link against older glibc version which allows running binary on a wider set of Linux systems
             path: target/aarch64-unknown-linux-gnu/release/shopify_function_trampoline
-            asset_name: shopify-function-wasm-api-trampoline-arm-linux-${{ inputs.tag_name || github.event.release.tag_name }}
             shasum_cmd: sha256sum
             target: aarch64-unknown-linux-gnu
-          - name: macos
+          - name: x86_64-macos
             os: macos-latest
             path: target/x86_64-apple-darwin/release/shopify_function_trampoline
-            asset_name: shopify-function-wasm-api-trampoline-x86_64-macos-${{ inputs.tag_name || github.event.release.tag_name }}
             shasum_cmd: shasum -a 256
             target: x86_64-apple-darwin
-          - name: arm64-macos
+          - name: arm-macos
             os: macos-latest
             path: target/aarch64-apple-darwin/release/shopify_function_trampoline
-            asset_name: shopify-function-wasm-api-trampoline-arm-macos-${{ inputs.tag_name || github.event.release.tag_name }}
             shasum_cmd: shasum -a 256
             target: aarch64-apple-darwin
-          - name: windows
+          - name: x86_64-windows
             os: windows-latest
             path: target\x86_64-pc-windows-msvc\release\wasm-trampoline-cli.exe
-            asset_name: shopify-function-wasm-api-trampoline-x86_64-windows-${{ inputs.tag_name || github.event.release.tag_name }}
             shasum_cmd: sha256sum
             target: x86_64-pc-windows-msvc
 
@@ -115,30 +112,36 @@ jobs:
       - name: Build trampoline-cli for ${{ matrix.target }}
         run: cargo build --release --target ${{ matrix.target }} --package shopify_function_trampoline --bin shopify_function_trampoline
 
+      - name: Extract asset name
+        id: asset_name
+        run: |
+          VERSION=$(cargo metadata --format-version=1 --locked | jq '.packages[] | select(.name == "shopify_function_trampoline") | .version' -r)
+          echo "asset_name=shopify-function-trampoline-${{ matrix.name }}-v$VERSION" >> $GITHUB_OUTPUT
+
       - name: Archive assets
-        run: gzip -k -f ${{ matrix.path }} && mv ${{ matrix.path }}.gz ${{ matrix.asset_name }}.gz
+        run: gzip -k -f ${{ matrix.path }} && mv ${{ matrix.path }}.gz ${{ steps.asset_name.outputs.asset_name }}.gz
 
       - name: Upload assets to artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ matrix.asset_name }}.gz
-          path: ${{ matrix.asset_name }}.gz
+          name: ${{ steps.asset_name.outputs.asset_name }}.gz
+          path: ${{ steps.asset_name.outputs.asset_name }}.gz
 
       - name: Upload assets to release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ inputs.tag_name || github.event.release.tag_name }} ${{ matrix.asset_name }}.gz
+        run: gh release upload ${{ inputs.tag_name || github.event.release.tag_name }} ${{ steps.asset_name.outputs.asset_name }}.gz
 
       - name: Generate asset hash
-        run: ${{ matrix.shasum_cmd }} ${{ matrix.asset_name }}.gz | awk '{ print $1 }' > ${{ matrix.asset_name }}.gz.sha256
+        run: ${{ matrix.shasum_cmd }} ${{ steps.asset_name.outputs.asset_name }}.gz | awk '{ print $1 }' > ${{ steps.asset_name.outputs.asset_name }}.gz.sha256
 
       - name: Upload asset hash to artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ matrix.asset_name }}.gz.sha256
-          path: ${{ matrix.asset_name }}.gz.sha256
+          name: ${{ steps.asset_name.outputs.asset_name }}.gz.sha256
+          path: ${{ steps.asset_name.outputs.asset_name }}.gz.sha256
 
       - name: Upload asset hash to release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ inputs.tag_name || github.event.release.tag_name }} ${{ matrix.asset_name }}.gz.sha256
+        run: gh release upload ${{ inputs.tag_name || github.event.release.tag_name }} ${{ steps.asset_name.outputs.asset_name }}.gz.sha256
