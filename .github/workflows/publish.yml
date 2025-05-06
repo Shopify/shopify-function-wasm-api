@@ -25,7 +25,7 @@ jobs:
       - name: Extract provider version
         id: provider_version
         run: |
-          VERSION=$(cargo metadata --format-version=1 --locked | jq '.packages[] | select(.name == "shopify_function_provider") | .version' -r)
+          VERSION=$(cargo metadata --format-version=1 | jq '.packages[] | select(.name == "shopify_function_provider") | .version' -r)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build provider asset
@@ -115,7 +115,7 @@ jobs:
       - name: Extract asset name
         id: asset_name
         run: |
-          VERSION=$(cargo metadata --format-version=1 --locked | jq '.packages[] | select(.name == "shopify_function_trampoline") | .version' -r)
+          VERSION=$(cargo metadata --format-version=1 | jq '.packages[] | select(.name == "shopify_function_trampoline") | .version' -r)
           echo "asset_name=shopify-function-trampoline-${{ matrix.name }}-v$VERSION" >> $GITHUB_OUTPUT
 
       - name: Archive assets
