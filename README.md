@@ -57,7 +57,7 @@ The trampoline tool bridges communication between your Wasm module and the provi
 
 ```shell
 # Short flags
-cargo run -p shopify_function_wasm_api_trampoline -- -i input.wasm -o output.wasm
+cargo run -p shopify_function_trampoline -- -i input.wasm -o output.wasm
 ```
 
 For examples, check out the [examples directory](./api/examples/).

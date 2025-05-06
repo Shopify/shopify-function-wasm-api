@@ -28,7 +28,7 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-features -- -D warnings
       - name: Run clippy (wasm32-wasip1 target)
-        run: cargo clippy --target wasm32-wasip1 --all-features --workspace --exclude shopify_function_wasm_api_trampoline --exclude integration_tests -- -D warnings
+        run: cargo clippy --target wasm32-wasip1 --all-features --workspace --exclude shopify_function_trampoline --exclude integration_tests -- -D warnings
       - name: Run clippy (tests)
         run: cargo clippy --tests --all-features
       - name: Run clippy (benches)

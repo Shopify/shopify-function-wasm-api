@@ -1,5 +1,5 @@
 [package]
-name = "shopify_function_wasm_api_trampoline"
+name = "shopify_function_trampoline"
 version = "1.0.0"
 edition = "2021"
 license = "MIT"

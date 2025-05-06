@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use shopify_function_wasm_api_trampoline::trampoline_existing_module;
+use shopify_function_trampoline::trampoline_existing_module;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
