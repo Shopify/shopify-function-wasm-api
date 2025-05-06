@@ -34,7 +34,7 @@ pub use read::Deserialize;
 pub use write::Serialize;
 
 #[cfg(target_family = "wasm")]
-#[link(wasm_import_module = "shopify_function_v1")]
+#[link(wasm_import_module = "shopify_function_v1")] 
 extern "C" {
     // Common API.
     fn shopify_function_context_new() -> ContextPtr;
@@ -530,5 +530,188 @@ impl Context {
 impl Default for Context {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use anyhow::Result;
+    use std::collections::HashSet;
+    use std::fs;
+    use std::path::PathBuf;
+    use syn::{File, ForeignItem, Item, Meta, LitStr};
+    use walrus::Module;
+
+    // Helper to dynamically get the wasm_import_module name from #[link(...)] attribute
+    fn get_linked_wasm_import_module_name() -> Result<String> {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let path_to_current_file = PathBuf::from(manifest_dir).join("src/lib.rs");
+        let content = fs::read_to_string(&path_to_current_file)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", path_to_current_file.display(), e))?;
+        let ast: File = syn::parse_str(&content)?;
+
+        for item in ast.items {
+            if let Item::ForeignMod(fm) = item {
+                let is_wasm_cfg = fm.attrs.iter().any(|attr| {
+                    if let Meta::List(meta_list) = &attr.meta {
+                        if meta_list.path.is_ident("cfg") {
+                            return meta_list.tokens.to_string().contains("target_family = \"wasm\"");
+                        }
+                    }
+                    false
+                });
+                if is_wasm_cfg && fm.abi.name.as_ref().map_or(false, |s| s.value() == "C") {
+                    for attr in &fm.attrs {
+                        if let Meta::List(meta_list) = &attr.meta {
+                            if meta_list.path.is_ident("link") {
+                                let mut module_name_val: Option<String> = None;
+                                attr.parse_nested_meta(|meta| {
+                                    if meta.path.is_ident("wasm_import_module") {
+                                        if let Ok(lit) = meta.value()?.parse::<LitStr>() {
+                                            module_name_val = Some(lit.value());
+                                        } 
+                                    }
+                                    Ok(())
+                                })?;
+                                if let Some(name) = module_name_val {
+                                    return Ok(name);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(anyhow::anyhow!("Could not find #[link(wasm_import_module = \"...\")] on a #[cfg(target_family = \"wasm\")] extern \"C\" block in {}", path_to_current_file.display()))
+    }
+
+    // Helper to get FFI function names from api/src/lib.rs
+    fn get_rust_ffi_function_names() -> Result<HashSet<String>> {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let path_to_current_file = PathBuf::from(manifest_dir).join("src/lib.rs"); 
+        let content = fs::read_to_string(&path_to_current_file)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", path_to_current_file.display(), e))?;
+        let ast: File = syn::parse_str(&content)?;
+
+        let ffi_names = ast
+            .items
+            .iter()
+            .find_map(|item| {
+                if let Item::ForeignMod(fm) = item {
+                    if fm.abi.name.as_ref().map_or(true, |name| name.value() != "C") {
+                        return None; 
+                    }
+                    let mut is_wasm_cfg = false;
+                    for attr in &fm.attrs {
+                        if let Meta::List(meta_list) = &attr.meta {
+                            if meta_list.path.is_ident("cfg") {
+                                if meta_list.tokens.to_string().contains("target_family = \"wasm\"") {
+                                    is_wasm_cfg = true;
+                                }
+                            }
+                        }
+                    }
+                    if is_wasm_cfg {
+                        let names: HashSet<String> = fm
+                            .items
+                            .iter()
+                            .filter_map(|f_item| {
+                                if let ForeignItem::Fn(func) = f_item {
+                                    Some(func.sig.ident.to_string())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+                        return Some(names);
+                    }
+                }
+                None
+            })
+            .unwrap_or_else(HashSet::new);
+        Ok(ffi_names)
+    }
+
+    // Helper to get imported function names from shopify_function.wat for the target module
+    fn get_wat_imported_function_names(expected_module: &str) -> Result<HashSet<String>> {
+        let consumer_bytes = wat::parse_bytes(include_bytes!("shopify_function.wat"))?;
+        let module = Module::from_buffer(&consumer_bytes)?;
+        let mut wat_names = HashSet::new();
+        for import in module.imports.iter() { 
+            if import.module == expected_module {
+                wat_names.insert(import.name.clone());
+            }
+        }
+        Ok(wat_names)
+    }
+
+    #[test]
+    fn test_wat_module_name_consistency() -> Result<()> {
+        let expected_import_module_name = get_linked_wasm_import_module_name()?;
+        let consumer_bytes = wat::parse_bytes(include_bytes!("shopify_function.wat"))?;
+        let module = Module::from_buffer(&consumer_bytes)?;
+
+        let mut import_count = 0;
+        for import in module.imports.iter() {
+            assert_eq!(
+                import.module.as_str(),
+                expected_import_module_name.as_str(),
+                "Imported function '{}' is from module '{}', but expected '{}'",
+                import.name,
+                import.module,
+                expected_import_module_name
+            );
+            import_count += 1;
+        }
+        assert!(
+            import_count > 0,
+            "No imports were found in shopify_function.wat to check module names."
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_wat_function_name_consistency() -> Result<()> {
+        let expected_module_name = get_linked_wasm_import_module_name()?;
+        let rust_ffi_names = get_rust_ffi_function_names()?;
+        let wat_import_names = get_wat_imported_function_names(&expected_module_name)?;
+
+        let missing_in_wat: Vec<_> = rust_ffi_names.difference(&wat_import_names).collect();
+        let missing_in_rust: Vec<_> = wat_import_names.difference(&rust_ffi_names).collect();
+
+        let mut error_messages = Vec::new();
+        if !missing_in_wat.is_empty() {
+            error_messages.push(format!(
+                "Functions in Rust FFI (module '{}') but not in WAT: {:?}",
+                expected_module_name,
+                missing_in_wat
+            ));
+        }
+        if !missing_in_rust.is_empty() {
+            error_messages.push(format!(
+                "Functions in WAT (module '{}') but not in Rust FFI: {:?}",
+                expected_module_name,
+                missing_in_rust
+            ));
+        }
+
+        assert!(
+            error_messages.is_empty(),
+            "Function name mismatch between Rust FFI and WAT (module '{}'):\n{}",
+            expected_module_name,
+            error_messages.join("\n")
+        );
+        assert!(
+            !rust_ffi_names.is_empty(),
+            "No FFI functions found in api/src/lib.rs for module {}",
+            expected_module_name
+        );
+        assert!(
+            !wat_import_names.is_empty(),
+            "No functions imported from module {} found in shopify_function.wat",
+            expected_module_name
+        );
+
+        Ok(())
     }
 }
