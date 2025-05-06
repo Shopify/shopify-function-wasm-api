@@ -1,6 +1,6 @@
-# Contributing to Shopify Function WASM API
+# Contributing to Shopify Function Wasm API
 
-Thank you for your interest in contributing to the Shopify Function WASM API! This document provides guidelines and instructions for contributing to this project.
+Thank you for your interest in contributing to the Shopify Function Wasm API! This document provides guidelines and instructions for contributing to this project.
 
 ## Code of Conduct
 

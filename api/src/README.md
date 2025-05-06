@@ -1,38 +1,38 @@
-# Shopify Function API Details
+# Shopify Function WebAssembly API
 
-This document provides details on the low-level aspects of the Shopify Function WASM API, including status codes, error codes, type codes, and the NanBox value structure.
+This document provides details on the low-level aspects of the Shopify Function Wasm API, including status codes, error codes, type codes, and the NanBox value structure.
 
-## Status Codes (returned by write functions):
+## Write Error Codes (i32 type):
 
-- **0**: Success - The operation was successful
-- **1**: IoError - Error occurred during writing
-- **2**: ExpectedKey - Expected a key but received a value
-- **3**: ObjectLengthError - Object length mismatch
-- **4**: ValueAlreadyWritten - Value already written
-- **5**: NotAnObject - Expected an object but received another type
-- **6**: ValueNotFinished - Value creation not completed
-- **7**: ArrayLengthError - Array length mismatch
-- **8**: NotAnArray - Expected an array but received another type
+- **0**: `Success` - The operation was successful
+- **1**: `IoError` - Error occurred during writing
+- **2**: `ExpectedKey` - Expected a key but received a value
+- **3**: `ObjectLengthError` - Object length mismatch
+- **4**: `ValueAlreadyWritten` - Value already written
+- **5**: `NotAnObject` - Expected an object but received another type
+- **6**: `ValueNotFinished` - Value creation not completed
+- **7**: `ArrayLengthError` - Array length mismatch
+- **8**: `NotAnArray` - Expected an array but received another type
 
-## Error Codes (for read operations):
+## Read Error Codes (i32 type):
 
-- **0**: DecodeError - Value could not be decoded
-- **1**: NotAnObject - Expected an object but received another type
-- **2**: ByteArrayOutOfBounds - Byte array index out of bounds
-- **3**: ReadError - Error occurred during reading
-- **4**: NotAnArray - Expected an array but received another type
-- **5**: IndexOutOfBounds - Array index out of bounds
-- **6**: NotIndexable - Value is not indexable (not an object or array)
+- **0**: `DecodeError` - Value could not be decoded
+- **1**: `NotAnObject` - Expected an object but received another type
+- **2**: `ByteArrayOutOfBounds` - Byte array index out of bounds
+- **3**: `ReadError` - Error occurred during reading
+- **4**: `NotAnArray` - Expected an array but received another type
+- **5**: `IndexOutOfBounds` - Array index out of bounds
+- **6**: `NotIndexable` - Value is not indexable (not an object or array)
 
-## Type Codes (for typing in NanBox return values):
+## Value types:
 
-- **0**: Null - Null value
-- **1**: Bool - Boolean value (true/false)
-- **2**: Number - Numeric value (f64)
-- **3**: String - UTF-8 encoded string (pointer + length)
-- **4**: Object - Key-value collection (pointer + length)
-- **5**: Array - Indexed collection of values (pointer + length)
-- **15**: Error - Error information
+- **0**: `Null` - Null value
+- **1**: `Bool` - Boolean value (true/false)
+- **2**: `Number` - Numeric value (f64)
+- **3**: `String` - UTF-8 encoded string (pointer + length)
+- **4**: `Object` - Key-value collection (pointer + length)
+- **5**: `Array` - Indexed collection of values (pointer + length)
+- **15**: `Error` - Read error codes
 
 ## NanBox Value Structure (64-bit)
 
@@ -48,9 +48,9 @@ Sign  Exponent   Quiet  Tag bits   Length      Value bits
 (0)   (all 1s)   NaN    (type)    (14 bits)   (32 bits - data/ptr)
 ```
 
-- **Sign bit**: Always 0 for NaN boxes
-- **Exponent**: Always all 1s (11 bits) for NaN representation
-- **Quiet NaN**: Always 11 for NaN boxing
+- **Sign bit**: Always 0 for NaN-boxed values
+- **Exponent**: 11 bits, all 1's
+- **Quiet NaN**: 1 bit set to 1
 - **Tag bits (TTTT)**: 4 bits indicating value type (0-15)
 - **Length field**: 14 bits for string/array length
 - **Value field**: 32 bits for actual data or pointer
@@ -67,4 +67,4 @@ Sign  Exponent                      Mantissa
 (variable) (variable)              (variable)
 ```
 
-When the exponent is not all 1s, the value is treated as a regular f64. 
+Floating point numbers in our API follow the [IEEE-754 specification](https://standards.ieee.org/ieee/754/6210/).  
