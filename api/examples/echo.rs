@@ -1,8 +1,8 @@
 use shopify_function_wasm_api::{
-    read::Error as ReadError, write::Error as WriteError, Context, Deserialize, InternedStringId,
-    Serialize, Value as ApiValue,
+    read::Error as ReadError, write::Error as WriteError, CachedInternedStringId, Context,
+    Deserialize, Serialize, Value as ApiValue,
 };
-use std::{error::Error, sync::OnceLock};
+use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut context = Context::new();
@@ -31,8 +31,8 @@ enum Value {
     Array(Vec<Self>),
 }
 
-static FOO_INTERNED_STRING_ID: OnceLock<InternedStringId> = OnceLock::new();
-static BAR_INTERNED_STRING_ID: OnceLock<InternedStringId> = OnceLock::new();
+static FOO_INTERNED_STRING_ID: CachedInternedStringId = CachedInternedStringId::new("foo");
+static BAR_INTERNED_STRING_ID: CachedInternedStringId = CachedInternedStringId::new("bar");
 
 impl Deserialize for Value {
     fn deserialize(value: &ApiValue) -> Result<Self, ReadError> {
@@ -55,13 +55,11 @@ impl Deserialize for Value {
                 // special case to exercise string interning and get_obj_prop
                 let raw_value = match key.as_str() {
                     "foo" => {
-                        let interned_string_id =
-                            *FOO_INTERNED_STRING_ID.get_or_init(|| value.intern_utf8_str("foo"));
+                        let interned_string_id = FOO_INTERNED_STRING_ID.load_from_value(value);
                         value.get_interned_obj_prop(interned_string_id)
                     }
                     "bar" => {
-                        let interned_string_id =
-                            *BAR_INTERNED_STRING_ID.get_or_init(|| value.intern_utf8_str("bar"));
+                        let interned_string_id = BAR_INTERNED_STRING_ID.load_from_value(value);
                         value.get_interned_obj_prop(interned_string_id)
                     }
                     "abc" | "def" => value.get_obj_prop(key.as_str()),
@@ -96,13 +94,13 @@ impl Serialize for Value {
                     for (key, value) in object {
                         match key.as_str() {
                             "foo" => {
-                                let interned_string_id = *FOO_INTERNED_STRING_ID
-                                    .get_or_init(|| ctx.intern_utf8_str("foo"));
+                                let interned_string_id =
+                                    FOO_INTERNED_STRING_ID.load_from_context(ctx);
                                 ctx.write_interned_utf8_str(interned_string_id)?;
                             }
                             "bar" => {
-                                let interned_string_id = *BAR_INTERNED_STRING_ID
-                                    .get_or_init(|| ctx.intern_utf8_str("bar"));
+                                let interned_string_id =
+                                    BAR_INTERNED_STRING_ID.load_from_context(ctx);
                                 ctx.write_interned_utf8_str(interned_string_id)?;
                             }
                             _ => ctx.write_utf8_str(key)?,
@@ -139,5 +137,21 @@ mod tests {
         let result = echo(input);
 
         assert_eq!(result, Value::Object(Vec::new()));
+    }
+
+    #[test]
+    fn test_echo_multiple_contexts_with_interned_string_cache() {
+        // tests the cached interned string logic by having multiple contexts that
+        // hit the interned string cache
+        let input = serde_json::json!({ "foo": "bar"});
+        let context = Context::new_with_input(input.clone());
+        let api_value = context.input_get().unwrap();
+        let input_value: Value = Deserialize::deserialize(&api_value).unwrap();
+        let result = echo(input_value);
+        let context2 = Context::new_with_input(input);
+        let api_value2 = context2.input_get().unwrap();
+        let input_value2: Value = Deserialize::deserialize(&api_value2).unwrap();
+        let result2 = echo(input_value2);
+        assert_eq!(result, result2);
     }
 }
