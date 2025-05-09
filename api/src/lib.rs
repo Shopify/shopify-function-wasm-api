@@ -260,7 +260,7 @@ impl CachedInternedStringId {
     pub const fn new(value: &'static str) -> Self {
         Self {
             value,
-            interned_string_id: AtomicUsize::new(0),
+            interned_string_id: AtomicUsize::new(usize::MAX),
             context: AtomicPtr::new(std::ptr::null_mut()),
         }
     }
