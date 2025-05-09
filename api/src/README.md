@@ -36,7 +36,7 @@ This document provides details on the low-level aspects of the Shopify Function 
 
 ## NanBox Value Structure (64-bit)
 
-### For non-numeric values (using NaN boxing):
+### NaN-box value representation: 
 
 ```
  63  62        52 51 50 49    46 45       32 31                 0
@@ -48,14 +48,14 @@ Sign  Exponent   Quiet  Tag bits   Length      Value bits
 (0)   (all 1s)   NaN    (type)    (14 bits)   (32 bits - data/ptr)
 ```
 
-- **Sign bit**: Always 0 for NaN-boxed values
+- **Sign bit**: 0
 - **Exponent**: 11 bits, all 1's
 - **Quiet NaN**: 1 bit set to 1
 - **Tag bits (TTTT)**: 4 bits indicating value type (0-15)
 - **Length field**: 14 bits for string/array length
 - **Value field**: 32 bits for actual data or pointer
 
-### For Number values (normal f64 representation):
+### 64-bit floating point values:
 
 ```
  63  62        52 51                                         0
