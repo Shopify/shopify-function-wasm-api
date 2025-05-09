@@ -25,7 +25,10 @@ use shopify_function_wasm_api_core::{
     write::WriteResult,
     ContextPtr,
 };
-use std::ptr::NonNull;
+use std::{
+    ptr::NonNull,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 pub mod read;
 pub mod write;
@@ -236,12 +239,52 @@ use provider_fallback::*;
 /// An identifier for an interned UTF-8 string.
 ///
 /// This is returned by [`Context::intern_utf8_str`], and can be used for both reading and writing.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct InternedStringId(shopify_function_wasm_api_core::InternedStringId);
 
 impl InternedStringId {
     fn as_usize(&self) -> usize {
         self.0
+    }
+}
+
+/// A mechanism for caching interned string IDs.
+pub struct CachedInternedStringId {
+    value: &'static str,
+    interned_string_id: AtomicUsize,
+    context: AtomicUsize,
+}
+
+impl CachedInternedStringId {
+    /// Create a new cached interned string ID.
+    pub const fn new(value: &'static str) -> Self {
+        Self {
+            value,
+            interned_string_id: AtomicUsize::new(0),
+            context: AtomicUsize::new(0),
+        }
+    }
+
+    /// Load the interned string ID from a context.
+    pub fn load_from_context(&self, context: &Context) -> InternedStringId {
+        self.load_from_context_ptr(context.0)
+    }
+
+    /// Load the interned string ID from a value.
+    pub fn load_from_value(&self, value: &Value) -> InternedStringId {
+        self.load_from_context_ptr(value.context.as_ptr() as _)
+    }
+
+    fn load_from_context_ptr(&self, context: ContextPtr) -> InternedStringId {
+        let context_usize: usize = context as usize;
+        if self.context.load(Ordering::Relaxed) != context_usize {
+            let id = unsafe {
+                shopify_function_intern_utf8_str(context, self.value.as_ptr(), self.value.len())
+            };
+            self.interned_string_id.store(id, Ordering::Relaxed);
+            self.context.store(context_usize, Ordering::Relaxed);
+        }
+        InternedStringId(self.interned_string_id.load(Ordering::Relaxed))
     }
 }
 
@@ -262,6 +305,13 @@ pub struct Value {
 }
 
 impl Value {
+    fn new_child(&self, nan_box: NanBox) -> Self {
+        Self {
+            context: self.context,
+            nan_box,
+        }
+    }
+
     /// Intern a string. This is just a convenience method equivalent to calling [`Context::intern_utf8_str`], if you don't have a [`Context`] easily accessible.
     pub fn intern_utf8_str(&self, s: &str) -> InternedStringId {
         let len = s.len();
@@ -335,10 +385,7 @@ impl Value {
                 prop.len(),
             )
         };
-        Self {
-            context: self.context,
-            nan_box: NanBox::from_bits(scope),
-        }
+        self.new_child(NanBox::from_bits(scope))
     }
 
     /// Get a property from the object by its interned string ID.
@@ -350,10 +397,7 @@ impl Value {
                 interned_string_id.as_usize(),
             )
         };
-        Self {
-            context: self.context,
-            nan_box: NanBox::from_bits(scope),
-        }
+        self.new_child(NanBox::from_bits(scope))
     }
 
     /// Check if the value is an array.
@@ -410,10 +454,7 @@ impl Value {
                 index,
             )
         };
-        Self {
-            context: self.context,
-            nan_box: NanBox::from_bits(scope),
-        }
+        self.new_child(NanBox::from_bits(scope))
     }
 
     /// Get the key of an object by its index.
@@ -427,10 +468,7 @@ impl Value {
                         index,
                     )
                 };
-                let value = Self {
-                    context: self.context,
-                    nan_box: NanBox::from_bits(scope),
-                };
+                let value = self.new_child(NanBox::from_bits(scope));
                 value.as_string()
             }
             _ => None,
@@ -517,5 +555,27 @@ impl Context {
 impl Default for Context {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_interned_string_id_cache() {
+        let cached_interned_string_id = CachedInternedStringId::new("test");
+
+        let context = Context::new_with_input(serde_json::json!({}));
+        let id = cached_interned_string_id.load_from_context(&context);
+        let id2 = cached_interned_string_id.load_from_context(&context);
+        assert_eq!(id, id2);
+
+        let context2 = Context::new_with_input(serde_json::json!({}));
+        // the first interned string ID from a new context is always 0,
+        // so we need to mix up the order of interning to make this test work
+        context2.intern_utf8_str("test");
+        let id3 = cached_interned_string_id.load_from_context(&context2);
+        assert_ne!(id, id3);
     }
 }

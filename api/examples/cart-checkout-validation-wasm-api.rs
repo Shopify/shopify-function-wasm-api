@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         array_ctx.write_object(
                             |error_ctx| {
                                 error_ctx.write_utf8_str("localizedMessage")?;
-                                error_ctx.write_utf8_str(&error)?;
+                                error_ctx.write_utf8_str(error)?;
 
                                 error_ctx.write_utf8_str("target")?;
                                 error_ctx.write_utf8_str("$.cart")?;
