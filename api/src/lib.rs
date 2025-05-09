@@ -27,7 +27,7 @@ use shopify_function_wasm_api_core::{
 };
 use std::{
     ptr::NonNull,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
 };
 
 pub mod read;
@@ -252,7 +252,7 @@ impl InternedStringId {
 pub struct CachedInternedStringId {
     value: &'static str,
     interned_string_id: AtomicUsize,
-    context: AtomicUsize,
+    context: AtomicPtr<std::ffi::c_void>,
 }
 
 impl CachedInternedStringId {
@@ -261,7 +261,7 @@ impl CachedInternedStringId {
         Self {
             value,
             interned_string_id: AtomicUsize::new(0),
-            context: AtomicUsize::new(0),
+            context: AtomicPtr::new(std::ptr::null_mut()),
         }
     }
 
@@ -276,13 +276,12 @@ impl CachedInternedStringId {
     }
 
     fn load_from_context_ptr(&self, context: ContextPtr) -> InternedStringId {
-        let context_usize: usize = context as usize;
-        if self.context.load(Ordering::Relaxed) != context_usize {
+        if self.context.load(Ordering::Relaxed) != context {
             let id = unsafe {
                 shopify_function_intern_utf8_str(context, self.value.as_ptr(), self.value.len())
             };
             self.interned_string_id.store(id, Ordering::Relaxed);
-            self.context.store(context_usize, Ordering::Relaxed);
+            self.context.store(context, Ordering::Relaxed);
         }
         InternedStringId(self.interned_string_id.load(Ordering::Relaxed))
     }
