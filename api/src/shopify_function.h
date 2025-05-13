@@ -14,12 +14,17 @@ typedef size_t InternedStringId;
 #define WRITE_RESULT_OK 0
 #define WRITE_RESULT_ERROR 1
 
+// Import module declaration
+#define SHOPIFY_FUNCTION_IMPORT_MODULE "shopify_function_v1"
+
 // Common API
 /**
  * Creates a new context for the Shopify Function execution
  * @return A new context pointer
  */
-ContextPtr shopify_function_context_new(void);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_context_new")))
+extern ContextPtr shopify_function_context_new(void);
 
 // Read API
 /**
@@ -27,7 +32,9 @@ ContextPtr shopify_function_context_new(void);
  * @param context The context pointer
  * @return The input value
  */
-Val shopify_function_input_get(ContextPtr context);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_input_get")))
+extern Val shopify_function_input_get(ContextPtr context);
 
 /**
  * Gets the length of a value (for arrays, objects, or strings)
@@ -35,16 +42,20 @@ Val shopify_function_input_get(ContextPtr context);
  * @param scope The value to get the length of
  * @return The length of the value
  */
-size_t shopify_function_input_get_val_len(ContextPtr context, Val scope);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_input_get_val_len")))
+extern size_t shopify_function_input_get_val_len(ContextPtr context, Val scope);
 
 /**
- * Reads a UTF-8 string from the input into the provided buffer
+ * Reads a UTF-8 encoded string from the input into the provided buffer
  * @param context The context pointer
  * @param src The source address of the string
  * @param out The output buffer to write the string to
  * @param len The length of the string
  */
-void shopify_function_input_read_utf8_str(ContextPtr context, size_t src, uint8_t* out, size_t len);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_input_read_utf8_str")))
+extern void shopify_function_input_read_utf8_str(ContextPtr context, size_t src, uint8_t* out, size_t len);
 
 /**
  * Gets an object property by name
@@ -54,7 +65,9 @@ void shopify_function_input_read_utf8_str(ContextPtr context, size_t src, uint8_
  * @param len The length of the property name
  * @return The property value
  */
-Val shopify_function_input_get_obj_prop(ContextPtr context, Val scope, const uint8_t* ptr, size_t len);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_input_get_obj_prop")))
+extern Val shopify_function_input_get_obj_prop(ContextPtr context, Val scope, const uint8_t* ptr, size_t len);
 
 /**
  * Gets an object property by interned string ID
@@ -63,7 +76,9 @@ Val shopify_function_input_get_obj_prop(ContextPtr context, Val scope, const uin
  * @param interned_string_id The interned string ID of the property name
  * @return The property value
  */
-Val shopify_function_input_get_interned_obj_prop(ContextPtr context, Val scope, InternedStringId interned_string_id);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_input_get_interned_obj_prop")))
+extern Val shopify_function_input_get_interned_obj_prop(ContextPtr context, Val scope, InternedStringId interned_string_id);
 
 /**
  * Gets an element from an array by index
@@ -72,7 +87,9 @@ Val shopify_function_input_get_interned_obj_prop(ContextPtr context, Val scope, 
  * @param index The index of the element
  * @return The element value
  */
-Val shopify_function_input_get_at_index(ContextPtr context, Val scope, size_t index);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_input_get_at_index")))
+extern Val shopify_function_input_get_at_index(ContextPtr context, Val scope, size_t index);
 
 /**
  * Gets an object key at the specified index
@@ -81,7 +98,9 @@ Val shopify_function_input_get_at_index(ContextPtr context, Val scope, size_t in
  * @param index The index of the key
  * @return The key value (as a string)
  */
-Val shopify_function_input_get_obj_key_at_index(ContextPtr context, Val scope, size_t index);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_input_get_obj_key_at_index")))
+extern Val shopify_function_input_get_obj_key_at_index(ContextPtr context, Val scope, size_t index);
 
 // Write API
 /**
@@ -90,21 +109,27 @@ Val shopify_function_input_get_obj_key_at_index(ContextPtr context, Val scope, s
  * @param value The boolean value (0 for false, non-zero for true)
  * @return WriteResult indicating success or failure
  */
-WriteResult shopify_function_output_new_bool(ContextPtr context, uint32_t value);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_new_bool")))
+extern WriteResult shopify_function_output_new_bool(ContextPtr context, uint32_t value);
 
 /**
  * Creates a new null output value
  * @param context The context pointer
  * @return WriteResult indicating success or failure
  */
-WriteResult shopify_function_output_new_null(ContextPtr context);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_new_null")))
+extern WriteResult shopify_function_output_new_null(ContextPtr context);
 
 /**
  * Finalizes the output and returns the result
  * @param context The context pointer
  * @return WriteResult indicating success or failure
  */
-WriteResult shopify_function_output_finalize(ContextPtr context);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_finalize")))
+extern WriteResult shopify_function_output_finalize(ContextPtr context);
 
 /**
  * Creates a new 32-bit integer output value
@@ -112,7 +137,9 @@ WriteResult shopify_function_output_finalize(ContextPtr context);
  * @param value The integer value
  * @return WriteResult indicating success or failure
  */
-WriteResult shopify_function_output_new_i32(ContextPtr context, int32_t value);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_new_i32")))
+extern WriteResult shopify_function_output_new_i32(ContextPtr context, int32_t value);
 
 /**
  * Creates a new 64-bit float output value
@@ -120,7 +147,9 @@ WriteResult shopify_function_output_new_i32(ContextPtr context, int32_t value);
  * @param value The float value
  * @return WriteResult indicating success or failure
  */
-WriteResult shopify_function_output_new_f64(ContextPtr context, double value);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_new_f64")))
+extern WriteResult shopify_function_output_new_f64(ContextPtr context, double value);
 
 /**
  * Creates a new UTF-8 string output value
@@ -129,7 +158,9 @@ WriteResult shopify_function_output_new_f64(ContextPtr context, double value);
  * @param len The length of the string
  * @return WriteResult indicating success or failure
  */
-WriteResult shopify_function_output_new_utf8_str(ContextPtr context, const uint8_t* ptr, size_t len);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_new_utf8_str")))
+extern WriteResult shopify_function_output_new_utf8_str(ContextPtr context, const uint8_t* ptr, size_t len);
 
 /**
  * Creates a new UTF-8 string output value from an interned string ID
@@ -137,7 +168,9 @@ WriteResult shopify_function_output_new_utf8_str(ContextPtr context, const uint8
  * @param id The interned string ID
  * @return WriteResult indicating success or failure
  */
-WriteResult shopify_function_output_new_interned_utf8_str(ContextPtr context, InternedStringId id);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_new_interned_utf8_str")))
+extern WriteResult shopify_function_output_new_interned_utf8_str(ContextPtr context, InternedStringId id);
 
 /**
  * Creates a new object output value with the specified number of properties
@@ -145,14 +178,18 @@ WriteResult shopify_function_output_new_interned_utf8_str(ContextPtr context, In
  * @param len The number of properties
  * @return WriteResult indicating success or failure
  */
-WriteResult shopify_function_output_new_object(ContextPtr context, size_t len);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_new_object")))
+extern WriteResult shopify_function_output_new_object(ContextPtr context, size_t len);
 
 /**
  * Finalizes an object output value
  * @param context The context pointer
  * @return WriteResult indicating success or failure
  */
-WriteResult shopify_function_output_finish_object(ContextPtr context);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_finish_object")))
+extern WriteResult shopify_function_output_finish_object(ContextPtr context);
 
 /**
  * Creates a new array output value with the specified length
@@ -160,14 +197,18 @@ WriteResult shopify_function_output_finish_object(ContextPtr context);
  * @param len The length of the array
  * @return WriteResult indicating success or failure
  */
-WriteResult shopify_function_output_new_array(ContextPtr context, size_t len);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_new_array")))
+extern WriteResult shopify_function_output_new_array(ContextPtr context, size_t len);
 
 /**
  * Finalizes an array output value
  * @param context The context pointer
  * @return WriteResult indicating success or failure
  */
-WriteResult shopify_function_output_finish_array(ContextPtr context);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_finish_array")))
+extern WriteResult shopify_function_output_finish_array(ContextPtr context);
 
 // Other
 /**
@@ -177,6 +218,8 @@ WriteResult shopify_function_output_finish_array(ContextPtr context);
  * @param len The length of the string
  * @return The interned string ID
  */
-InternedStringId shopify_function_intern_utf8_str(ContextPtr context, const uint8_t* ptr, size_t len);
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_intern_utf8_str")))
+extern InternedStringId shopify_function_intern_utf8_str(ContextPtr context, const uint8_t* ptr, size_t len);
 
 #endif // SHOPIFY_FUNCTION_H

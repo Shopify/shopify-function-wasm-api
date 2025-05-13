@@ -1,16 +1,11 @@
 use anyhow::Result;
 use integration_tests::prepare_example;
-use std::collections::HashSet;
-use std::fs;
-use std::path::PathBuf;
 use std::sync::LazyLock;
-use walrus::Module as WalrusModule;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::{
     pipe::{MemoryInputPipe, MemoryOutputPipe},
     WasiCtxBuilder,
 };
-use wat::parse_str;
 
 const STARTING_FUEL: u64 = u64::MAX;
 const THRESHOLD_PERCENTAGE: f64 = 2.0;
@@ -108,10 +103,7 @@ fn run_example(example: &str, input_bytes: Vec<u8>) -> Result<(Vec<u8>, u64)> {
     if let Err(e) = result {
         let error = stderr.contents().to_vec();
         return Err(anyhow::anyhow!(
-            "{}
-
-STDERR:
-{}",
+            "{}\n\nSTDERR:\n{}",
             e,
             String::from_utf8(error)?
         ));
@@ -324,6 +316,7 @@ fn test_echo_with_large_string_input() -> Result<()> {
         run_wasm_api_example("echo", serde_json::json!(large_string))?,
         serde_json::json!(large_string)
     );
+
     Ok(())
 }
 
@@ -342,7 +335,6 @@ fn test_echo_with_large_array_input() -> Result<()> {
     Ok(())
 }
 
-<<<<<<< HEAD
 #[test]
 fn test_fuel_consumption_within_threshold() -> Result<()> {
     BENCHMARK_EXAMPLE_RESULT
@@ -395,81 +387,11 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
 
     assert_fuel_consumed_within_threshold(16522, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(26043, non_wasm_api_fuel);
-=======
-// --- Consistency Tests ---
-
-// Helper to get the set of unique module names used in imports in a WAT file
-fn get_wat_import_module_names(wat_file_path_str: &str) -> Result<HashSet<String>> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let wat_file_path = PathBuf::from(manifest_dir).join(wat_file_path_str);
-    let wat_content = fs::read_to_string(&wat_file_path)
-         .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", wat_file_path.display(), e))?;
-    let wasm_bytes = parse_str(&wat_content)?;
-    let module = WalrusModule::from_buffer(&wasm_bytes)?;
-    let module_names: HashSet<String> = module.imports.iter().map(|imp| imp.module.clone()).collect();
-    // Ensure we found at least one module name if the file isn't empty of imports
-    if !module_names.is_empty() || module.imports.iter().count() == 0 {
-        Ok(module_names)
-    } else {
-        Err(anyhow::anyhow!("No import module names found in {} although imports exist", wat_file_path.display()))
-    }
-}
-
-// Helper to get imported function names from a WAT file for a specific module
-fn get_wat_imported_function_names(wat_file_path_str: &str, expected_module: &str) -> Result<HashSet<String>> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let wat_file_path = PathBuf::from(manifest_dir).join(wat_file_path_str);
-    let wat_content = fs::read_to_string(&wat_file_path)
-         .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", wat_file_path.display(), e))?;
-    let wasm_bytes = parse_str(&wat_content)?;
-    let module = WalrusModule::from_buffer(&wasm_bytes)?;
-    let mut wat_names = HashSet::new();
-    for import in module.imports.iter() { 
-        if import.module == expected_module {
-            wat_names.insert(import.name.clone());
-        }
-    }
-    Ok(wat_names)
-}
-
-#[test]
-fn test_interface_vs_consumer_module_name_consistency() -> Result<()> {
-    let interface_wat_path = "../api/src/shopify_function.wat"; // Path relative to integration_tests
-    let consumer_wat_path = "../trampoline/src/consumer.wat"; // Path relative to integration_tests
-
-    let interface_module_names = get_wat_import_module_names(interface_wat_path)?;
-    let consumer_module_names = get_wat_import_module_names(consumer_wat_path)?;
-
-    assert!(
-        !interface_module_names.is_empty(),
-        "No import modules found in {}", interface_wat_path
-    );
-    assert!(
-        !consumer_module_names.is_empty(),
-        "No import modules found in {}", consumer_wat_path
-    );
-
-    assert_eq!(
-        interface_module_names,
-        consumer_module_names,
-        "Import module name mismatch between {} and {}:\nInterface Modules: {:?}\nConsumer Modules:  {:?}",
-        interface_wat_path,
-        consumer_wat_path,
-        interface_module_names,
-        consumer_module_names
-    );
-
-    // Optional: Check if there's only one unique module name used (as expected)
-    assert_eq!(interface_module_names.len(), 1, 
-        "Expected only one unique import module name in {}, found: {:?}", 
-        interface_wat_path, interface_module_names);
->>>>>>> 194f6ce (fixing docs and simplifying tests)
 
     Ok(())
 }
 
 #[test]
-<<<<<<< HEAD
 fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
     BENCHMARK_EXAMPLE_RESULT
         .as_ref()
@@ -511,52 +433,3 @@ fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
 
     Ok(())
 }
-=======
-fn test_interface_vs_consumer_wat_function_name_consistency() -> Result<()> {
-    let interface_wat_path = "../api/src/shopify_function.wat"; 
-    let consumer_wat_path = "../trampoline/src/consumer.wat"; 
-
-    // Assuming the module name consistency test passed and there's only one module name,
-    // we extract it to filter function names.
-    let module_names = get_wat_import_module_names(interface_wat_path)?;
-    let expected_module_name = module_names.iter().next().ok_or_else(|| anyhow::anyhow!("No module name found in {} to use for function name comparison", interface_wat_path))?;
-
-    let interface_import_names = get_wat_imported_function_names(interface_wat_path, expected_module_name)?;
-    let consumer_import_names = get_wat_imported_function_names(consumer_wat_path, expected_module_name)?;
-
-    let missing_in_consumer: Vec<_> = interface_import_names.difference(&consumer_import_names).collect();
-    let missing_in_interface: Vec<_> = consumer_import_names.difference(&interface_import_names).collect();
-
-    let mut error_messages = Vec::new();
-    if !missing_in_consumer.is_empty() {
-        error_messages.push(format!(
-            "Functions in interface WAT ({}) but not in consumer WAT ({}) for module '{}': {:?}",
-            interface_wat_path, consumer_wat_path, expected_module_name, missing_in_consumer
-        ));
-    }
-    if !missing_in_interface.is_empty() {
-        error_messages.push(format!(
-            "Functions in consumer WAT ({}) but not in interface WAT ({}) for module '{}': {:?}",
-            consumer_wat_path, interface_wat_path, expected_module_name, missing_in_interface
-        ));
-    }
-
-    assert!(
-        error_messages.is_empty(),
-        "Function name mismatch between {} and {} imports (module '{}'):\n{}",
-        interface_wat_path, consumer_wat_path, expected_module_name, error_messages.join("\n")
-    );
-    assert!(
-        !interface_import_names.is_empty(),
-        "No functions imported from module {} found in {}",
-        expected_module_name, interface_wat_path
-    );
-     assert!(
-        !consumer_import_names.is_empty(),
-        "No functions imported from module {} found in {}",
-        expected_module_name, consumer_wat_path
-    );
-
-    Ok(())
-}
->>>>>>> 194f6ce (fixing docs and simplifying tests)

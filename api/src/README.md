@@ -26,6 +26,8 @@ This document provides details on the low-level aspects of the Shopify Function 
 
 ## Value types:
 
+Values in the Wasm API are represented as 64-bit NaN-boxed values. NaN-box provides a performant way to represent multiple value types without requiring additional memory allocations for type information. The API uses specific bit patterns to encode type information, length fields, and either immediate values or pointers to heap-allocated structure as shown in [NanBox Value Structure (64-bit)](#nanbox-value-structure-64-bit).
+
 - **0**: `Null` - Null value
 - **1**: `Bool` - Boolean value (true/false)
 - **2**: `Number` - Numeric value (f64)
@@ -67,4 +69,4 @@ Sign  Exponent                      Mantissa
 (variable) (variable)              (variable)
 ```
 
-Floating point numbers in our API follow the [IEEE-754 specification](https://standards.ieee.org/ieee/754/6210/).  
+Floating point numbers in our API follow the [IEEE-754 specification](https://standards.ieee.org/ieee/754/6210/).
