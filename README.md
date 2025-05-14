@@ -1,13 +1,13 @@
-# Shopify Function WASM API
+# Shopify Function Wasm API
 
-A high-performance API for building Shopify Functions using WebAssembly (WASM).
+A high-performance API for building Shopify Functions using WebAssembly (Wasm).
 
 ## Architecture
 
-The WASM API consists of these main components:
+The Wasm API consists of these main components:
 
 1. **Provider (`provider/`)**
-    - Implements low-level WASM operations for:
+    - Implements low-level Wasm operations for:
         - Reading function input
         - Serializing the function output
 
@@ -16,13 +16,13 @@ The WASM API consists of these main components:
 
 3. **API (`api/`)**
     - Provides a high-level interface for interacting with the provider
-    - Abstracts away low-level WASM details
+    - Abstracts away low-level Wasm details
     - Includes examples and documentation
 
 4. **Trampoline (`trampoline/`)**
-    - CLI tool that augments WASM modules to interface with the provider
+    - CLI tool that augments Wasm modules to interface with the provider
     - Handles memory sharing between guest and provider modules
-    - Creates the necessary WASM imports/exports
+    - Creates the necessary Wasm imports/exports
 
 ## Getting Started
 

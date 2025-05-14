@@ -8,8 +8,9 @@
     (import "shopify_function_v1" "shopify_function_input_get_obj_prop" (func (param i32 i64 i32 i32) (result i64)))
     (import "shopify_function_v1" "shopify_function_input_get_interned_obj_prop" (func (param i32 i64 i32) (result i64)))
     (import "shopify_function_v1" "shopify_function_input_get_at_index" (func (param i32 i64 i32) (result i64)))
-    (import "shopify_function_v1" "shopify_function_input_get_val_len" (func (param i32 i64) (result i64)))
-    (import "shopify_function_v1" "shopify_function_input_get_utf8_str_addr" (func (param i32 i32) (result i32)))
+    (import "shopify_function_v1" "shopify_function_input_get_obj_key_at_index" (func (param i32 i64 i32) (result i64)))
+    (import "shopify_function_v1" "shopify_function_input_get_val_len" (func (param i32 i64) (result i32)))
+    (import "shopify_function_v1" "shopify_function_input_read_utf8_str" (func (param i32 i32 i32 i32) (result i32)))
 
     ;; Write.
     (import "shopify_function_v1" "shopify_function_output_new_bool" (func (param i32 i32) (result i32)))

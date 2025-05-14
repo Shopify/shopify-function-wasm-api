@@ -1,0 +1,8 @@
+---
+source: integration_tests/tests/docs_sync_test.rs
+expression: "(&ids_missing_in_consumer, &ids_missing_in_shopify_function)"
+---
+(
+    [],
+    [],
+)
