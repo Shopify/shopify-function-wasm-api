@@ -1171,11 +1171,11 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "deterministic-wasi-ctx",
+ "insta",
  "rmp-serde",
  "serde_json",
  "shopify_function_provider",
  "shopify_function_trampoline",
- "syn",
  "walrus",
  "wasmtime",
  "wasmtime-wasi",

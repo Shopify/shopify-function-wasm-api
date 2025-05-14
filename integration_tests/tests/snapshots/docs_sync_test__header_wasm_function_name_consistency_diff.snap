@@ -1,0 +1,8 @@
+---
+source: integration_tests/tests/docs_sync_test.rs
+expression: "(&functions_missing_in_consumer, &functions_missing_in_header)"
+---
+(
+    [],
+    [],
+)

@@ -1,0 +1,8 @@
+---
+source: integration_tests/tests/docs_sync_test.rs
+expression: "(&modules_missing_in_consumer, &modules_missing_in_header)"
+---
+(
+    [],
+    [],
+)

@@ -1,6 +1,6 @@
 # Shopify Function WebAssembly API
 
-This document provides details on the low-level aspects of the Shopify Function Wasm API, including status codes, error codes, type codes, and the NanBox value structure.
+The Shopify Wasm API provides a way for your Shopify Function to read and write data. This API facilitates communication between the Shopify platform (host) and the custom Wasm module (guest), primarily through a set of imported functions that the Wasm module can call. When reading data, a `Val` will be returned. When writing data, a `WriteResult` is returned. The following sections describe these formats, along with status codes, error codes, and the NanBoxed value structure used by the API.
 
 ## Write Error Codes (i32 type):
 
@@ -15,6 +15,8 @@ This document provides details on the low-level aspects of the Shopify Function 
 - **8**: `NotAnArray` - Expected an array but received another type
 
 ## Read Error Codes (i32 type):
+
+When the tag bits in a NanBoxed Val correspond to 15, it represents a read error, and the specific error codes is one of the following:
 
 - **0**: `DecodeError` - Value could not be decoded
 - **1**: `NotAnObject` - Expected an object but received another type

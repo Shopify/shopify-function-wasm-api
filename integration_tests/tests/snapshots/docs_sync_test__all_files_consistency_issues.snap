@@ -1,0 +1,5 @@
+---
+source: integration_tests/tests/docs_sync_test.rs
+expression: inconsistencies
+---
+[]

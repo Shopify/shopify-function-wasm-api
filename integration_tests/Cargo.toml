@@ -17,4 +17,4 @@ shopify_function_provider = { path = "../provider" }
 walrus = "0.23.3"
 anyhow = "1.0"
 wat = "1.229.0"
-syn = { version = "2.0", features = ["full"] }
+insta = "1" 

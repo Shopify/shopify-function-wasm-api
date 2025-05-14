@@ -1,3 +1,7 @@
+---
+source: integration_tests/tests/docs_sync_test.rs
+expression: api/src/shopify_function.wat
+---
 ;; WebAssembly Text Format (WAT) description of the shopify_function API
 ;; This WAT file describes the interfaces exposed by the shopify_function Wasm API
 ;; 

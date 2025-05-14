@@ -1,3 +1,7 @@
+---
+source: integration_tests/tests/docs_sync_test.rs
+expression: trampoline/src/test_data/consumer.wat
+---
 (module
     ;; General
     (import "shopify_function_v1" "shopify_function_context_new" (func (result i32)))
