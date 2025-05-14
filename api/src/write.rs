@@ -37,19 +37,23 @@ pub enum Error {
     /// The value is not an array, but was expected to be one based on the current context.
     #[error("Not an array")]
     NotAnArray,
+    /// An unknown error occurred. This occurs when a new error code is added that this version of the API does not know about.
+    #[error("Unknown error")]
+    Unknown,
 }
 
-fn map_result(result: WriteResult) -> Result<(), Error> {
-    match result {
-        WriteResult::Ok => Ok(()),
-        WriteResult::IoError => Err(Error::IoError),
-        WriteResult::ExpectedKey => Err(Error::ExpectedKey),
-        WriteResult::ObjectLengthError => Err(Error::ObjectLengthError),
-        WriteResult::ValueAlreadyWritten => Err(Error::ValueAlreadyWritten),
-        WriteResult::NotAnObject => Err(Error::NotAnObject),
-        WriteResult::ValueNotFinished => Err(Error::ValueNotFinished),
-        WriteResult::ArrayLengthError => Err(Error::ArrayLengthError),
-        WriteResult::NotAnArray => Err(Error::NotAnArray),
+fn map_result(result: usize) -> Result<(), Error> {
+    match WriteResult::from_repr(result) {
+        Some(WriteResult::Ok) => Ok(()),
+        Some(WriteResult::IoError) => Err(Error::IoError),
+        Some(WriteResult::ExpectedKey) => Err(Error::ExpectedKey),
+        Some(WriteResult::ObjectLengthError) => Err(Error::ObjectLengthError),
+        Some(WriteResult::ValueAlreadyWritten) => Err(Error::ValueAlreadyWritten),
+        Some(WriteResult::NotAnObject) => Err(Error::NotAnObject),
+        Some(WriteResult::ValueNotFinished) => Err(Error::ValueNotFinished),
+        Some(WriteResult::ArrayLengthError) => Err(Error::ArrayLengthError),
+        Some(WriteResult::NotAnArray) => Err(Error::NotAnArray),
+        None => Err(Error::Unknown),
     }
 }
 
@@ -120,7 +124,8 @@ impl Context {
     /// This is only available in non-Wasm targets, and therefore only recommended for use in tests.
     pub fn finalize_output_and_return(self) -> Result<serde_json::Value, Error> {
         let (result, bytes) = shopify_function_provider::write::shopify_function_output_finalize_and_return_msgpack_bytes(self.0 as _);
-        map_result(result).and_then(|_| rmp_serde::from_slice(&bytes).map_err(|_| Error::IoError))
+        map_result(result as usize)
+            .and_then(|_| rmp_serde::from_slice(&bytes).map_err(|_| Error::IoError))
     }
 }
 

@@ -22,7 +22,6 @@
 
 use shopify_function_wasm_api_core::{
     read::{ErrorCode, NanBox, Val, ValueRef},
-    write::WriteResult,
     ContextPtr,
 };
 use std::{
@@ -70,24 +69,24 @@ extern "C" {
     ) -> Val;
 
     // Write API.
-    fn shopify_function_output_new_bool(context: ContextPtr, bool: u32) -> WriteResult;
-    fn shopify_function_output_new_null(context: ContextPtr) -> WriteResult;
-    fn shopify_function_output_finalize(context: ContextPtr) -> WriteResult;
-    fn shopify_function_output_new_i32(context: ContextPtr, int: i32) -> WriteResult;
-    fn shopify_function_output_new_f64(context: ContextPtr, float: f64) -> WriteResult;
+    fn shopify_function_output_new_bool(context: ContextPtr, bool: u32) -> usize;
+    fn shopify_function_output_new_null(context: ContextPtr) -> usize;
+    fn shopify_function_output_finalize(context: ContextPtr) -> usize;
+    fn shopify_function_output_new_i32(context: ContextPtr, int: i32) -> usize;
+    fn shopify_function_output_new_f64(context: ContextPtr, float: f64) -> usize;
     fn shopify_function_output_new_utf8_str(
         context: ContextPtr,
         ptr: *const u8,
         len: usize,
-    ) -> WriteResult;
+    ) -> usize;
     fn shopify_function_output_new_interned_utf8_str(
         context: ContextPtr,
         id: shopify_function_wasm_api_core::InternedStringId,
-    ) -> WriteResult;
-    fn shopify_function_output_new_object(context: ContextPtr, len: usize) -> WriteResult;
-    fn shopify_function_output_finish_object(context: ContextPtr) -> WriteResult;
-    fn shopify_function_output_new_array(context: ContextPtr, len: usize) -> WriteResult;
-    fn shopify_function_output_finish_array(context: ContextPtr) -> WriteResult;
+    ) -> usize;
+    fn shopify_function_output_new_object(context: ContextPtr, len: usize) -> usize;
+    fn shopify_function_output_finish_object(context: ContextPtr) -> usize;
+    fn shopify_function_output_new_array(context: ContextPtr, len: usize) -> usize;
+    fn shopify_function_output_finish_array(context: ContextPtr) -> usize;
 
     // Other.
     fn shopify_function_intern_utf8_str(context: ContextPtr, ptr: *const u8, len: usize) -> usize;
@@ -95,7 +94,8 @@ extern "C" {
 
 #[cfg(not(target_family = "wasm"))]
 mod provider_fallback {
-    use super::{ContextPtr, Val, WriteResult};
+    use super::{ContextPtr, Val};
+    use shopify_function_wasm_api_core::write::WriteResult;
 
     // Read API.
     pub(crate) unsafe fn shopify_function_input_get(context: ContextPtr) -> Val {
@@ -156,41 +156,31 @@ mod provider_fallback {
     }
 
     // Write API.
-    pub(crate) unsafe fn shopify_function_output_new_bool(
-        context: ContextPtr,
-        bool: u32,
-    ) -> WriteResult {
-        shopify_function_provider::write::shopify_function_output_new_bool(context, bool)
+    pub(crate) unsafe fn shopify_function_output_new_bool(context: ContextPtr, bool: u32) -> usize {
+        shopify_function_provider::write::shopify_function_output_new_bool(context, bool) as usize
     }
-    pub(crate) unsafe fn shopify_function_output_new_null(context: ContextPtr) -> WriteResult {
-        shopify_function_provider::write::shopify_function_output_new_null(context)
+    pub(crate) unsafe fn shopify_function_output_new_null(context: ContextPtr) -> usize {
+        shopify_function_provider::write::shopify_function_output_new_null(context) as usize
     }
-    pub(crate) unsafe fn shopify_function_output_finalize(context: ContextPtr) -> WriteResult {
-        shopify_function_provider::write::shopify_function_output_finalize(context)
+    pub(crate) unsafe fn shopify_function_output_finalize(context: ContextPtr) -> usize {
+        shopify_function_provider::write::shopify_function_output_finalize(context) as usize
     }
-    pub(crate) unsafe fn shopify_function_output_new_i32(
-        context: ContextPtr,
-        int: i32,
-    ) -> WriteResult {
-        shopify_function_provider::write::shopify_function_output_new_i32(context, int)
+    pub(crate) unsafe fn shopify_function_output_new_i32(context: ContextPtr, int: i32) -> usize {
+        shopify_function_provider::write::shopify_function_output_new_i32(context, int) as usize
     }
-    pub(crate) unsafe fn shopify_function_output_new_f64(
-        context: ContextPtr,
-        float: f64,
-    ) -> WriteResult {
-        shopify_function_provider::write::shopify_function_output_new_f64(context, float)
+    pub(crate) unsafe fn shopify_function_output_new_f64(context: ContextPtr, float: f64) -> usize {
+        shopify_function_provider::write::shopify_function_output_new_f64(context, float) as usize
     }
     pub(crate) unsafe fn shopify_function_output_new_utf8_str(
         context: ContextPtr,
         ptr: *const u8,
         len: usize,
-    ) -> WriteResult {
+    ) -> usize {
         let result =
             shopify_function_provider::write::shopify_function_output_new_utf8_str(context, len);
-        let write_result =
-            WriteResult::from_repr((result >> usize::BITS) as usize).expect("Invalid write result");
+        let write_result = (result >> usize::BITS) as usize;
         let dst = result as usize;
-        if write_result == WriteResult::Ok {
+        if write_result == WriteResult::Ok as usize {
             std::ptr::copy(ptr as _, dst as _, len);
         }
         write_result
@@ -198,26 +188,27 @@ mod provider_fallback {
     pub(crate) unsafe fn shopify_function_output_new_interned_utf8_str(
         context: ContextPtr,
         id: shopify_function_wasm_api_core::InternedStringId,
-    ) -> WriteResult {
+    ) -> usize {
         shopify_function_provider::write::shopify_function_output_new_interned_utf8_str(context, id)
+            as usize
     }
     pub(crate) unsafe fn shopify_function_output_new_object(
         context: ContextPtr,
         len: usize,
-    ) -> WriteResult {
-        shopify_function_provider::write::shopify_function_output_new_object(context, len)
+    ) -> usize {
+        shopify_function_provider::write::shopify_function_output_new_object(context, len) as usize
     }
-    pub(crate) unsafe fn shopify_function_output_finish_object(context: ContextPtr) -> WriteResult {
-        shopify_function_provider::write::shopify_function_output_finish_object(context)
+    pub(crate) unsafe fn shopify_function_output_finish_object(context: ContextPtr) -> usize {
+        shopify_function_provider::write::shopify_function_output_finish_object(context) as usize
     }
     pub(crate) unsafe fn shopify_function_output_new_array(
         context: ContextPtr,
         len: usize,
-    ) -> WriteResult {
-        shopify_function_provider::write::shopify_function_output_new_array(context, len)
+    ) -> usize {
+        shopify_function_provider::write::shopify_function_output_new_array(context, len) as usize
     }
-    pub(crate) unsafe fn shopify_function_output_finish_array(context: ContextPtr) -> WriteResult {
-        shopify_function_provider::write::shopify_function_output_finish_array(context)
+    pub(crate) unsafe fn shopify_function_output_finish_array(context: ContextPtr) -> usize {
+        shopify_function_provider::write::shopify_function_output_finish_array(context) as usize
     }
 
     // Other.
