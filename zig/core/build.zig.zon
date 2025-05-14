@@ -1,0 +1,9 @@
+.{
+    .name = "shopify_function_wasm_api_core",
+    .version = "0.1.0",
+    .paths = .{
+        "src",
+        "build.zig",
+        "build.zig.zon",
+    },
+}

@@ -1,0 +1,16 @@
+.{
+    .name = "shopify_function_wasm_api",
+    .version = "0.1.0",
+    .paths = .{
+        "api",
+        "core",
+        "build.zig",
+        "build.zig.zon",
+        "README.md",
+    },
+    .dependencies = .{
+        .shopify_function_wasm_api_core = .{
+            .path = "core",
+        },
+    },
+}
