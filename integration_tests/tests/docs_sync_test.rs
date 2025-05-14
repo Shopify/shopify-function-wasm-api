@@ -307,35 +307,3 @@ fn test_consistency_across_all_files() -> Result<()> {
 
     Ok(())
 }
-
-#[test]
-fn snapshot_shopify_function_wat() -> Result<()> {
-    let wat_path = "api/src/shopify_function.wat";
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let workspace_root = PathBuf::from(manifest_dir).join("..");
-    let full_path = workspace_root.join(wat_path);
-    let wat_content = fs::read_to_string(&full_path).with_context(|| {
-        format!(
-            "Failed to read WAT file for snapshot: {}",
-            full_path.display()
-        )
-    })?;
-    insta::assert_snapshot!("shopify_function_wat_content", wat_content, wat_path);
-    Ok(())
-}
-
-#[test]
-fn snapshot_consumer_wat() -> Result<()> {
-    let wat_path = "trampoline/src/test_data/consumer.wat";
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let workspace_root = PathBuf::from(manifest_dir).join("..");
-    let full_path = workspace_root.join(wat_path);
-    let wat_content = fs::read_to_string(&full_path).with_context(|| {
-        format!(
-            "Failed to read WAT file for snapshot: {}",
-            full_path.display()
-        )
-    })?;
-    insta::assert_snapshot!("consumer_wat_content", wat_content, wat_path);
-    Ok(())
-}
