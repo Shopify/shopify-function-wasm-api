@@ -5,6 +5,83 @@ use walrus::{
     FunctionBuilder, FunctionId, ImportKind, MemoryId, Module, ValType,
 };
 
+static IMPORTS: &[(&str, &str)] = &[
+    (
+        "shopify_function_context_new",
+        "_shopify_function_context_new",
+    ),
+    ("shopify_function_input_get", "_shopify_function_input_get"),
+    (
+        "shopify_function_input_get_val_len",
+        "_shopify_function_input_get_val_len",
+    ),
+    ("shopify_function_input_read_utf8_str", ""),
+    (
+        "shopify_function_input_get_obj_prop",
+        "_shopify_function_input_get_obj_prop",
+    ),
+    (
+        "shopify_function_input_get_interned_obj_prop",
+        "_shopify_function_input_get_interned_obj_prop",
+    ),
+    (
+        "shopify_function_input_get_at_index",
+        "_shopify_function_input_get_at_index",
+    ),
+    (
+        "shopify_function_input_get_obj_key_at_index",
+        "_shopify_function_input_get_obj_key_at_index",
+    ),
+    (
+        "shopify_function_output_new_bool",
+        "_shopify_function_output_new_bool",
+    ),
+    (
+        "shopify_function_output_new_null",
+        "_shopify_function_output_new_null",
+    ),
+    (
+        "shopify_function_output_finalize",
+        "_shopify_function_output_finalize",
+    ),
+    (
+        "shopify_function_output_new_i32",
+        "_shopify_function_output_new_i32",
+    ),
+    (
+        "shopify_function_output_new_f64",
+        "_shopify_function_output_new_f64",
+    ),
+    (
+        "shopify_function_output_new_utf8_str",
+        "_shopify_function_output_new_utf8_str",
+    ),
+    (
+        "shopify_function_intern_utf8_str",
+        "_shopify_function_intern_utf8_str",
+    ),
+    (
+        "shopify_function_output_new_interned_utf8_str",
+        "_shopify_function_output_new_interned_utf8_str",
+    ),
+    (
+        "shopify_function_output_new_object",
+        "_shopify_function_output_new_object",
+    ),
+    (
+        "shopify_function_output_finish_object",
+        "_shopify_function_output_finish_object",
+    ),
+    (
+        "shopify_function_output_new_array",
+        "_shopify_function_output_new_array",
+    ),
+    (
+        "shopify_function_output_finish_array",
+        "_shopify_function_output_finish_array",
+    ),
+];
+
 pub const PROVIDER_MODULE_NAME: &str =
     concat!("shopify_function_v", env!("CARGO_PKG_VERSION_MAJOR"));
 
@@ -366,71 +443,25 @@ impl TrampolineCodegen {
     }
 
     pub fn apply(mut self) -> walrus::Result<Module> {
-        self.rename_imported_func(
-            "shopify_function_context_new",
-            "_shopify_function_context_new",
-        )?;
-        self.rename_imported_func("shopify_function_input_get", "_shopify_function_input_get")?;
-        self.rename_imported_func(
-            "shopify_function_input_get_val_len",
-            "_shopify_function_input_get_val_len",
-        )?;
-        self.emit_shopify_function_input_read_utf8_str()?;
-        self.emit_shopify_function_input_get_obj_prop()?;
-        self.rename_imported_func(
-            "shopify_function_input_get_interned_obj_prop",
-            "_shopify_function_input_get_interned_obj_prop",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_input_get_at_index",
-            "_shopify_function_input_get_at_index",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_input_get_obj_key_at_index",
-            "_shopify_function_input_get_obj_key_at_index",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_output_new_bool",
-            "_shopify_function_output_new_bool",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_output_new_null",
-            "_shopify_function_output_new_null",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_output_finalize",
-            "_shopify_function_output_finalize",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_output_new_i32",
-            "_shopify_function_output_new_i32",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_output_new_f64",
-            "_shopify_function_output_new_f64",
-        )?;
-        self.emit_shopify_function_output_new_utf8_str()?;
-        self.emit_shopify_function_intern_utf8_str()?;
-        self.rename_imported_func(
-            "shopify_function_output_new_interned_utf8_str",
-            "_shopify_function_output_new_interned_utf8_str",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_output_new_object",
-            "_shopify_function_output_new_object",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_output_finish_object",
-            "_shopify_function_output_finish_object",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_output_new_array",
-            "_shopify_function_output_new_array",
-        )?;
-        self.rename_imported_func(
-            "shopify_function_output_finish_array",
-            "_shopify_function_output_finish_array",
-        )?;
+        for (original, new) in IMPORTS {
+            if *original == "shopify_function_input_read_utf8_str" {
+                self.emit_shopify_function_input_read_utf8_str()?;
+            }
+
+            if *original == "shopify_function_input_get_obj_prop" {
+                self.emit_shopify_function_input_get_obj_prop()?;
+            }
+
+            if *original == "shopify_function_output_new_utf8_str" {
+                self.emit_shopify_function_output_new_utf8_str()?;
+            }
+
+            if *original == "shopify_function_intern_utf8_str" {
+                self.emit_shopify_function_intern_utf8_str()?;
+            }
+
+            self.rename_imported_func(original, new)?;
+        }
 
         Ok(self.module)
     }
@@ -438,7 +469,7 @@ impl TrampolineCodegen {
 
 #[cfg(test)]
 mod test {
-    use super::TrampolineCodegen;
+    use super::{TrampolineCodegen, IMPORTS, PROVIDER_MODULE_NAME};
     use walrus::Module;
 
     #[test]
@@ -455,5 +486,15 @@ mod test {
             let actual = wasmprinter::print_bytes(result.emit_wasm()).unwrap();
             insta::assert_snapshot!(actual);
         });
+    }
+
+    #[test]
+    fn test_consumer_imports_the_entire_api_surface() {
+        let input = include_bytes!("test_data/consumer.wat");
+        let buf = wat::parse_bytes(input).unwrap();
+        let module = Module::from_buffer(&buf).unwrap();
+        for (import, _) in IMPORTS {
+            assert!(module.imports.find(PROVIDER_MODULE_NAME, import).is_some());
+        }
     }
 }
