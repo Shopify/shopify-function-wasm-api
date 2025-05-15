@@ -444,23 +444,21 @@ impl TrampolineCodegen {
 
     pub fn apply(mut self) -> walrus::Result<Module> {
         for (original, new) in IMPORTS {
-            if *original == "shopify_function_input_read_utf8_str" {
-                self.emit_shopify_function_input_read_utf8_str()?;
-            }
-
-            if *original == "shopify_function_input_get_obj_prop" {
-                self.emit_shopify_function_input_get_obj_prop()?;
-            }
-
-            if *original == "shopify_function_output_new_utf8_str" {
-                self.emit_shopify_function_output_new_utf8_str()?;
-            }
-
-            if *original == "shopify_function_intern_utf8_str" {
-                self.emit_shopify_function_intern_utf8_str()?;
-            }
-
-            self.rename_imported_func(original, new)?;
+            match *original {
+                "shopify_function_input_read_utf8_str" => {
+                    self.emit_shopify_function_input_read_utf8_str()?
+                }
+                "shopify_function_input_get_obj_prop" => {
+                    self.emit_shopify_function_input_get_obj_prop()?
+                }
+                "shopify_function_output_new_utf8_str" => {
+                    self.emit_shopify_function_output_new_utf8_str()?
+                }
+                "shopify_function_intern_utf8_str" => {
+                    self.emit_shopify_function_intern_utf8_str()?
+                }
+                original => self.rename_imported_func(original, new)?,
+            };
         }
 
         Ok(self.module)
