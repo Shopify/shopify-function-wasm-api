@@ -1,12 +1,23 @@
 # Shopify Function WebAssembly API
 
-The Shopify Wasm API provides functions for your Shopify Function to read and write data. This API facilitates communication between the Shopify platform (host) and the custom Wasm module (guest), primarily through a set of imported functions that the Wasm module can call. The following sections describe these formats, along with status codes, error codes, and the NanBoxed value structure used by the API.
+The Shopify Wasm API provides functions for your Shopify Function to
+read and write data. This API facilitates communication between the
+Shopify platform (host) and the guest Wasm module, primarily through a
+set of imported functions that the Wasm module can call. The following
+sections describe the value representation format, along with status
+codes, error codes, and the NanBoxed value structure used by the API.
 
 ## NanBox Value Structure (64-bit)
 
-Values exchanged with the Wasm module (primarily data read by the module and complex data written by it) are represented as 64-bit NaN-boxed `i64` integers. NaN-boxing provides a performant way to represent multiple value types (such as numbers, strings, booleans, objects, arrays, or errors) within this single `i64` representation, without requiring additional memory allocations for type information. The API uses specific bit patterns within the `i64` to encode this information.
+Input values in the Wasm API are represented as 64-bit NaN-boxed
+values, represented as `i64` constants in WebAssembly. NaN-boxing
+provides a performant way to represent multiple value types (such as
+numbers, strings, booleans, objects, arrays, or errors) within
+64-bits, without requiring additional memory allocations for type
+information. The API uses specific bit patterns within the 64 bits
+to encode value information.
 
-### NaN-box Value Representation:
+### NaN-box Value Representation
 
 ```
  63  62        52 51 50 49    46 45       32 31                 0
@@ -25,9 +36,11 @@ Sign  Exponent   Quiet  Tag bits   Length      Value bits
 - **Length field**: 14 bits for string/array length.
 - **Value field**: 32 bits for actual data or a pointer to heap-allocated structures.
 
-### 64-bit floating point values:
+### 64-bit floating point values
 
-When a value is a floating-point number (type tag `2`), it is not NanBoxed in the same way as other types. Instead, it directly uses the standard IEEE 754 double-precision binary floating-point format:
+When a value is a floating-point number (type tag `2`), it is not
+encoded through NaN-boxing. Instead, it directly uses the
+standard IEEE 754 double-precision binary floating-point format:
 
 ```
  63  62        52 51                                         0
@@ -43,7 +56,8 @@ Floating point numbers in our API follow the [IEEE-754 specification](https://st
 
 ### Value Types
 
-The `Tag bits (TTTT)` in the NanBox structure determine the logical type of the `i64` value. The following type tags are used:
+The `Tag bits (TTTT)` in the NanBox structure determine the logical
+type of the `i64` value. The following type tags are used:
 
 - **0**: `Null` - Null value
 - **1**: `Bool` - Boolean value (true/false)
@@ -55,13 +69,23 @@ The `Tag bits (TTTT)` in the NanBox structure determine the logical type of the 
 
 ## Reading Data
 
-To read input data provided by the Shopify platform, your Wasm module will use a set of imported API functions. These functions allow you to access the root input value and traverse complex data structures like objects and arrays. For a complete list and detailed signatures of these read functions, refer to the C header file ([`api/src/shopify_function.h`](src/shopify_function.h)) or the WebAssembly Text Format definition ([`api/src/shopify_function.wat`](src/shopify_function.wat)).
+To read input data provided by the Shopify platform, your Wasm module
+will use a set of imported API functions. These functions allow you to
+access the root input value and traverse complex data structures like
+objects and arrays. For a complete list and detailed signatures of
+these read functions, refer to the [C header file](src/shopify_function.h) or the
+[WebAssembly Text Format definition](src/shopify_function.wat).
 
-Each read operation that retrieves data typically returns a 64-bit integer (`i64`). This `i64` value should be interpreted according to the NanBox structure and Value Types detailed above.
+Each read operation that retrieves data typically returns a NaN-boxed
+value.  This value should be interpreted according to the NanBox
+structure and Value Types detailed above.
 
 ### Read Error Codes (i32 type)
 
-When a 64-bit NaN-boxed `i64` value has its type tag bits set to `15` (Error), it signifies that a read error occurred. The lower 32 bits of this `i64` (the "Value field" in the NanBox structure) will then contain one of the following `i32` error codes:
+When a 64-bit NaN-boxed value has its type tag bits set to `15`
+(Error), it signifies that a read error occurred. The lower 32 bits of
+this `i64` (the "Value field" in the NanBox structure) will then
+contain one of the following `i32` error codes:
 
 - **0**: `DecodeError` - Value could not be decoded
 - **1**: `NotAnObject` - Expected an object but received another type
@@ -73,9 +97,18 @@ When a 64-bit NaN-boxed `i64` value has its type tag bits set to `15` (Error), i
 
 ## Writing Data
 
-To write output data back to the Shopify platform, your Wasm module will use a corresponding set of imported API functions. These functions allow you to construct complex data structures, such as objects and arrays, and populate them with various value types (strings, numbers, booleans, null) as defined in the [Value Types](#value-types) section. For a complete list and detailed signatures of these write functions, refer to the C header file ([`api/src/shopify_function.h`](src/shopify_function.h)) or the WebAssembly Text Format definition ([`api/src/shopify_function.wat`](src/shopify_function.wat)).
+To write output data back to the Shopify platform, your Wasm module
+will use a corresponding set of imported API functions. These
+functions allow you to construct complex data structures, such as
+objects and arrays, and populate them with various value types
+(strings, numbers, booleans, null) as defined in the [Value
+Types](#value-types) section. For a complete list and detailed
+signatures of these write functions, refer to the [C header file](src/shopify_function.h) or the
+[WebAssembly Text Format definition](src/shopify_function.wat).
 
-Most write operations return an `i32` status code. A value of `0` (Success) indicates the operation was successful, while other values signify errors.
+Most write operations return an `i32` status code. A value of `0`
+(Success) indicates the operation was successful, while other values
+signify errors.
 
 ### Write Error Codes (i32 type)
 
