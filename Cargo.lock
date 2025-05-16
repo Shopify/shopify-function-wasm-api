@@ -1167,7 +1167,7 @@ dependencies = [
 
 [[package]]
 name = "integration_tests"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "deterministic-wasi-ctx",
@@ -1832,7 +1832,7 @@ dependencies = [
 
 [[package]]
 name = "shopify_function_wasm_api"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "paste",
  "rmp-serde",
@@ -1844,7 +1844,7 @@ dependencies = [
 
 [[package]]
 name = "shopify_function_wasm_api_core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "strum",
 ]
