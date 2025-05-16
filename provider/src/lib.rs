@@ -27,7 +27,7 @@ struct Context {
 }
 
 #[derive(Debug)]
-pub enum ContextError {
+enum ContextError {
     NullPointer,
 }
 

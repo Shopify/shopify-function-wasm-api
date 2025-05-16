@@ -153,9 +153,9 @@ impl NanBox {
             Tag::Array => Ok(ValueRef::Array { ptr, len }),
             Tag::String => Ok(ValueRef::String { ptr, len }),
             Tag::Object => Ok(ValueRef::Object { ptr, len }),
-            Tag::Error => ErrorCode::from_repr(val as usize)
-                .map(ValueRef::Error)
-                .ok_or_else(|| "Invalid error code.".into()),
+            Tag::Error => Ok(ValueRef::Error(
+                ErrorCode::from_repr(val as usize).unwrap_or(ErrorCode::Unknown),
+            )),
         }
     }
 
@@ -233,6 +233,8 @@ pub enum ErrorCode {
     IndexOutOfBounds = 5,
     /// The value is not indexable. Indexable values are objects and arrays.
     NotIndexable = 6,
+    /// An unknown error code.
+    Unknown,
 }
 
 #[cfg(test)]

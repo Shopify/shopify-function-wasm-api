@@ -95,6 +95,10 @@ contain one of the following `i32` error codes:
 - **5**: `IndexOutOfBounds` - Array index out of bounds
 - **6**: `NotIndexable` - Value is not indexable (not an object or array)
 
+Shopify does not consider additions to this list to be a breaking change,
+so developers are encouraged to handle the case that new error
+values are emitted.
+
 ## Writing Data
 
 To write output data back to the Shopify platform, your Wasm module
@@ -110,7 +114,7 @@ Most write operations return an `i32` status code. A value of `0`
 (Success) indicates the operation was successful, while other values
 signify errors.
 
-### Write Error Codes (i32 type)
+### Write Status Codes (i32 type)
 
 These are the `i32` status codes returned by write operations:
 
@@ -123,3 +127,7 @@ These are the `i32` status codes returned by write operations:
 - **6**: `ValueNotFinished` - Value creation not completed
 - **7**: `ArrayLengthError` - Array length mismatch
 - **8**: `NotAnArray` - Expected an array but received another type
+
+Shopify does not consider additions to this list to be a breaking change,
+so developers are encouraged to handle the case that new status
+codes are emitted.
