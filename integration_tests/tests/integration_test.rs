@@ -34,8 +34,7 @@ fn assert_fuel_consumed_within_threshold(target_fuel: u64, fuel_consumed: u64) {
             target_fuel
         );
     } else if percentage_difference > THRESHOLD_PERCENTAGE {
-        assert!(
-            false,
+        panic!(
             "fuel_consumed ({}) was significantly better than target_fuel value ({}) by more than {:.2}%. This is a significant improvement! Please double check your changes and update the target fuel if this is a legitimate improvement.",
             fuel_consumed,
             target_fuel,
@@ -47,7 +46,7 @@ fn assert_fuel_consumed_within_threshold(target_fuel: u64, fuel_consumed: u64) {
 fn run_example(example: &str, input_bytes: Vec<u8>) -> Result<(Vec<u8>, u64)> {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let workspace_root = std::path::PathBuf::from(manifest_dir).join("..");
-    let engine = Engine::new(&Config::new().consume_fuel(true))?;
+    let engine = Engine::new(Config::new().consume_fuel(true))?;
 
     let module_path = workspace_root.join(format!(
         "target/wasm32-wasip1/release/examples/{example}.merged.wasm"

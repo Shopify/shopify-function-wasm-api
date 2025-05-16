@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 /// An error that can occur when deserializing a value.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     /// The value is not of the expected type.
     #[error("Invalid type")]

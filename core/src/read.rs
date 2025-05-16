@@ -218,6 +218,7 @@ impl Tag {
 /// An error code.
 #[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::FromRepr)]
 #[repr(usize)]
+#[non_exhaustive]
 pub enum ErrorCode {
     /// The NanBox could not be decoded.
     DecodeError = 0,
