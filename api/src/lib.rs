@@ -481,6 +481,7 @@ pub struct Context(ContextPtr);
 
 /// An error that can occur when creating a [`Context`].
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum ContextError {
     /// The pointer to the context is null.
     NullPointer,

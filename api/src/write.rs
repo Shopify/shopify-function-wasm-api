@@ -10,6 +10,7 @@ use shopify_function_wasm_api_core::write::WriteResult;
 
 /// An error that can occur when writing a value.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     /// An I/O error occurred.
     #[error("I/O error")]
