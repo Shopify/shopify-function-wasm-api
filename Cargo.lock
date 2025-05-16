@@ -1831,6 +1831,7 @@ dependencies = [
 name = "shopify_function_wasm_api"
 version = "0.0.1"
 dependencies = [
+ "paste",
  "rmp-serde",
  "serde_json",
  "shopify_function_provider",

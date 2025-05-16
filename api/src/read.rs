@@ -50,6 +50,16 @@ impl Deserialize for Value {
     }
 }
 
+impl Deserialize for () {
+    fn deserialize(value: &Value) -> Result<Self, Error> {
+        if value.is_null() {
+            Ok(())
+        } else {
+            Err(Error::InvalidType)
+        }
+    }
+}
+
 impl Deserialize for bool {
     fn deserialize(value: &Value) -> Result<Self, Error> {
         value.as_bool().ok_or(Error::InvalidType)
@@ -160,6 +170,62 @@ mod tests {
         });
     }
 
+    macro_rules! test_deserialize_int {
+        ($ty:ty) => {
+            paste::paste! {
+                #[test]
+                fn [<test_deserialize_ $ty>]() {
+                    [$ty::MIN, 0 as $ty, $ty::MAX].iter().for_each(|&n| {
+                        let value = serde_json::json!(n);
+                        let result: $ty = deserialize_json_value(value).unwrap();
+                        assert_eq!(result, n);
+                    });
+                }
+            }
+        };
+    }
+
+    test_deserialize_int!(i8);
+    test_deserialize_int!(i16);
+    test_deserialize_int!(i32);
+    test_deserialize_int!(i64);
+    test_deserialize_int!(u8);
+    test_deserialize_int!(u16);
+    test_deserialize_int!(u32);
+    test_deserialize_int!(u64);
+    test_deserialize_int!(usize);
+    test_deserialize_int!(isize);
+
+    #[test]
+    fn test_deserialize_f64() {
+        let value = serde_json::json!(1.0);
+        let result: f64 = deserialize_json_value(value).unwrap();
+        assert_eq!(result, 1.0);
+    }
+
+    #[test]
+    fn test_deserialize_string() {
+        let value = serde_json::json!("test");
+        let result: String = deserialize_json_value(value).unwrap();
+        assert_eq!(result, "test");
+    }
+
+    #[test]
+    fn test_deserialize_option() {
+        [None, Some(1), Some(2)].iter().for_each(|&opt| {
+            let value = serde_json::json!(opt);
+            let result: Option<i32> = deserialize_json_value(value).unwrap();
+            assert_eq!(result, opt);
+        });
+    }
+
+    #[test]
+    fn test_deserialize_vec() {
+        let value = serde_json::json!([1, 2, 3]);
+        let result: Vec<i32> = deserialize_json_value(value).unwrap();
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+
     #[test]
     fn test_deserialize_hash_map() {
         let value = serde_json::json!({
@@ -172,5 +238,11 @@ mod tests {
             ("key2".to_string(), "value2".to_string()),
         ]);
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_deserialize_unit() {
+        let value = serde_json::json!(null);
+        deserialize_json_value::<()>(value).unwrap();
     }
 }
