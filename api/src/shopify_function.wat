@@ -42,7 +42,7 @@
   ;;   - Array: number of elements.
   ;;   - String: number of utf8-encoded bytes.
   ;;   - Object: number of entries.
-  ;;   - 0 for all other values.
+  ;;   - -1 for all other values.
   ;;
   ;; Note that calling this function is not required in all cases, if
   ;; the length value is equal or less than (2^14) - 1, the length
