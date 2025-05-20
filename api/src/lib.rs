@@ -409,7 +409,11 @@ impl Value {
                 } else {
                     len
                 };
-                Some(len)
+                if len == usize::MAX {
+                    None
+                } else {
+                    Some(len)
+                }
             }
             _ => None,
         }
@@ -429,7 +433,11 @@ impl Value {
                 } else {
                     len
                 };
-                Some(len)
+                if len == usize::MAX {
+                    None
+                } else {
+                    Some(len)
+                }
             }
             _ => None,
         }
@@ -568,5 +576,49 @@ mod tests {
         context2.intern_utf8_str("test");
         let id3 = cached_interned_string_id.load_from_context(&context2);
         assert_ne!(id, id3);
+    }
+
+    #[test]
+    fn test_array_len_with_null_ptr() {
+        let context = Context::new_with_input(serde_json::json!({}));
+        let value = Value {
+            context: NonNull::new(context.0 as _).unwrap(),
+            nan_box: NanBox::array(0, NanBox::MAX_VALUE_LENGTH),
+        };
+        let len = value.array_len();
+        assert_eq!(len, None);
+    }
+
+    #[test]
+    fn test_array_len_with_non_length_eligible_nan_box() {
+        let context = Context::new_with_input(serde_json::json!({}));
+        let value = Value {
+            context: NonNull::new(context.0 as _).unwrap(),
+            nan_box: NanBox::null(),
+        };
+        let len = value.array_len();
+        assert_eq!(len, None);
+    }
+
+    #[test]
+    fn test_obj_len_with_null_ptr() {
+        let context = Context::new_with_input(serde_json::json!({}));
+        let value = Value {
+            context: NonNull::new(context.0 as _).unwrap(),
+            nan_box: NanBox::obj(0, NanBox::MAX_VALUE_LENGTH),
+        };
+        let len = value.obj_len();
+        assert_eq!(len, None);
+    }
+
+    #[test]
+    fn test_obj_len_with_non_length_eligible_nan_box() {
+        let context = Context::new_with_input(serde_json::json!({}));
+        let value = Value {
+            context: NonNull::new(context.0 as _).unwrap(),
+            nan_box: NanBox::null(),
+        };
+        let len = value.obj_len();
+        assert_eq!(len, None);
     }
 }

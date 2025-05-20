@@ -172,14 +172,14 @@ decorate_for_target! {
                 match v.try_decode() {
                     Ok(NanBoxValueRef::String { ptr, .. } | NanBoxValueRef::Array { ptr, .. } | NanBoxValueRef::Object { ptr, .. }) => {
                         let Ok(value) = LazyValueRef::mut_from_raw(ptr as _) else {
-                            return 0;
+                            return usize::MAX;
                         };
                         value.get_value_length()
                     }
-                    _ => 0,
+                    _ => usize::MAX,
                 }
             }
-            Err(_) => 0,
+            Err(_) => usize::MAX,
         }
     }
 }
