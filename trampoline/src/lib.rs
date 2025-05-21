@@ -98,7 +98,7 @@ pub fn trampoline_existing_module(
 
 pub struct TrampolineCodegen {
     module: Module,
-    guest_memory_id: MemoryId,
+    guest_memory_id: Option<MemoryId>,
     provider_memory_id: OnceCell<MemoryId>,
     memcpy_to_guest: OnceCell<FunctionId>,
     memcpy_to_provider: OnceCell<FunctionId>,
@@ -136,7 +136,7 @@ impl TrampolineCodegen {
         })
     }
 
-    fn guest_memory_id(module: &Module) -> walrus::Result<MemoryId> {
+    fn guest_memory_id(module: &Module) -> walrus::Result<Option<MemoryId>> {
         let non_imported_memories = module
             .memories
             .iter()
@@ -144,10 +144,10 @@ impl TrampolineCodegen {
             .map(|memory| memory.id())
             .collect::<Vec<_>>();
 
-        if let Some((memory_id, [])) = non_imported_memories.split_first() {
-            Ok(*memory_id)
-        } else {
-            anyhow::bail!("expected exactly one non-imported guest memory")
+        match non_imported_memories.split_first() {
+            Some((memory_id, [])) => Ok(Some(*memory_id)),
+            Some(_) => anyhow::bail!("multiple non-imported memories are not supported"),
+            None => Ok(None),
         }
     }
 
@@ -170,7 +170,10 @@ impl TrampolineCodegen {
                 .local_get(dst)
                 .local_get(src)
                 .local_get(size)
-                .memory_copy(provider_memory_id, self.guest_memory_id);
+                .memory_copy(
+                    provider_memory_id,
+                    self.guest_memory_id.expect("no guest memory"),
+                );
 
             memcpy_to_guest.finish(vec![dst, src, size], &mut self.module.funcs)
         })
@@ -195,7 +198,10 @@ impl TrampolineCodegen {
                 .local_get(dst)
                 .local_get(src)
                 .local_get(size)
-                .memory_copy(self.guest_memory_id, provider_memory_id);
+                .memory_copy(
+                    self.guest_memory_id.expect("no guest memory"),
+                    provider_memory_id,
+                );
 
             memcpy_to_provider.finish(vec![dst, src, size], &mut self.module.funcs)
         })
@@ -458,6 +464,11 @@ impl TrampolineCodegen {
     }
 
     pub fn apply(mut self) -> walrus::Result<Module> {
+        // If the module does not have a memory, we should no-op
+        if self.guest_memory_id.is_none() {
+            return Ok(self.module);
+        }
+
         for (original, new) in IMPORTS {
             match *original {
                 "shopify_function_input_read_utf8_str" => {
@@ -542,7 +553,7 @@ mod test {
         let err = result.unwrap_err();
         assert_eq!(
             err.to_string(),
-            "expected exactly one non-imported guest memory"
+            "multiple non-imported memories are not supported"
         );
     }
 }
