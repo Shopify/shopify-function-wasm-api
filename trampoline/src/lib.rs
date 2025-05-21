@@ -108,7 +108,7 @@ pub struct TrampolineCodegen {
 
 impl TrampolineCodegen {
     pub fn new(module: Module) -> walrus::Result<Self> {
-        let guest_memory_id = module.get_memory_id()?;
+        let guest_memory_id = Self::guest_memory_id(&module)?;
 
         Ok(Self {
             module,
@@ -134,6 +134,21 @@ impl TrampolineCodegen {
             );
             provider_memory_id
         })
+    }
+
+    fn guest_memory_id(module: &Module) -> walrus::Result<MemoryId> {
+        let non_imported_memories = module
+            .memories
+            .iter()
+            .filter(|&memory| memory.import.is_none())
+            .map(|memory| memory.id())
+            .collect::<Vec<_>>();
+
+        if let Some((memory_id, [])) = non_imported_memories.split_first() {
+            Ok(*memory_id)
+        } else {
+            anyhow::bail!("expected exactly one non-imported guest memory")
+        }
     }
 
     fn emit_memcpy_to_guest(&mut self) -> FunctionId {
@@ -470,6 +485,18 @@ mod test {
     use super::{TrampolineCodegen, IMPORTS, PROVIDER_MODULE_NAME};
     use walrus::Module;
 
+    fn trampoline_wat(wat_bytes: &[u8]) -> walrus::Result<String> {
+        let wasm_buf = wat::parse_bytes(wat_bytes)?;
+        trampoline_wasm(&wasm_buf)
+    }
+
+    fn trampoline_wasm(wasm_bytes: &[u8]) -> walrus::Result<String> {
+        let module = Module::from_buffer(wasm_bytes)?;
+        let codegen = TrampolineCodegen::new(module)?;
+        let mut result = codegen.apply()?;
+        wasmprinter::print_bytes(result.emit_wasm())
+    }
+
     #[test]
     fn disassemble_trampoline() {
         // to add a new test case, add a new file to the `test_data` directory and run `cargo test`
@@ -478,10 +505,7 @@ mod test {
         // environment variable as documented at https://docs.rs/insta/latest/insta/index.html#updating-snapshots
         insta::glob!("test_data/*.wat", |path| {
             let input = wat::parse_file(path).unwrap();
-            let module = Module::from_buffer(&input).unwrap();
-            let codegen = TrampolineCodegen::new(module).unwrap();
-            let mut result = codegen.apply().unwrap();
-            let actual = wasmprinter::print_bytes(result.emit_wasm()).unwrap();
+            let actual = trampoline_wat(&input).unwrap();
             insta::assert_snapshot!(actual);
         });
     }
@@ -494,5 +518,31 @@ mod test {
         for (import, _) in IMPORTS {
             assert!(module.imports.find(PROVIDER_MODULE_NAME, import).is_some());
         }
+    }
+
+    #[test]
+    fn test_consumer_second_pass_is_a_no_op() {
+        let input = include_bytes!("test_data/consumer.wat");
+        let first_wat = trampoline_wat(input).unwrap();
+        let second_wat = trampoline_wat(first_wat.as_bytes()).unwrap();
+
+        assert_eq!(first_wat, second_wat);
+    }
+
+    #[test]
+    fn test_error_for_multiple_guest_memories() {
+        let module = r#"
+        (module
+            (memory 1)
+            (memory 1)
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "expected exactly one non-imported guest memory"
+        );
     }
 }
