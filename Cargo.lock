@@ -1816,13 +1816,12 @@ dependencies = [
 
 [[package]]
 name = "shopify_function_trampoline"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
  "clap",
  "insta",
- "once_cell",
  "predicates",
  "uuid",
  "walrus",
