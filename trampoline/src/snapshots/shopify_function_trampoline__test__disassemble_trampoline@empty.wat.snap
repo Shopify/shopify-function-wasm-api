@@ -4,8 +4,6 @@ expression: actual
 input_file: trampoline/src/test_data/empty.wat
 ---
 (module
-  (memory (;0;) 1)
-  (export "memory" (memory 0))
   (@producers
     (processed-by "walrus" "0.23.3")
   )
