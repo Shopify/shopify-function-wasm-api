@@ -10,8 +10,16 @@ use std::collections::HashMap;
 #[non_exhaustive]
 pub enum Error {
     /// The value is not of the expected type.
-    #[error("Invalid type")]
-    InvalidType,
+    #[error("Invalid type; expected {expected}, got {actual}")]
+    InvalidType {
+        /// The expected type.
+        expected: &'static str,
+        /// The actual type.
+        actual: &'static str,
+    },
+    /// A custom error.
+    #[error(transparent)]
+    Custom(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// A trait for types that can be deserialized from a [`Value`].
@@ -56,14 +64,20 @@ impl Deserialize for () {
         if value.is_null() {
             Ok(())
         } else {
-            Err(Error::InvalidType)
+            Err(Error::InvalidType {
+                expected: "null",
+                actual: value.type_name(),
+            })
         }
     }
 }
 
 impl Deserialize for bool {
     fn deserialize(value: &Value) -> Result<Self, Error> {
-        value.as_bool().ok_or(Error::InvalidType)
+        value.as_bool().ok_or_else(|| Error::InvalidType {
+            expected: "boolean",
+            actual: value.type_name(),
+        })
     }
 }
 
@@ -80,7 +94,10 @@ macro_rules! impl_deserialize_for_int {
                             None
                         }
                     })
-                    .ok_or(Error::InvalidType)
+                    .ok_or_else(|| Error::InvalidType {
+                        expected: stringify!($ty),
+                        actual: value.type_name(),
+                    })
             }
         }
     };
@@ -99,13 +116,19 @@ impl_deserialize_for_int!(isize);
 
 impl Deserialize for f64 {
     fn deserialize(value: &Value) -> Result<Self, Error> {
-        value.as_number().ok_or(Error::InvalidType)
+        value.as_number().ok_or_else(|| Error::InvalidType {
+            expected: "number",
+            actual: value.type_name(),
+        })
     }
 }
 
 impl Deserialize for String {
     fn deserialize(value: &Value) -> Result<Self, Error> {
-        value.as_string().ok_or(Error::InvalidType)
+        value.as_string().ok_or_else(|| Error::InvalidType {
+            expected: "string",
+            actual: value.type_name(),
+        })
     }
 }
 
@@ -128,7 +151,10 @@ impl<T: Deserialize> Deserialize for Vec<T> {
             }
             Ok(vec)
         } else {
-            Err(Error::InvalidType)
+            Err(Error::InvalidType {
+                expected: "array",
+                actual: value.type_name(),
+            })
         }
     }
 }
@@ -136,13 +162,21 @@ impl<T: Deserialize> Deserialize for Vec<T> {
 impl<T: Deserialize> Deserialize for HashMap<String, T> {
     fn deserialize(value: &Value) -> Result<Self, Error> {
         let Some(obj_len) = value.obj_len() else {
-            return Err(Error::InvalidType);
+            return Err(Error::InvalidType {
+                expected: "object",
+                actual: value.type_name(),
+            });
         };
 
         let mut map = HashMap::new();
 
         for i in 0..obj_len {
-            let key = value.get_obj_key_at_index(i).ok_or(Error::InvalidType)?;
+            let key = value
+                .get_obj_key_at_index(i)
+                .ok_or_else(|| Error::InvalidType {
+                    expected: "string",
+                    actual: value.type_name(),
+                })?;
             let value = value.get_at_index(i);
             map.insert(key, T::deserialize(&value)?);
         }

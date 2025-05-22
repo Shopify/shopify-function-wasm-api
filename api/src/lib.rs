@@ -480,6 +480,20 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Get the type name of the value.
+    pub fn type_name(&self) -> &'static str {
+        match self.nan_box.try_decode() {
+            Ok(ValueRef::Bool(_)) => "boolean",
+            Ok(ValueRef::Number(_)) => "number",
+            Ok(ValueRef::String { .. }) => "string",
+            Ok(ValueRef::Null) => "null",
+            Ok(ValueRef::Object { .. }) => "object",
+            Ok(ValueRef::Array { .. }) => "array",
+            Ok(ValueRef::Error(_)) => "error_code",
+            Err(_) => "unknown",
+        }
+    }
 }
 
 /// A context for reading and writing values.
