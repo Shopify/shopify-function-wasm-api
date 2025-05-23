@@ -288,7 +288,7 @@ impl CachedInternedStringId {
 /// - object
 /// - array
 /// - error
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Value {
     context: NonNull<ContextPtr>,
     nan_box: NanBox,
@@ -478,6 +478,35 @@ impl Value {
         match self.nan_box.try_decode() {
             Ok(ValueRef::Error(e)) => Some(e),
             _ => None,
+        }
+    }
+
+    /// Get the type name of the value.
+    pub fn type_name(&self) -> &'static str {
+        match self.nan_box.try_decode() {
+            Ok(ValueRef::Bool(_)) => "boolean",
+            Ok(ValueRef::Number(_)) => "number",
+            Ok(ValueRef::String { .. }) => "string",
+            Ok(ValueRef::Null) => "null",
+            Ok(ValueRef::Object { .. }) => "object",
+            Ok(ValueRef::Array { .. }) => "array",
+            Ok(ValueRef::Error(_)) => "error_code",
+            Err(_) => "unknown",
+        }
+    }
+}
+
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.nan_box.try_decode() {
+            Ok(ValueRef::Bool(b)) => write!(f, "{}", b),
+            Ok(ValueRef::Number(n)) => write!(f, "{}", n),
+            Ok(ValueRef::String { .. }) => write!(f, "string"),
+            Ok(ValueRef::Null) => write!(f, "null"),
+            Ok(ValueRef::Object { .. }) => write!(f, "object"),
+            Ok(ValueRef::Array { .. }) => write!(f, "array"),
+            Ok(ValueRef::Error(e)) => write!(f, "error_code({:?})", e),
+            Err(_) => write!(f, "unknown"),
         }
     }
 }

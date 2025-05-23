@@ -76,7 +76,10 @@ impl Deserialize for Value {
             }
             Ok(Value::Array(arr))
         } else {
-            Err(ReadError::InvalidType)
+            Err(ReadError::InvalidType {
+                expected: "value",
+                value: *value,
+            })
         }
     }
 }

@@ -10,8 +10,16 @@ use std::collections::HashMap;
 #[non_exhaustive]
 pub enum Error {
     /// The value is not of the expected type.
-    #[error("Invalid type")]
-    InvalidType,
+    #[error("Invalid type; expected {expected}, got {value}")]
+    InvalidType {
+        /// The expected type.
+        expected: &'static str,
+        /// The actual value.
+        value: Value,
+    },
+    /// A custom error.
+    #[error(transparent)]
+    Custom(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// A trait for types that can be deserialized from a [`Value`].
@@ -56,14 +64,20 @@ impl Deserialize for () {
         if value.is_null() {
             Ok(())
         } else {
-            Err(Error::InvalidType)
+            Err(Error::InvalidType {
+                expected: "null",
+                value: *value,
+            })
         }
     }
 }
 
 impl Deserialize for bool {
     fn deserialize(value: &Value) -> Result<Self, Error> {
-        value.as_bool().ok_or(Error::InvalidType)
+        value.as_bool().ok_or_else(|| Error::InvalidType {
+            expected: "boolean",
+            value: *value,
+        })
     }
 }
 
@@ -80,7 +94,10 @@ macro_rules! impl_deserialize_for_int {
                             None
                         }
                     })
-                    .ok_or(Error::InvalidType)
+                    .ok_or_else(|| Error::InvalidType {
+                        expected: stringify!($ty),
+                        value: *value,
+                    })
             }
         }
     };
@@ -99,13 +116,19 @@ impl_deserialize_for_int!(isize);
 
 impl Deserialize for f64 {
     fn deserialize(value: &Value) -> Result<Self, Error> {
-        value.as_number().ok_or(Error::InvalidType)
+        value.as_number().ok_or_else(|| Error::InvalidType {
+            expected: "number",
+            value: *value,
+        })
     }
 }
 
 impl Deserialize for String {
     fn deserialize(value: &Value) -> Result<Self, Error> {
-        value.as_string().ok_or(Error::InvalidType)
+        value.as_string().ok_or_else(|| Error::InvalidType {
+            expected: "string",
+            value: *value,
+        })
     }
 }
 
@@ -114,7 +137,13 @@ impl<T: Deserialize> Deserialize for Option<T> {
         if value.is_null() {
             Ok(None)
         } else {
-            Ok(Some(T::deserialize(value)?))
+            T::deserialize(value).map(Some).map_err(|e| match e {
+                Error::InvalidType { value, .. } => Error::InvalidType {
+                    expected: std::any::type_name::<Option<T>>(),
+                    value,
+                },
+                e => e,
+            })
         }
     }
 }
@@ -128,7 +157,10 @@ impl<T: Deserialize> Deserialize for Vec<T> {
             }
             Ok(vec)
         } else {
-            Err(Error::InvalidType)
+            Err(Error::InvalidType {
+                expected: "array",
+                value: *value,
+            })
         }
     }
 }
@@ -136,13 +168,21 @@ impl<T: Deserialize> Deserialize for Vec<T> {
 impl<T: Deserialize> Deserialize for HashMap<String, T> {
     fn deserialize(value: &Value) -> Result<Self, Error> {
         let Some(obj_len) = value.obj_len() else {
-            return Err(Error::InvalidType);
+            return Err(Error::InvalidType {
+                expected: "object",
+                value: *value,
+            });
         };
 
         let mut map = HashMap::new();
 
         for i in 0..obj_len {
-            let key = value.get_obj_key_at_index(i).ok_or(Error::InvalidType)?;
+            let key = value
+                .get_obj_key_at_index(i)
+                .ok_or_else(|| Error::InvalidType {
+                    expected: "string",
+                    value: *value,
+                })?;
             let value = value.get_at_index(i);
             map.insert(key, T::deserialize(&value)?);
         }
@@ -171,6 +211,17 @@ mod tests {
         });
     }
 
+    #[test]
+    fn test_deserialize_bool_error() {
+        let value = serde_json::json!(1);
+        let result = deserialize_json_value::<bool>(value);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid type; expected boolean, got 1"
+        );
+    }
+
     macro_rules! test_deserialize_int {
         ($ty:ty) => {
             paste::paste! {
@@ -181,6 +232,17 @@ mod tests {
                         let result: $ty = deserialize_json_value(value).unwrap();
                         assert_eq!(result, n);
                     });
+                }
+
+                #[test]
+                fn [<test_deserialize_ $ty _error>]() {
+                    let value = serde_json::json!(null);
+                    let result = deserialize_json_value::<$ty>(value);
+                    assert!(result.is_err());
+                    assert_eq!(
+                        result.unwrap_err().to_string(),
+                        concat!("Invalid type; expected ", stringify!($ty), ", got null")
+                    );
                 }
             }
         };
@@ -205,10 +267,32 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_f64_error() {
+        let value = serde_json::json!(null);
+        let result = deserialize_json_value::<f64>(value);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid type; expected number, got null"
+        );
+    }
+
+    #[test]
     fn test_deserialize_string() {
         let value = serde_json::json!("test");
         let result: String = deserialize_json_value(value).unwrap();
         assert_eq!(result, "test");
+    }
+
+    #[test]
+    fn test_deserialize_string_error() {
+        let value = serde_json::json!(null);
+        let result = deserialize_json_value::<String>(value);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid type; expected string, got null"
+        );
     }
 
     #[test]
@@ -221,10 +305,32 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_option_error() {
+        let value = serde_json::json!("test");
+        let result = deserialize_json_value::<Option<i32>>(value);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid type; expected core::option::Option<i32>, got string"
+        );
+    }
+
+    #[test]
     fn test_deserialize_vec() {
         let value = serde_json::json!([1, 2, 3]);
         let result: Vec<i32> = deserialize_json_value(value).unwrap();
         assert_eq!(result, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_deserialize_vec_error() {
+        let value = serde_json::json!("test");
+        let result = deserialize_json_value::<Vec<i32>>(value);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid type; expected array, got string"
+        );
     }
 
     #[test]
@@ -242,8 +348,30 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_hash_map_error() {
+        let value = serde_json::json!("test");
+        let result = deserialize_json_value::<HashMap<String, String>>(value);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid type; expected object, got string"
+        );
+    }
+
+    #[test]
     fn test_deserialize_unit() {
         let value = serde_json::json!(null);
         deserialize_json_value::<()>(value).unwrap();
+    }
+
+    #[test]
+    fn test_deserialize_unit_error() {
+        let value = serde_json::json!(1);
+        let result = deserialize_json_value::<()>(value);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid type; expected null, got 1"
+        );
     }
 }
