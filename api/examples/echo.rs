@@ -78,7 +78,7 @@ impl Deserialize for Value {
         } else {
             Err(ReadError::InvalidType {
                 expected: "value",
-                actual: value.type_name(),
+                value: *value,
             })
         }
     }
