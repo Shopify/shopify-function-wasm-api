@@ -142,7 +142,7 @@ fn decode_json_output(output: Vec<u8>) -> Result<serde_json::Value> {
 }
 
 fn prepare_wasm_api_input(input: serde_json::Value) -> Result<Vec<u8>> {
-    Ok(rmp_serde::to_vec(&input)?)
+    Ok(shopify_function_provider::json_to_custom_msgpack(&input))
 }
 
 fn prepare_wasi_json_input(input: serde_json::Value) -> Result<Vec<u8>> {
@@ -344,7 +344,7 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     let (_, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(15880, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(12801, wasm_api_fuel);
     Ok(())
 }
 
@@ -384,7 +384,7 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
         wasm_api_fuel, non_wasm_api_fuel, improvement
     );
 
-    assert_fuel_consumed_within_threshold(15880, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(12829, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(23858, non_wasm_api_fuel);
 
     Ok(())
@@ -427,7 +427,7 @@ fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
     );
 
     // Add fuel consumption threshold checks for both implementations
-    assert_fuel_consumed_within_threshold(17826, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(15930, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(736695, non_wasm_api_fuel);
 
     Ok(())
