@@ -3,6 +3,8 @@ pub mod read;
 mod string_interner;
 pub mod write;
 
+#[cfg(not(target_family = "wasm"))]
+use rmp::encode;
 use rmp::encode::ByteBuf;
 use shopify_function_wasm_api_core::ContextPtr;
 use std::ptr::NonNull;
@@ -18,7 +20,6 @@ type DoubleUsize = u128;
 type DoubleUsize = u64;
 
 struct Context {
-    bump_allocator: bumpalo::Bump,
     input_bytes: Vec<u8>,
     output_bytes: ByteBuf,
     write_state: State,
@@ -33,9 +34,7 @@ enum ContextError {
 
 impl Context {
     fn new(input_bytes: Vec<u8>) -> Self {
-        let bump_allocator = bumpalo::Bump::new();
         Self {
-            bump_allocator,
             input_bytes,
             output_bytes: ByteBuf::new(),
             write_state: State::Start,
@@ -109,6 +108,64 @@ decorate_for_target! {
                 ((id as DoubleUsize) << usize::BITS) | (ptr as DoubleUsize)
             }
             Err(_) => 0,
+        }
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+pub fn json_to_custom_msgpack(json_value: &serde_json::Value) -> Vec<u8> {
+    let mut byte_buf = ByteBuf::new();
+    write_json_to_custom_msgpack(&mut byte_buf, json_value);
+    byte_buf.into_vec()
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn write_json_to_custom_msgpack(byte_buf: &mut ByteBuf, json_value: &serde_json::Value) {
+    match json_value {
+        serde_json::Value::Null => {
+            encode::write_nil(byte_buf).unwrap();
+        }
+        serde_json::Value::Bool(value) => {
+            encode::write_bool(byte_buf, *value).unwrap();
+        }
+        serde_json::Value::Number(value) => {
+            if value.is_i64() {
+                encode::write_sint(byte_buf, value.as_i64().unwrap()).unwrap();
+            } else if value.is_u64() {
+                encode::write_u64(byte_buf, value.as_u64().unwrap()).unwrap();
+            } else if value.is_f64() {
+                encode::write_f64(byte_buf, value.as_f64().unwrap()).unwrap();
+            } else {
+                panic!("Unsupported number type");
+            }
+        }
+        serde_json::Value::String(value) => {
+            encode::write_str(byte_buf, value.as_str()).unwrap();
+        }
+        serde_json::Value::Array(value) => {
+            let byte_len_idx = byte_buf.as_slice().len() + 1;
+            encode::write_ext_meta(byte_buf, u32::MAX, 16).unwrap();
+            let byte_array_start_idx = byte_buf.as_slice().len();
+            encode::write_array_len(byte_buf, value.len() as u32).unwrap();
+            for item in value {
+                write_json_to_custom_msgpack(byte_buf, item);
+            }
+            let byte_array_len = (byte_buf.as_slice().len() - byte_array_start_idx) as u32;
+            byte_buf.as_mut_vec()[byte_len_idx..byte_len_idx + 4]
+                .copy_from_slice(&byte_array_len.to_be_bytes());
+        }
+        serde_json::Value::Object(value) => {
+            let byte_len_idx = byte_buf.as_slice().len() + 1;
+            encode::write_ext_meta(byte_buf, u32::MAX, 16).unwrap();
+            let byte_map_start_idx = byte_buf.as_slice().len();
+            encode::write_map_len(byte_buf, value.len() as u32).unwrap();
+            for (key, value) in value {
+                encode::write_str(byte_buf, key.as_str()).unwrap();
+                write_json_to_custom_msgpack(byte_buf, value);
+            }
+            let byte_map_len = (byte_buf.as_slice().len() - byte_map_start_idx) as u32;
+            byte_buf.as_mut_vec()[byte_len_idx..byte_len_idx + 4]
+                .copy_from_slice(&byte_map_len.to_be_bytes());
         }
     }
 }
