@@ -151,6 +151,30 @@ impl<T: Deserialize> Deserialize for HashMap<String, T> {
     }
 }
 
+macro_rules! impl_deserialize_tuple {
+    ($n:literal) => {
+        seq_macro::seq!(N in 0..$n {
+            impl<#(T~N: Deserialize,)*> Deserialize for (#(T~N,)*) {
+                fn deserialize(value: &Value) -> Result<Self, Error> {
+                    let Some(len) = value.array_len() else {
+                        return Err(Error::InvalidType);
+                    };
+
+                    if len != $n {
+                        return Err(Error::InvalidType);
+                    }
+
+                    Ok((#(T~N::deserialize(&value.get_at_index(N))?,)*))
+                }
+            }
+        });
+    }
+}
+
+seq_macro::seq!(N in 2..=10 {
+    impl_deserialize_tuple!(N);
+});
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,5 +269,12 @@ mod tests {
     fn test_deserialize_unit() {
         let value = serde_json::json!(null);
         deserialize_json_value::<()>(value).unwrap();
+    }
+
+    #[test]
+    fn test_deserialize_tuple() {
+        let value = serde_json::json!([1, 2, 3]);
+        let result: (i32, i32, i32) = deserialize_json_value(value).unwrap();
+        assert_eq!(result, (1, 2, 3));
     }
 }
