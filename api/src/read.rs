@@ -204,26 +204,29 @@ seq_macro::seq!(N in 2..=10 {
     impl_deserialize_tuple!(N);
 });
 
-impl<T: Deserialize, const N: usize> Deserialize for [T; N] {
-    fn deserialize(value: &Value) -> Result<Self, Error> {
-        let Some(len) = value.array_len() else {
-            return Err(Error::InvalidType);
-        };
+macro_rules! impl_deserialize_array {
+    ($n:literal) => {
+        impl<T: Deserialize> Deserialize for [T; $n] {
+            fn deserialize(value: &Value) -> Result<Self, Error> {
+                let Some(len) = value.array_len() else {
+                    return Err(Error::InvalidType);
+                };
 
-        if len != N {
-            return Err(Error::InvalidType);
+                if len != $n {
+                    return Err(Error::InvalidType);
+                }
+
+                seq_macro::seq!(N in 0..$n {
+                    Ok([#(T::deserialize(&value.get_at_index(N))?,)*])
+                })
+            }
         }
-
-        // We need to collect into a Vec first, then try to convert to array
-        let mut vec = Vec::with_capacity(N);
-        for i in 0..N {
-            vec.push(T::deserialize(&value.get_at_index(i))?);
-        }
-
-        // Convert Vec to array
-        vec.try_into().map_err(|_| Error::InvalidType)
-    }
+    };
 }
+
+seq_macro::seq!(N in 0..=32 {
+    impl_deserialize_array!(N);
+});
 
 #[cfg(test)]
 mod tests {
@@ -368,5 +371,19 @@ mod tests {
 
         let value = serde_json::json!([1, 2, 3, 4]);
         assert!(deserialize_json_value::<[i32; 3]>(value).is_err());
+
+        // Test edge cases
+        let value = serde_json::json!([]);
+        let result: [i32; 0] = deserialize_json_value(value).unwrap();
+        assert_eq!(result, [] as [i32; 0]);
+
+        let value = serde_json::json!([42]);
+        let result: [i32; 1] = deserialize_json_value(value).unwrap();
+        assert_eq!(result, [42]);
+
+        // Test larger array
+        let value = serde_json::json!([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        let result: [i32; 10] = deserialize_json_value(value).unwrap();
+        assert_eq!(result, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     }
 }
