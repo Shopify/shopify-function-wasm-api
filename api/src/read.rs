@@ -3,7 +3,7 @@
 //! This consists primarily of the `Deserialize` trait for converting [`Value`] into other types.
 
 use crate::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 
 /// An error that can occur when deserializing a value.
 #[derive(Debug, thiserror::Error)]
@@ -109,6 +109,17 @@ impl Deserialize for String {
     }
 }
 
+impl Deserialize for char {
+    fn deserialize(value: &Value) -> Result<Self, Error> {
+        let s = value.as_string().ok_or(Error::InvalidType)?;
+        let mut chars = s.chars();
+        match (chars.next(), chars.next()) {
+            (Some(c), None) => Ok(c),
+            _ => Err(Error::InvalidType),
+        }
+    }
+}
+
 impl<T: Deserialize> Deserialize for Option<T> {
     fn deserialize(value: &Value) -> Result<Self, Error> {
         if value.is_null() {
@@ -151,6 +162,24 @@ impl<T: Deserialize> Deserialize for HashMap<String, T> {
     }
 }
 
+impl<T: Deserialize> Deserialize for BTreeMap<String, T> {
+    fn deserialize(value: &Value) -> Result<Self, Error> {
+        let Some(obj_len) = value.obj_len() else {
+            return Err(Error::InvalidType);
+        };
+
+        let mut map = BTreeMap::new();
+
+        for i in 0..obj_len {
+            let key = value.get_obj_key_at_index(i).ok_or(Error::InvalidType)?;
+            let value = value.get_at_index(i);
+            map.insert(key, T::deserialize(&value)?);
+        }
+
+        Ok(map)
+    }
+}
+
 macro_rules! impl_deserialize_tuple {
     ($n:literal) => {
         seq_macro::seq!(N in 0..$n {
@@ -174,6 +203,28 @@ macro_rules! impl_deserialize_tuple {
 seq_macro::seq!(N in 2..=10 {
     impl_deserialize_tuple!(N);
 });
+
+impl<T: Deserialize, const N: usize> Deserialize for [T; N] {
+    fn deserialize(value: &Value) -> Result<Self, Error> {
+        let Some(len) = value.array_len() else {
+            return Err(Error::InvalidType);
+        };
+
+        if len != N {
+            return Err(Error::InvalidType);
+        }
+
+        // We need to collect into a Vec first, then try to convert to array
+        let mut vec = Vec::with_capacity(N);
+        for i in 0..N {
+            vec.push(T::deserialize(&value.get_at_index(i))?);
+        }
+
+        // Convert Vec to array
+        vec.try_into()
+            .map_err(|_| Error::InvalidType)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -236,6 +287,20 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_char() {
+        let value = serde_json::json!("a");
+        let result: char = deserialize_json_value(value).unwrap();
+        assert_eq!(result, 'a');
+
+        // Test invalid cases
+        let value = serde_json::json!("ab");
+        assert!(deserialize_json_value::<char>(value).is_err());
+
+        let value = serde_json::json!("");
+        assert!(deserialize_json_value::<char>(value).is_err());
+    }
+
+    #[test]
     fn test_deserialize_option() {
         [None, Some(1), Some(2)].iter().for_each(|&opt| {
             let value = serde_json::json!(opt);
@@ -266,6 +331,20 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_btree_map() {
+        let value = serde_json::json!({
+            "key1": "value1",
+            "key2": "value2",
+        });
+        let result: BTreeMap<String, String> = deserialize_json_value(value).unwrap();
+        let expected = BTreeMap::from([
+            ("key1".to_string(), "value1".to_string()),
+            ("key2".to_string(), "value2".to_string()),
+        ]);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
     fn test_deserialize_unit() {
         let value = serde_json::json!(null);
         deserialize_json_value::<()>(value).unwrap();
@@ -276,5 +355,19 @@ mod tests {
         let value = serde_json::json!([1, 2, 3]);
         let result: (i32, i32, i32) = deserialize_json_value(value).unwrap();
         assert_eq!(result, (1, 2, 3));
+    }
+
+    #[test]
+    fn test_deserialize_fixed_array() {
+        let value = serde_json::json!([1, 2, 3]);
+        let result: [i32; 3] = deserialize_json_value(value).unwrap();
+        assert_eq!(result, [1, 2, 3]);
+
+        // Test wrong size
+        let value = serde_json::json!([1, 2]);
+        assert!(deserialize_json_value::<[i32; 3]>(value).is_err());
+
+        let value = serde_json::json!([1, 2, 3, 4]);
+        assert!(deserialize_json_value::<[i32; 3]>(value).is_err());
     }
 }
