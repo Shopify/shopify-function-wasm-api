@@ -3,7 +3,7 @@
 //! This consists primarily of the `Deserialize` trait for converting [`Value`] into other types.
 
 use crate::Value;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 
 /// An error that can occur when deserializing a value.
 #[derive(Debug, thiserror::Error)]
@@ -221,8 +221,7 @@ impl<T: Deserialize, const N: usize> Deserialize for [T; N] {
         }
 
         // Convert Vec to array
-        vec.try_into()
-            .map_err(|_| Error::InvalidType)
+        vec.try_into().map_err(|_| Error::InvalidType)
     }
 }
 
