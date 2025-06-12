@@ -222,4 +222,15 @@ __attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
 __attribute__((import_name("shopify_function_intern_utf8_str")))
 extern InternedStringId shopify_function_intern_utf8_str(ContextPtr context, const uint8_t* ptr, size_t len);
 
+/**
+ * Logs a UTF-8 string output value
+ * @param context The context pointer
+ * @param ptr The string data
+ * @param len The length of the string
+ * @return WriteResult indicating success or failure
+ */
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_log_utf8_str")))
+extern WriteResult shopify_function_log_utf8_str(ContextPtr context, const uint8_t* ptr, size_t len);
+
 #endif // SHOPIFY_FUNCTION_H

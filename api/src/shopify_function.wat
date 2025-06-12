@@ -277,4 +277,16 @@
   (import "shopify_function_v1" "shopify_function_intern_utf8_str" 
     (func (param $context i32) (param $ptr i32) (param $len i32) (result i32))
   )
+
+  ;; Logs a string output value.
+  ;; The string data is copied from WebAssembly memory.
+  ;; Parameters:
+  ;;   - context: i32 pointer to the context.
+  ;;   - ptr: i32 pointer to string data in WebAssembly memory.
+  ;;   - len: i32 length of string in bytes.
+  ;; Returns:
+  ;;   - i32 status code indicating success or failure
+  (import "shopify_function_v1" "shopify_function_log_utf8_str" 
+    (func (param $context i32) (param $ptr i32) (param $len i32) (result i32))
+  )
 )

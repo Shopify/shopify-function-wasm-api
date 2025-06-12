@@ -1,4 +1,5 @@
 mod alloc;
+pub mod log;
 pub mod read;
 mod string_interner;
 pub mod write;
@@ -24,6 +25,7 @@ struct Context {
     write_state: State,
     write_parent_state_stack: Vec<State>,
     string_interner: StringInterner,
+    logs: LogBuffer,
 }
 
 #[derive(Debug)]
@@ -41,6 +43,7 @@ impl Context {
             write_state: State::Start,
             write_parent_state_stack: Vec::new(),
             string_interner: StringInterner::new(),
+            logs: LogBuffer::new(),
         }
     }
 
@@ -89,6 +92,8 @@ macro_rules! decorate_for_target {
 }
 
 pub(crate) use decorate_for_target;
+
+use crate::log::LogBuffer;
 
 #[cfg(target_family = "wasm")]
 #[export_name = "_shopify_function_context_new"]
