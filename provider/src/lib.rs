@@ -5,12 +5,21 @@ pub mod write;
 
 use rmp::encode::ByteBuf;
 use shopify_function_wasm_api_core::ContextPtr;
-use std::ptr::NonNull;
+use std::{cell::RefCell, ptr::NonNull};
 use string_interner::StringInterner;
 use write::State;
 
 pub const PROVIDER_MODULE_NAME: &str =
     concat!("shopify_function_v", env!("CARGO_PKG_VERSION_MAJOR"));
+
+// This serves 2 purposes:
+// 1. Creating multiple contexts in Wasm won't cause a hang waiting for input
+//    on stdin.
+// 2. Data in the context can be read by the host environment.
+// Thread local values live for the same amount of time as the Wasm instance.
+thread_local! {
+    static CONTEXT: RefCell<Option<ContextPtr>> = const { RefCell::new(None) };
+}
 
 #[cfg(target_pointer_width = "64")]
 type DoubleUsize = u128;
@@ -93,12 +102,22 @@ pub(crate) use decorate_for_target;
 #[cfg(target_family = "wasm")]
 #[export_name = "_shopify_function_context_new"]
 extern "C" fn shopify_function_context_new() -> ContextPtr {
-    Box::into_raw(Box::new(Context::new_from_stdin())) as _
+    // Assuming this is called from a Wasm module, we should return a
+    // pre-existing context if there is one to avoid trying to read input
+    // multiple times.
+    CONTEXT.with_borrow_mut(|option_ptr| {
+        *option_ptr.get_or_insert_with(|| Box::into_raw(Box::new(Context::new_from_stdin())) as _)
+    })
 }
 
 #[cfg(not(target_family = "wasm"))]
 pub fn shopify_function_context_new_from_msgpack_bytes(bytes: Vec<u8>) -> ContextPtr {
-    Box::into_raw(Box::new(Context::new(bytes))) as _
+    // Assuming this is called from a unit test, we should reset the context
+    // with the input passed as an argument instead of using any context that
+    // may have been present before.
+    CONTEXT.with_borrow_mut(|option_ptr| {
+        *option_ptr.insert(Box::into_raw(Box::new(Context::new(bytes))) as _)
+    })
 }
 
 decorate_for_target! {
