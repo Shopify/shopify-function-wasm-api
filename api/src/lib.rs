@@ -29,6 +29,7 @@ use std::{
     sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
 };
 
+pub mod log;
 pub mod read;
 pub mod write;
 
@@ -87,6 +88,9 @@ extern "C" {
     fn shopify_function_output_finish_object(context: ContextPtr) -> usize;
     fn shopify_function_output_new_array(context: ContextPtr, len: usize) -> usize;
     fn shopify_function_output_finish_array(context: ContextPtr) -> usize;
+
+    // Log API.
+    fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize) -> usize;
 
     // Other.
     fn shopify_function_intern_utf8_str(context: ContextPtr, ptr: *const u8, len: usize) -> usize;
@@ -209,6 +213,17 @@ mod provider_fallback {
     }
     pub(crate) unsafe fn shopify_function_output_finish_array(context: ContextPtr) -> usize {
         shopify_function_provider::write::shopify_function_output_finish_array(context) as usize
+    }
+
+    // Logging.
+    pub(crate) unsafe fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize) -> usize {
+        let result = shopify_function_provider::log::shopify_function_log_new_utf8_str(len);
+        let write_result = (result >> usize::BITS) as usize;
+        let dst = result as usize;
+        if write_result == WriteResult::Ok as usize {
+            std::ptr::copy(ptr as _, dst as _, len);
+        }
+        write_result
     }
 
     // Other.
