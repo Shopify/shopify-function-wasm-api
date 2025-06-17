@@ -31,8 +31,10 @@ enum Value {
     Array(Vec<Self>),
 }
 
-static FOO_INTERNED_STRING_ID: CachedInternedStringId = CachedInternedStringId::new("foo");
-static BAR_INTERNED_STRING_ID: CachedInternedStringId = CachedInternedStringId::new("bar");
+thread_local! {
+    static FOO_INTERNED_STRING_ID: CachedInternedStringId = CachedInternedStringId::new("foo");
+    static BAR_INTERNED_STRING_ID: CachedInternedStringId = CachedInternedStringId::new("bar");
+}
 
 impl Deserialize for Value {
     fn deserialize(value: &ApiValue) -> Result<Self, ReadError> {
@@ -55,11 +57,13 @@ impl Deserialize for Value {
                 // special case to exercise string interning and get_obj_prop
                 let raw_value = match key.as_str() {
                     "foo" => {
-                        let interned_string_id = FOO_INTERNED_STRING_ID.load_from_value(value);
+                        let interned_string_id =
+                            FOO_INTERNED_STRING_ID.with(|id| id.load_from_value(value));
                         value.get_interned_obj_prop(interned_string_id)
                     }
                     "bar" => {
-                        let interned_string_id = BAR_INTERNED_STRING_ID.load_from_value(value);
+                        let interned_string_id =
+                            BAR_INTERNED_STRING_ID.with(|id| id.load_from_value(value));
                         value.get_interned_obj_prop(interned_string_id)
                     }
                     "abc" | "def" => value.get_obj_prop(key.as_str()),
@@ -95,12 +99,12 @@ impl Serialize for Value {
                         match key.as_str() {
                             "foo" => {
                                 let interned_string_id =
-                                    FOO_INTERNED_STRING_ID.load_from_context(ctx);
+                                    FOO_INTERNED_STRING_ID.with(|id| id.load_from_context(ctx));
                                 ctx.write_interned_utf8_str(interned_string_id)?;
                             }
                             "bar" => {
                                 let interned_string_id =
-                                    BAR_INTERNED_STRING_ID.load_from_context(ctx);
+                                    BAR_INTERNED_STRING_ID.with(|id| id.load_from_context(ctx));
                                 ctx.write_interned_utf8_str(interned_string_id)?;
                             }
                             _ => ctx.write_utf8_str(key)?,
