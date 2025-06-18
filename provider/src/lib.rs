@@ -12,6 +12,11 @@ use write::State;
 pub const PROVIDER_MODULE_NAME: &str =
     concat!("shopify_function_v", env!("CARGO_PKG_VERSION_MAJOR"));
 
+#[cfg(target_family = "wasm")]
+thread_local! {
+    static INPUT: std::cell::RefCell<Vec<u8>> = std::cell::RefCell::new(Vec::new());
+}
+
 #[cfg(target_pointer_width = "64")]
 type DoubleUsize = u128;
 #[cfg(target_pointer_width = "32")]
@@ -45,15 +50,8 @@ impl Context {
     }
 
     #[cfg(target_family = "wasm")]
-    fn new_from_stdin() -> Self {
-        use std::io::Read;
-        let mut input_bytes: Vec<u8> = vec![];
-        let mut stdin = std::io::stdin();
-        // Temporary use of stdin, to copy data into the Wasm linear memory.
-        // Initial benchmarking doesn't seem to suggest that this represents
-        // a source of performance overhead.
-        stdin.read_to_end(&mut input_bytes).unwrap();
-
+    fn new_from_buffer() -> Self {
+        let input_bytes = INPUT.with_borrow_mut(|input| std::mem::take(input));
         Self::new(input_bytes)
     }
 
@@ -93,7 +91,7 @@ pub(crate) use decorate_for_target;
 #[cfg(target_family = "wasm")]
 #[export_name = "_shopify_function_context_new"]
 extern "C" fn shopify_function_context_new() -> ContextPtr {
-    Box::into_raw(Box::new(Context::new_from_stdin())) as _
+    Box::into_raw(Box::new(Context::new_from_buffer())) as _
 }
 
 #[cfg(not(target_family = "wasm"))]
@@ -111,4 +109,13 @@ decorate_for_target! {
             Err(_) => 0,
         }
     }
+}
+
+#[cfg(target_family = "wasm")]
+#[no_mangle]
+pub extern "C" fn initialize(input_len: i32) -> i32 {
+    INPUT.with_borrow_mut(|input| {
+        *input = vec![0; input_len as usize];
+        input.as_ptr() as i32
+    })
 }
