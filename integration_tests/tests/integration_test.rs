@@ -43,7 +43,7 @@ fn assert_fuel_consumed_within_threshold(target_fuel: u64, fuel_consumed: u64) {
     }
 }
 
-fn run_example(example: &str, input_bytes: Vec<u8>) -> Result<(Vec<u8>, u64)> {
+fn run_example(example: &str, input_bytes: Vec<u8>, use_wasi: bool) -> Result<(Vec<u8>, u64)> {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let workspace_root = std::path::PathBuf::from(manifest_dir).join("..");
     let engine = Engine::new(Config::new().consume_fuel(true))?;
@@ -69,20 +69,28 @@ fn run_example(example: &str, input_bytes: Vec<u8>) -> Result<(Vec<u8>, u64)> {
     deterministic_wasi_ctx::replace_scheduling_functions_for_wasi_preview_0(&mut linker)
         .expect("Failed to replace scheduling functions in wasi-ctx");
 
-    let stdin = MemoryInputPipe::new(input_bytes);
     let stderr = MemoryOutputPipe::new(usize::MAX);
     let stdout = MemoryOutputPipe::new(usize::MAX);
     let mut wasi_builder = WasiCtxBuilder::new();
-    wasi_builder
-        .stdin(stdin)
-        .stdout(stdout.clone())
-        .stderr(stderr.clone());
+    wasi_builder.stdout(stdout.clone()).stderr(stderr.clone());
+    if use_wasi {
+        let stdin = MemoryInputPipe::new(input_bytes.clone());
+        wasi_builder.stdin(stdin);
+    }
     deterministic_wasi_ctx::add_determinism_to_wasi_ctx_builder(&mut wasi_builder);
     let wasi = wasi_builder.build_p1();
     let mut store = Store::new(&engine, wasi);
-    store.set_fuel(STARTING_FUEL)?;
 
     let provider_instance = linker.instantiate(&mut store, &provider)?;
+    if !use_wasi {
+        store.set_fuel(STARTING_FUEL)?;
+        let init_func = provider_instance.get_typed_func::<i32, i32>(&mut store, "initialize")?;
+        let input_buffer_ptr = init_func.call(&mut store, input_bytes.len() as i32)?;
+        provider_instance
+            .get_memory(&mut store, "memory")
+            .unwrap()
+            .write(&mut store, input_buffer_ptr as usize, &input_bytes)?;
+    }
     linker.instance(
         &mut store,
         shopify_function_provider::PROVIDER_MODULE_NAME,
@@ -91,6 +99,7 @@ fn run_example(example: &str, input_bytes: Vec<u8>) -> Result<(Vec<u8>, u64)> {
 
     let instance = linker.instantiate(&mut store, &module)?;
 
+    store.set_fuel(STARTING_FUEL)?;
     let func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
 
     let result = func.call(&mut store, ());
@@ -151,7 +160,7 @@ fn prepare_wasi_json_input(input: serde_json::Value) -> Result<Vec<u8>> {
 
 fn run_wasm_api_example(example: &str, input: serde_json::Value) -> Result<serde_json::Value> {
     let input_bytes = prepare_wasm_api_input(input)?;
-    let (output, _fuel) = run_example(example, input_bytes)?;
+    let (output, _fuel) = run_example(example, input_bytes, false)?;
     decode_msgpack_output(output)
 }
 
@@ -341,10 +350,11 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
     let input = generate_cart_with_size(2, true);
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
-    let (_, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
+    let (_, wasm_api_fuel) =
+        run_example("cart-checkout-validation-wasm-api", wasm_api_input, false)?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(15880, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(13479, wasm_api_fuel);
     Ok(())
 }
 
@@ -361,12 +371,12 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
 
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (wasm_api_output, wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
+        run_example("cart-checkout-validation-wasm-api", wasm_api_input, false)?;
     let wasm_api_value = decode_msgpack_output(wasm_api_output)?;
 
     let wasi_json_input = prepare_wasi_json_input(input)?;
     let (non_wasm_api_output, non_wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasi-json", wasi_json_input)?;
+        run_example("cart-checkout-validation-wasi-json", wasi_json_input, true)?;
     let non_wasm_api_value = decode_json_output(non_wasm_api_output)?;
 
     assert_eq!(wasm_api_value, non_wasm_api_value);
@@ -384,7 +394,7 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
         wasm_api_fuel, non_wasm_api_fuel, improvement
     );
 
-    assert_fuel_consumed_within_threshold(15880, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(13479, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(23858, non_wasm_api_fuel);
 
     Ok(())
@@ -403,12 +413,12 @@ fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
 
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (wasm_api_output, wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
+        run_example("cart-checkout-validation-wasm-api", wasm_api_input, false)?;
     let wasm_api_value = decode_msgpack_output(wasm_api_output)?;
 
     let wasi_json_input = prepare_wasi_json_input(input)?;
     let (non_wasm_api_output, non_wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasi-json", wasi_json_input)?;
+        run_example("cart-checkout-validation-wasi-json", wasi_json_input, true)?;
     let non_wasm_api_value = decode_json_output(non_wasm_api_output)?;
 
     assert_eq!(wasm_api_value, non_wasm_api_value);
@@ -427,7 +437,7 @@ fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
     );
 
     // Add fuel consumption threshold checks for both implementations
-    assert_fuel_consumed_within_threshold(17826, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(13485, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(736695, non_wasm_api_fuel);
 
     Ok(())
