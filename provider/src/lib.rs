@@ -1,4 +1,5 @@
 mod alloc;
+pub mod log;
 pub mod read;
 mod string_interner;
 pub mod write;

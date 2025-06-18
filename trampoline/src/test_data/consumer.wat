@@ -25,6 +25,9 @@
     (import "shopify_function_v1" "shopify_function_output_new_interned_utf8_str" (func (param i32 i32) (result i32)))
     (import "shopify_function_v1" "shopify_function_output_finalize" (func (param i32) (result i32)))
 
+    ;; Log.
+    (import "shopify_function_v1" "shopify_function_log_new_utf8_str" (func (param i32 i32) (result i32)))
+
     ;; Memory
     (memory 1)
 

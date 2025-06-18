@@ -1,3 +1,4 @@
+pub mod log;
 pub mod read;
 pub mod write;
 
