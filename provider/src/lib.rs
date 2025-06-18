@@ -14,7 +14,7 @@ pub const PROVIDER_MODULE_NAME: &str =
 
 #[cfg(target_family = "wasm")]
 thread_local! {
-    static INPUT: std::cell::RefCell<Vec<u8>> = std::cell::RefCell::new(Vec::new());
+    static INPUT: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 #[cfg(target_pointer_width = "64")]
@@ -51,7 +51,7 @@ impl Context {
 
     #[cfg(target_family = "wasm")]
     fn new_from_buffer() -> Self {
-        let input_bytes = INPUT.with_borrow_mut(|input| std::mem::take(input));
+        let input_bytes = INPUT.with_borrow_mut(std::mem::take);
         Self::new(input_bytes)
     }
 
