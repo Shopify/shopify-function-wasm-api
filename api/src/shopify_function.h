@@ -123,15 +123,6 @@ __attribute__((import_name("shopify_function_output_new_null")))
 extern WriteResult shopify_function_output_new_null(ContextPtr context);
 
 /**
- * Finalizes the output and returns the result
- * @param context The context pointer
- * @return WriteResult indicating success or failure
- */
-__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
-__attribute__((import_name("shopify_function_output_finalize")))
-extern WriteResult shopify_function_output_finalize(ContextPtr context);
-
-/**
  * Creates a new 32-bit integer output value
  * @param context The context pointer
  * @param value The integer value

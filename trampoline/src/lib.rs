@@ -41,10 +41,6 @@ static IMPORTS: &[(&str, &str)] = &[
         "_shopify_function_output_new_null",
     ),
     (
-        "shopify_function_output_finalize",
-        "_shopify_function_output_finalize",
-    ),
-    (
         "shopify_function_output_new_i32",
         "_shopify_function_output_new_i32",
     ),

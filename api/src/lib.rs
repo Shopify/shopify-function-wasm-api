@@ -13,7 +13,6 @@
 //!     let input = context.input_get()?;
 //!     let value: i32 = Deserialize::deserialize(&input)?;
 //!     value.serialize(&mut context)?;
-//!     context.finalize_output()?;
 //!     Ok(())
 //! }
 //! ```
@@ -71,7 +70,6 @@ extern "C" {
     // Write API.
     fn shopify_function_output_new_bool(context: ContextPtr, bool: u32) -> usize;
     fn shopify_function_output_new_null(context: ContextPtr) -> usize;
-    fn shopify_function_output_finalize(context: ContextPtr) -> usize;
     fn shopify_function_output_new_i32(context: ContextPtr, int: i32) -> usize;
     fn shopify_function_output_new_f64(context: ContextPtr, float: f64) -> usize;
     fn shopify_function_output_new_utf8_str(
@@ -161,9 +159,6 @@ mod provider_fallback {
     }
     pub(crate) unsafe fn shopify_function_output_new_null(context: ContextPtr) -> usize {
         shopify_function_provider::write::shopify_function_output_new_null(context) as usize
-    }
-    pub(crate) unsafe fn shopify_function_output_finalize(context: ContextPtr) -> usize {
-        shopify_function_provider::write::shopify_function_output_finalize(context) as usize
     }
     pub(crate) unsafe fn shopify_function_output_new_i32(context: ContextPtr, int: i32) -> usize {
         shopify_function_provider::write::shopify_function_output_new_i32(context, int) as usize

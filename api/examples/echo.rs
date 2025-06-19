@@ -11,8 +11,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let value = Value::deserialize(&input)?;
     let result = echo(value);
     result.serialize(&mut context)?;
-    context.finalize_output()?;
-
     Ok(())
 }
 

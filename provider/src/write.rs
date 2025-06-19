@@ -1,7 +1,6 @@
 use crate::{decorate_for_target, Context, DoubleUsize};
 use rmp::encode;
 use shopify_function_wasm_api_core::{write::WriteResult, ContextPtr};
-use std::io::Write;
 
 mod state;
 
@@ -220,33 +219,6 @@ decorate_for_target! {
     }
 }
 
-decorate_for_target! {
-    fn shopify_function_output_finalize(context: ContextPtr) -> WriteResult {
-        match Context::mut_from_raw(context) {
-            Ok(context) => {
-                let Context {
-                    output_bytes,
-                    write_state,
-                    ..
-                } = &context;
-                if *write_state != State::End {
-                    return WriteResult::ValueNotFinished;
-                }
-                let mut stdout = std::io::stdout();
-                if stdout.write_all(output_bytes.as_slice()).is_err() {
-                    return WriteResult::IoError;
-                }
-                if stdout.flush().is_err() {
-                    return WriteResult::IoError;
-                }
-                let _ = unsafe { Box::from_raw(context as *mut Context) }; // drop the context
-                WriteResult::Ok
-            }
-            Err(_) => WriteResult::IoError,
-        }
-    }
-}
-
 #[cfg(not(target_family = "wasm"))]
 pub fn shopify_function_output_finalize_and_return_msgpack_bytes(
     context: ContextPtr,
@@ -267,6 +239,20 @@ pub fn shopify_function_output_finalize_and_return_msgpack_bytes(
         }
         Err(_) => (WriteResult::IoError, Vec::new()),
     }
+}
+
+#[cfg(target_family = "wasm")]
+#[no_mangle]
+pub fn finalize() -> DoubleUsize {
+    use crate::CONTEXT;
+
+    CONTEXT.with_borrow(|context| {
+        let context = context.unwrap();
+        let context = Context::ref_from_raw(context).unwrap();
+        let output_ptr = context.output_bytes.as_vec().as_ptr();
+        let output_len = context.output_bytes.as_vec().len();
+        ((output_ptr as DoubleUsize) << usize::BITS) | output_len as DoubleUsize
+    })
 }
 
 #[cfg(test)]

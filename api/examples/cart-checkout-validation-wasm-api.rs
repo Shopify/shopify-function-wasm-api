@@ -38,8 +38,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         1,
     )?;
 
-    context.finalize_output()?;
-
     Ok(())
 }
 
