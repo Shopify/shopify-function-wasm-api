@@ -23,10 +23,11 @@ use shopify_function_wasm_api_core::{
     read::{ErrorCode, NanBox, Val, ValueRef},
     ContextPtr,
 };
-use std::{
-    ptr::NonNull,
-    sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
-};
+use std::ptr::NonNull;
+#[cfg(target_pointer_width = "32")]
+use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(target_pointer_width = "64")]
+use std::sync::Mutex;
 
 pub mod read;
 pub mod write;
@@ -237,8 +238,10 @@ impl InternedStringId {
 /// A mechanism for caching interned string IDs.
 pub struct CachedInternedStringId {
     value: &'static str,
-    interned_string_id: AtomicUsize,
-    context: AtomicPtr<std::ffi::c_void>,
+    #[cfg(target_pointer_width = "32")]
+    interned_string_id_and_context: AtomicU64,
+    #[cfg(target_pointer_width = "64")]
+    interned_string_id_and_context: Mutex<(usize, usize)>,
 }
 
 impl CachedInternedStringId {
@@ -246,8 +249,10 @@ impl CachedInternedStringId {
     pub const fn new(value: &'static str) -> Self {
         Self {
             value,
-            interned_string_id: AtomicUsize::new(usize::MAX),
-            context: AtomicPtr::new(std::ptr::null_mut()),
+            #[cfg(target_pointer_width = "32")]
+            interned_string_id_and_context: AtomicU64::new(u64::MAX),
+            #[cfg(target_pointer_width = "64")]
+            interned_string_id_and_context: Mutex::new((usize::MAX, usize::MAX)),
         }
     }
 
@@ -261,15 +266,35 @@ impl CachedInternedStringId {
         self.load_from_context_ptr(value.context.as_ptr() as _)
     }
 
+    #[cfg(target_pointer_width = "32")]
     fn load_from_context_ptr(&self, context: ContextPtr) -> InternedStringId {
-        if self.context.load(Ordering::Relaxed) != context {
+        let interned_string_id_and_context =
+            self.interned_string_id_and_context.load(Ordering::Relaxed);
+        if interned_string_id_and_context & (u32::MAX as u64) == context as u64 {
+            InternedStringId((interned_string_id_and_context >> 32) as usize)
+        } else {
             let id = unsafe {
                 shopify_function_intern_utf8_str(context, self.value.as_ptr(), self.value.len())
             };
-            self.interned_string_id.store(id, Ordering::Relaxed);
-            self.context.store(context, Ordering::Relaxed);
+            let interned_string_id_and_context = ((id as u64) << 32) | (context as u64);
+            self.interned_string_id_and_context
+                .store(interned_string_id_and_context, Ordering::Relaxed);
+            InternedStringId(id as usize)
         }
-        InternedStringId(self.interned_string_id.load(Ordering::Relaxed))
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    fn load_from_context_ptr(&self, context: ContextPtr) -> InternedStringId {
+        let mut interned_string_id_and_context =
+            self.interned_string_id_and_context.lock().unwrap();
+        if interned_string_id_and_context.1 != context as usize {
+            let id = unsafe {
+                shopify_function_intern_utf8_str(context, self.value.as_ptr(), self.value.len())
+            };
+            interned_string_id_and_context.0 = id;
+            interned_string_id_and_context.1 = context as usize;
+        }
+        InternedStringId(interned_string_id_and_context.0)
     }
 }
 

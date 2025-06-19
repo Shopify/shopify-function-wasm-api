@@ -2,9 +2,10 @@
 
 // Force the compiler to keep these imports by declaring function pointers
 // This file is needed to test the imports of the shopify_function.h file
-// On updating this file, regenerate the header_test.wasm file with the
-// following command: clang --target=wasm32-wasi -nostdlib -Wl,--no-entry
-// -Wl,--export-all -Wl,--allow-undefined -o header_test.wasm header_test.c
+// To update this file you will need a compiler toolchain:
+// `brew install llvm lld`
+// On updating this file, regenerate the header_test.wasm file with the following command:
+// `/opt/homebrew/opt/llvm/bin/clang --target=wasm32-wasip1 -I .. -nostdlib -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -o header_test.wasm header_test.c`
 
 volatile void* imports[] = {
     (void*)shopify_function_context_new,
