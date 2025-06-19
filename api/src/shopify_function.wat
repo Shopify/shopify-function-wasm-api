@@ -151,18 +151,6 @@
     (func (param $context i32) (result i32))
   )
 
-  ;; Finalizes the output, making it available to the host.
-  ;; Must be called after output construction is complete.
-  ;; This is typically the last API call made before function returns.
-  ;; Signals that the response is complete and ready to be used.
-  ;; Parameters:
-  ;;   - context: i32 pointer to the context.
-  ;; Returns:
-  ;;   - i32 status code indicating success or failure
-  (import "shopify_function_v1" "shopify_function_output_finalize" 
-    (func (param $context i32) (result i32))
-  )
-
   ;; Writes a new integer output value.
   ;; Used for numeric values that fit within 32 bits.
   ;; More efficient than f64 for integral values.

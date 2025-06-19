@@ -18,7 +18,6 @@ volatile void* imports[] = {
     (void*)shopify_function_input_get_obj_key_at_index,
     (void*)shopify_function_output_new_bool,
     (void*)shopify_function_output_new_null,
-    (void*)shopify_function_output_finalize,
     (void*)shopify_function_output_new_i32,
     (void*)shopify_function_output_new_f64,
     (void*)shopify_function_output_new_utf8_str,
@@ -27,5 +26,4 @@ volatile void* imports[] = {
     (void*)shopify_function_output_finish_object,
     (void*)shopify_function_output_new_array,
     (void*)shopify_function_output_finish_array,
-    (void*)shopify_function_intern_utf8_str
-};
+    (void*)shopify_function_intern_utf8_str};
