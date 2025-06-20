@@ -1,6 +1,5 @@
 (module
     ;; General
-    (import "shopify_function_v1" "shopify_function_context_new" (func))
     (import "shopify_function_v1" "shopify_function_intern_utf8_str" (func (param i32 i32) (result i32)))
 
     ;; Read.

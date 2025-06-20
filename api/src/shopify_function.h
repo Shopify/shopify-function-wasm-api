@@ -16,14 +16,6 @@ typedef size_t InternedStringId;
 // Import module declaration
 #define SHOPIFY_FUNCTION_IMPORT_MODULE "shopify_function_v1"
 
-// Common API
-/**
- * Creates a new context for the Shopify Function execution
- */
-__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
-__attribute__((import_name("shopify_function_context_new")))
-extern void shopify_function_context_new(void);
-
 // Read API
 /**
  * Gets the input value from the context

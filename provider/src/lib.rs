@@ -105,13 +105,17 @@ macro_rules! decorate_for_target {
 pub(crate) use decorate_for_target;
 
 #[cfg(target_family = "wasm")]
-#[export_name = "_shopify_function_context_new"]
-extern "C" fn shopify_function_context_new() {
-    CONTEXT.with_borrow_mut(|context| *context = Context::new_from_stdin())
+#[export_name = "initialize"]
+extern "C" fn initialize(input_len: usize) -> *const u8 {
+    CONTEXT.with_borrow_mut(|context| {
+        *context = Context::new_from_stdin();
+        context.input_bytes = vec![0; input_len];
+        context.input_bytes.as_ptr()
+    })
 }
 
 #[cfg(not(target_family = "wasm"))]
-pub fn shopify_function_context_new_from_msgpack_bytes(bytes: Vec<u8>) {
+pub fn initialize_from_msgpack_bytes(bytes: Vec<u8>) {
     CONTEXT.with_borrow_mut(|context| *context = Context::new(bytes))
 }
 

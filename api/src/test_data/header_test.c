@@ -8,7 +8,6 @@
 // `/opt/homebrew/opt/llvm/bin/clang --target=wasm32-wasip1 -I .. -nostdlib -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -o header_test.wasm header_test.c`
 
 volatile void* imports[] = {
-    (void*)shopify_function_context_new,
     (void*)shopify_function_input_get,
     (void*)shopify_function_input_get_val_len,
     (void*)shopify_function_input_read_utf8_str,

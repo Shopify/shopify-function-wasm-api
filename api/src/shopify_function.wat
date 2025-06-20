@@ -7,15 +7,6 @@
 ;; host and guest.
 
 (module
-  ;; Creates and returns a new Context handle.
-  ;;
-  ;; The context represents an isolated scope in which values and state
-  ;; are bound. Every API call operates within this context, ensuring
-  ;; that the execution environment remains distinct and independent.
-  (import "shopify_function_v1" "shopify_function_context_new" 
-    (func)
-  )
-
   ;; Read API Functions - Used to access input data.
 
   ;; Retrieves the root input value from the context.

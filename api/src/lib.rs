@@ -32,9 +32,6 @@ pub use write::Serialize;
 #[cfg(target_family = "wasm")]
 #[link(wasm_import_module = "shopify_function_v1")]
 extern "C" {
-    // Common API.
-    fn shopify_function_context_new();
-
     // Read API.
     fn shopify_function_input_get() -> Val;
     fn shopify_function_input_get_val_len(scope: Val) -> usize;
@@ -408,7 +405,6 @@ impl Context {
 
         #[cfg(target_family = "wasm")]
         {
-            unsafe { shopify_function_context_new() };
             Self
         }
     }
@@ -419,7 +415,7 @@ impl Context {
     #[cfg(not(target_family = "wasm"))]
     pub fn new_with_input(input: serde_json::Value) -> Self {
         let bytes = rmp_serde::to_vec(&input).unwrap();
-        shopify_function_provider::shopify_function_context_new_from_msgpack_bytes(bytes);
+        shopify_function_provider::initialize_from_msgpack_bytes(bytes);
         Self
     }
 

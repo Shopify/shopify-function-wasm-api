@@ -6,10 +6,6 @@ use walrus::{
 };
 
 static IMPORTS: &[(&str, &str)] = &[
-    (
-        "shopify_function_context_new",
-        "_shopify_function_context_new",
-    ),
     ("shopify_function_input_get", "_shopify_function_input_get"),
     (
         "shopify_function_input_get_val_len",
