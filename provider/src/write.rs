@@ -1,6 +1,6 @@
 use crate::{decorate_for_target, Context, DoubleUsize};
 use rmp::encode;
-use shopify_function_wasm_api_core::{write::WriteResult, ContextPtr};
+use shopify_function_wasm_api_core::write::WriteResult;
 use std::io::Write;
 
 mod state;
@@ -118,155 +118,130 @@ impl Context {
 }
 
 decorate_for_target! {
-    fn shopify_function_output_new_bool(context: ContextPtr, bool: u32) -> WriteResult {
-        match Context::mut_from_raw(context) {
-            Ok(context) => context.write_bool(bool != 0),
-            Err(_) => WriteResult::IoError,
-        }
+    fn shopify_function_output_new_bool(bool: u32) -> WriteResult {
+        Context::with_mut(|context| {
+            context.write_bool(bool != 0)
+        })
     }
 }
 
 decorate_for_target! {
-    fn shopify_function_output_new_null(context: ContextPtr) -> WriteResult {
-        match Context::mut_from_raw(context) {
-            Ok(context) => context.write_nil(),
-            Err(_) => WriteResult::IoError,
-        }
+    fn shopify_function_output_new_null() -> WriteResult {
+        Context::with_mut(|context| {
+            context.write_nil()
+        })
     }
 }
 
 decorate_for_target! {
-    fn shopify_function_output_new_i32(context: ContextPtr, int: i32) -> WriteResult {
-        match Context::mut_from_raw(context) {
-            Ok(context) => context.write_i32(int),
-            Err(_) => WriteResult::IoError,
-        }
+    fn shopify_function_output_new_i32(int: i32) -> WriteResult {
+        Context::with_mut(|context| {
+            context.write_i32(int)
+        })
     }
 }
 
 decorate_for_target! {
-    fn shopify_function_output_new_f64(context: ContextPtr, float: f64) -> WriteResult {
-        match Context::mut_from_raw(context) {
-            Ok(context) => context.write_f64(float),
-            Err(_) => WriteResult::IoError,
-        }
+    fn shopify_function_output_new_f64(float: f64) -> WriteResult {
+        Context::with_mut(|context| {
+            context.write_f64(float)
+        })
     }
 }
 
 decorate_for_target! {
     /// The most significant 32 bits are the result, the least significant 32 bits are the pointer.
-    fn shopify_function_output_new_utf8_str(context: ContextPtr, len: usize) -> DoubleUsize {
-        match Context::mut_from_raw(context) {
-            Ok(context) => {
-                let (result, ptr) = context.allocate_utf8_str(len);
-                ((result as DoubleUsize) << usize::BITS) | ptr as DoubleUsize
-            }
-            Err(_) => (WriteResult::IoError as DoubleUsize) << usize::BITS,
-        }
+    fn shopify_function_output_new_utf8_str(len: usize) -> DoubleUsize {
+        Context::with_mut(|context| {
+            let (result, ptr) = context.allocate_utf8_str(len);
+            ((result as DoubleUsize) << usize::BITS) | ptr as DoubleUsize
+        })
     }
 }
 
 decorate_for_target! {
     fn shopify_function_output_new_object(
-        context: ContextPtr,
         len: usize,
     ) -> WriteResult {
-        match Context::mut_from_raw(context) {
-            Ok(context) => context.start_object(len),
-            Err(_) => WriteResult::IoError,
-        }
+        Context::with_mut(|context| {
+            context.start_object(len)
+        })
     }
 }
 
 decorate_for_target! {
-    fn shopify_function_output_finish_object(context: ContextPtr) -> WriteResult {
-        match Context::mut_from_raw(context) {
-            Ok(context) => context.finish_object(),
-            Err(_) => WriteResult::IoError,
-        }
+    fn shopify_function_output_finish_object() -> WriteResult {
+        Context::with_mut(|context| {
+            context.finish_object()
+        })
     }
 }
 
 decorate_for_target! {
     fn shopify_function_output_new_array(
-        context: ContextPtr,
         len: usize,
     ) -> WriteResult {
-        match Context::mut_from_raw(context) {
-            Ok(context) => context.start_array(len),
-            Err(_) => WriteResult::IoError,
-        }
+        Context::with_mut(|context| {
+            context.start_array(len)
+        })
     }
 }
 
 decorate_for_target! {
-    fn shopify_function_output_finish_array(context: ContextPtr) -> WriteResult {
-        match Context::mut_from_raw(context) {
-            Ok(context) => context.finish_array(),
-            Err(_) => WriteResult::IoError,
-        }
+    fn shopify_function_output_finish_array() -> WriteResult {
+        Context::with_mut(|context| {
+            context.finish_array()
+        })
     }
 }
 
 decorate_for_target! {
     fn shopify_function_output_new_interned_utf8_str(
-        context: ContextPtr,
         id: shopify_function_wasm_api_core::InternedStringId,
     ) -> WriteResult {
-        match Context::mut_from_raw(context) {
-            Ok(context) => context.write_interned_utf8_str(id),
-            Err(_) => WriteResult::IoError,
-        }
+        Context::with_mut(|context| {
+            context.write_interned_utf8_str(id)
+        })
     }
 }
 
 decorate_for_target! {
-    fn shopify_function_output_finalize(context: ContextPtr) -> WriteResult {
-        match Context::mut_from_raw(context) {
-            Ok(context) => {
-                let Context {
-                    output_bytes,
-                    write_state,
-                    ..
-                } = &context;
-                if *write_state != State::End {
-                    return WriteResult::ValueNotFinished;
-                }
-                let mut stdout = std::io::stdout();
-                if stdout.write_all(output_bytes.as_slice()).is_err() {
-                    return WriteResult::IoError;
-                }
-                if stdout.flush().is_err() {
-                    return WriteResult::IoError;
-                }
-                let _ = unsafe { Box::from_raw(context as *mut Context) }; // drop the context
-                WriteResult::Ok
-            }
-            Err(_) => WriteResult::IoError,
-        }
-    }
-}
-
-#[cfg(not(target_family = "wasm"))]
-pub fn shopify_function_output_finalize_and_return_msgpack_bytes(
-    context: ContextPtr,
-) -> (WriteResult, Vec<u8>) {
-    match Context::mut_from_raw(context) {
-        Ok(context) => {
+    fn shopify_function_output_finalize() -> WriteResult {
+        Context::with_mut(|context| {
             let Context {
                 output_bytes,
                 write_state,
                 ..
             } = &context;
             if *write_state != State::End {
-                return (WriteResult::ValueNotFinished, Vec::new());
+                return WriteResult::ValueNotFinished;
             }
-            let bytes = output_bytes.as_slice().to_vec();
-            let _ = unsafe { Box::from_raw(context as *mut Context) }; // drop the context
-            (WriteResult::Ok, bytes)
-        }
-        Err(_) => (WriteResult::IoError, Vec::new()),
+            let mut stdout = std::io::stdout();
+            if stdout.write_all(output_bytes.as_slice()).is_err() {
+                return WriteResult::IoError;
+            }
+            if stdout.flush().is_err() {
+                return WriteResult::IoError;
+            }
+            WriteResult::Ok
+        })
     }
+}
+
+#[cfg(not(target_family = "wasm"))]
+pub fn shopify_function_output_finalize_and_return_msgpack_bytes() -> (WriteResult, Vec<u8>) {
+    Context::with_mut(|context| {
+        let Context {
+            output_bytes,
+            write_state,
+            ..
+        } = &context;
+        if *write_state != State::End {
+            return (WriteResult::ValueNotFinished, Vec::new());
+        }
+        let bytes = output_bytes.as_slice().to_vec();
+        (WriteResult::Ok, bytes)
+    })
 }
 
 #[cfg(test)]

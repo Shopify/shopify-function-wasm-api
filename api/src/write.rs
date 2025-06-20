@@ -61,36 +61,34 @@ fn map_result(result: usize) -> Result<(), Error> {
 impl Context {
     /// Write a boolean value.
     pub fn write_bool(&mut self, value: bool) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_bool(self.0 as _, value as u32) })
+        map_result(unsafe { crate::shopify_function_output_new_bool(value as u32) })
     }
 
     /// Write a null value.
     pub fn write_null(&mut self) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_null(self.0 as _) })
+        map_result(unsafe { crate::shopify_function_output_new_null() })
     }
 
     /// Write an i32 value.
     pub fn write_i32(&mut self, value: i32) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_i32(self.0 as _, value) })
+        map_result(unsafe { crate::shopify_function_output_new_i32(value) })
     }
 
     /// Write a f64 value.
     pub fn write_f64(&mut self, value: f64) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_f64(self.0 as _, value) })
+        map_result(unsafe { crate::shopify_function_output_new_f64(value) })
     }
 
     /// Write a UTF-8 string value.
     pub fn write_utf8_str(&mut self, value: &str) -> Result<(), Error> {
         map_result(unsafe {
-            crate::shopify_function_output_new_utf8_str(self.0 as _, value.as_ptr(), value.len())
+            crate::shopify_function_output_new_utf8_str(value.as_ptr(), value.len())
         })
     }
 
     /// Write an interned UTF-8 string value.
     pub fn write_interned_utf8_str(&mut self, id: InternedStringId) -> Result<(), Error> {
-        map_result(unsafe {
-            crate::shopify_function_output_new_interned_utf8_str(self.0 as _, id.as_usize())
-        })
+        map_result(unsafe { crate::shopify_function_output_new_interned_utf8_str(id.as_usize()) })
     }
 
     /// Write an object. You must provide the exact number of key-value pairs you will write.
@@ -99,9 +97,9 @@ impl Context {
         f: F,
         len: usize,
     ) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_object(self.0 as _, len) })?;
+        map_result(unsafe { crate::shopify_function_output_new_object(len) })?;
         f(self)?;
-        map_result(unsafe { crate::shopify_function_output_finish_object(self.0 as _) })
+        map_result(unsafe { crate::shopify_function_output_finish_object() })
     }
 
     /// Write an array. You must provide the exact number of values you will write.
@@ -110,21 +108,21 @@ impl Context {
         f: F,
         len: usize,
     ) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_new_array(self.0 as _, len) })?;
+        map_result(unsafe { crate::shopify_function_output_new_array(len) })?;
         f(self)?;
-        map_result(unsafe { crate::shopify_function_output_finish_array(self.0 as _) })
+        map_result(unsafe { crate::shopify_function_output_finish_array() })
     }
 
     /// Finalize the output. This must be called exactly once, and must be called after all other writes.
     pub fn finalize_output(self) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_finalize(self.0 as _) })
+        map_result(unsafe { crate::shopify_function_output_finalize() })
     }
 
     #[cfg(not(target_family = "wasm"))]
     /// Finalize the output and return the serialized value as a `serde_json::Value`.
     /// This is only available in non-Wasm targets, and therefore only recommended for use in tests.
     pub fn finalize_output_and_return(self) -> Result<serde_json::Value, Error> {
-        let (result, bytes) = shopify_function_provider::write::shopify_function_output_finalize_and_return_msgpack_bytes(self.0 as _);
+        let (result, bytes) = shopify_function_provider::write::shopify_function_output_finalize_and_return_msgpack_bytes();
         map_result(result as usize)
             .and_then(|_| rmp_serde::from_slice(&bytes).map_err(|_| Error::IoError))
     }
