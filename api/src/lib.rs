@@ -21,10 +21,7 @@
 #![warn(missing_docs)]
 
 use shopify_function_wasm_api_core::read::{ErrorCode, NanBox, Val, ValueRef};
-#[cfg(target_pointer_width = "32")]
-use std::sync::atomic::{AtomicU32, Ordering};
-#[cfg(target_pointer_width = "64")]
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub mod read;
 pub mod write;
@@ -185,54 +182,30 @@ impl InternedStringId {
 /// A mechanism for caching interned string IDs.
 pub struct CachedInternedStringId {
     value: &'static str,
-    #[cfg(target_pointer_width = "32")]
-    interned_string_id: AtomicU32,
-    #[cfg(target_pointer_width = "64")]
-    interned_string_id: AtomicU64,
+    interned_string_id: AtomicUsize,
 }
 
-#[cfg(target_pointer_width = "32")]
-const INITIAL_INTERN_STRING_ID: u32 = u32::MAX;
-#[cfg(target_pointer_width = "64")]
-const INITIAL_INTERN_STRING_ID: u64 = u64::MAX;
+const INITIAL_INTERN_STRING_ID: usize = usize::MAX;
 
 impl CachedInternedStringId {
     /// Create a new cached interned string ID.
     pub const fn new(value: &'static str) -> Self {
         Self {
             value,
-            #[cfg(target_pointer_width = "32")]
-            interned_string_id: AtomicU32::new(INITIAL_INTERN_STRING_ID),
-            #[cfg(target_pointer_width = "64")]
-            interned_string_id: AtomicU64::new(INITIAL_INTERN_STRING_ID),
+            interned_string_id: AtomicUsize::new(INITIAL_INTERN_STRING_ID),
         }
     }
 
-    #[cfg(target_pointer_width = "32")]
     /// Load the interned string ID.
     pub fn load(&self) -> InternedStringId {
         let interned_string_id = self.interned_string_id.load(Ordering::Relaxed);
         if interned_string_id == INITIAL_INTERN_STRING_ID {
             let id =
                 unsafe { shopify_function_intern_utf8_str(self.value.as_ptr(), self.value.len()) };
-            self.interned_string_id.store(id as u32, Ordering::Relaxed);
-            InternedStringId(id as usize)
-        } else {
-            InternedStringId(interned_string_id as usize)
-        }
-    }
-
-    #[cfg(target_pointer_width = "64")]
-    /// Load the interned string ID.
-    pub fn load(&self) -> InternedStringId {
-        let interned_string_id = self.interned_string_id.load(Ordering::Relaxed);
-        if interned_string_id == INITIAL_INTERN_STRING_ID {
-            let id =
-                unsafe { shopify_function_intern_utf8_str(self.value.as_ptr(), self.value.len()) };
-            self.interned_string_id.store(id as u64, Ordering::Relaxed);
+            self.interned_string_id.store(id, Ordering::Relaxed);
             InternedStringId(id)
         } else {
-            InternedStringId(interned_string_id as usize)
+            InternedStringId(interned_string_id)
         }
     }
 }
