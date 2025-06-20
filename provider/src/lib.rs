@@ -1,4 +1,5 @@
 mod alloc;
+pub mod log;
 pub mod read;
 mod string_interner;
 pub mod write;
@@ -21,6 +22,7 @@ struct Context {
     bump_allocator: bumpalo::Bump,
     input_bytes: Vec<u8>,
     output_bytes: ByteBuf,
+    logs: Vec<u8>,
     write_state: State,
     write_parent_state_stack: Vec<State>,
     string_interner: StringInterner,
@@ -30,12 +32,18 @@ thread_local! {
     static CONTEXT: RefCell<Context> = RefCell::new(Context::default())
 }
 
+#[cfg(target_family = "wasm")]
+thread_local! {
+    static OUTPUT_AND_LOG_PTRS: RefCell<[usize; 4]> = RefCell::new([0; 4]);
+}
+
 impl Default for Context {
     fn default() -> Self {
         Self {
             bump_allocator: Bump::new(),
             input_bytes: Vec::new(),
             output_bytes: ByteBuf::new(),
+            logs: Vec::with_capacity(1024),
             write_state: State::Start,
             write_parent_state_stack: Vec::new(),
             string_interner: StringInterner::new(),
@@ -44,29 +52,11 @@ impl Default for Context {
 }
 
 impl Context {
+    #[cfg(not(target_family = "wasm"))]
     fn new(input_bytes: Vec<u8>) -> Self {
-        let bump_allocator = bumpalo::Bump::new();
-        Self {
-            bump_allocator,
-            input_bytes,
-            output_bytes: ByteBuf::new(),
-            write_state: State::Start,
-            write_parent_state_stack: Vec::new(),
-            string_interner: StringInterner::new(),
-        }
-    }
-
-    #[cfg(target_family = "wasm")]
-    fn new_from_stdin() -> Self {
-        use std::io::Read;
-        let mut input_bytes: Vec<u8> = vec![];
-        let mut stdin = std::io::stdin();
-        // Temporary use of stdin, to copy data into the Wasm linear memory.
-        // Initial benchmarking doesn't seem to suggest that this represents
-        // a source of performance overhead.
-        stdin.read_to_end(&mut input_bytes).unwrap();
-
-        Self::new(input_bytes)
+        let mut context = Self::default();
+        context.input_bytes = input_bytes;
+        context
     }
 
     fn with<F, T>(f: F) -> T
@@ -105,14 +95,37 @@ macro_rules! decorate_for_target {
 pub(crate) use decorate_for_target;
 
 #[cfg(target_family = "wasm")]
-#[export_name = "_shopify_function_context_new"]
-extern "C" fn shopify_function_context_new() {
-    CONTEXT.with_borrow_mut(|context| *context = Context::new_from_stdin())
+#[export_name = "initialize"]
+extern "C" fn initialize(input_len: usize) -> *const u8 {
+    CONTEXT.with_borrow_mut(|context| {
+        *context = Context::default();
+        context.input_bytes = vec![0; input_len];
+        context.input_bytes.as_ptr()
+    })
 }
 
 #[cfg(not(target_family = "wasm"))]
-pub fn shopify_function_context_new_from_msgpack_bytes(bytes: Vec<u8>) {
+pub fn initialize_from_msgpack_bytes(bytes: Vec<u8>) {
     CONTEXT.with_borrow_mut(|context| *context = Context::new(bytes))
+}
+
+#[cfg(target_family = "wasm")]
+#[export_name = "finalize"]
+extern "C" fn finalize() -> *const usize {
+    Context::with(|context| {
+        let output = context.output_bytes.as_vec();
+        let output_ptr = output.as_ptr();
+        let output_len = output.len();
+        let logs_ptr = context.logs.as_ptr();
+        let logs_len = context.logs.len();
+        OUTPUT_AND_LOG_PTRS.with_borrow_mut(|output_and_log_ptrs| {
+            output_and_log_ptrs[0] = output_ptr as usize;
+            output_and_log_ptrs[1] = output_len;
+            output_and_log_ptrs[2] = logs_ptr as usize;
+            output_and_log_ptrs[3] = logs_len;
+            output_and_log_ptrs.as_ptr()
+        })
+    })
 }
 
 decorate_for_target! {

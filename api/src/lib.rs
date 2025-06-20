@@ -9,11 +9,11 @@
 //! use std::error::Error;
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
+//!     shopify_function_wasm_api::init_panic_handler();
 //!     let mut context = Context::new();
 //!     let input = context.input_get()?;
 //!     let value: i32 = Deserialize::deserialize(&input)?;
 //!     value.serialize(&mut context)?;
-//!     context.finalize_output()?;
 //!     Ok(())
 //! }
 //! ```
@@ -23,6 +23,7 @@
 use shopify_function_wasm_api_core::read::{ErrorCode, NanBox, Val, ValueRef};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+pub mod log;
 pub mod read;
 pub mod write;
 
@@ -32,9 +33,6 @@ pub use write::Serialize;
 #[cfg(target_family = "wasm")]
 #[link(wasm_import_module = "shopify_function_v1")]
 extern "C" {
-    // Common API.
-    fn shopify_function_context_new();
-
     // Read API.
     fn shopify_function_input_get() -> Val;
     fn shopify_function_input_get_val_len(scope: Val) -> usize;
@@ -50,7 +48,6 @@ extern "C" {
     // Write API.
     fn shopify_function_output_new_bool(bool: u32) -> usize;
     fn shopify_function_output_new_null() -> usize;
-    fn shopify_function_output_finalize() -> usize;
     fn shopify_function_output_new_i32(int: i32) -> usize;
     fn shopify_function_output_new_f64(float: f64) -> usize;
     fn shopify_function_output_new_utf8_str(ptr: *const u8, len: usize) -> usize;
@@ -61,6 +58,9 @@ extern "C" {
     fn shopify_function_output_finish_object() -> usize;
     fn shopify_function_output_new_array(len: usize) -> usize;
     fn shopify_function_output_finish_array() -> usize;
+
+    // Log API.
+    fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize) -> usize;
 
     // Other.
     fn shopify_function_intern_utf8_str(ptr: *const u8, len: usize) -> usize;
@@ -119,9 +119,6 @@ mod provider_fallback {
     pub(crate) unsafe fn shopify_function_output_new_null() -> usize {
         shopify_function_provider::write::shopify_function_output_new_null() as usize
     }
-    pub(crate) unsafe fn shopify_function_output_finalize() -> usize {
-        shopify_function_provider::write::shopify_function_output_finalize() as usize
-    }
     pub(crate) unsafe fn shopify_function_output_new_i32(int: i32) -> usize {
         shopify_function_provider::write::shopify_function_output_new_i32(int) as usize
     }
@@ -153,6 +150,17 @@ mod provider_fallback {
     }
     pub(crate) unsafe fn shopify_function_output_finish_array() -> usize {
         shopify_function_provider::write::shopify_function_output_finish_array() as usize
+    }
+
+    // Logging.
+    pub(crate) unsafe fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize) -> usize {
+        let result = shopify_function_provider::log::shopify_function_log_new_utf8_str(len);
+        let write_result = (result >> usize::BITS) as usize;
+        let dst = result as usize;
+        if write_result == WriteResult::Ok as usize {
+            std::ptr::copy(ptr as _, dst as _, len);
+        }
+        write_result
     }
 
     // Other.
@@ -408,7 +416,6 @@ impl Context {
 
         #[cfg(target_family = "wasm")]
         {
-            unsafe { shopify_function_context_new() };
             Self
         }
     }
@@ -419,7 +426,7 @@ impl Context {
     #[cfg(not(target_family = "wasm"))]
     pub fn new_with_input(input: serde_json::Value) -> Self {
         let bytes = rmp_serde::to_vec(&input).unwrap();
-        shopify_function_provider::shopify_function_context_new_from_msgpack_bytes(bytes);
+        shopify_function_provider::initialize_from_msgpack_bytes(bytes);
         Self
     }
 
@@ -446,6 +453,15 @@ impl Default for Context {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Configures panics to write to the logging API.
+pub fn init_panic_handler() {
+    #[cfg(target_family = "wasm")]
+    std::panic::set_hook(Box::new(|info| {
+        let message = format!("{info}");
+        log::log_utf8_str(&message);
+    }));
 }
 
 #[cfg(test)]

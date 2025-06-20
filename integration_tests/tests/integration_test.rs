@@ -1,6 +1,6 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
 use integration_tests::prepare_example;
-use std::sync::LazyLock;
+use std::{fmt::Display, sync::LazyLock};
 use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::{
     pipe::{MemoryInputPipe, MemoryOutputPipe},
@@ -43,7 +43,28 @@ fn assert_fuel_consumed_within_threshold(target_fuel: u64, fuel_consumed: u64) {
     }
 }
 
-fn run_example(example: &str, input_bytes: Vec<u8>) -> Result<(Vec<u8>, u64)> {
+enum Api {
+    Wasi,
+    Wasm,
+}
+
+impl Api {
+    fn is_wasi(&self) -> bool {
+        match self {
+            Self::Wasi => true,
+            Self::Wasm => false,
+        }
+    }
+
+    fn is_wasm(&self) -> bool {
+        match self {
+            Self::Wasi => false,
+            Self::Wasm => true,
+        }
+    }
+}
+
+fn run_example(example: &str, input_bytes: Vec<u8>, api: Api) -> Result<(Vec<u8>, String, u64)> {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let workspace_root = std::path::PathBuf::from(manifest_dir).join("..");
     let engine = Engine::new(Config::new().consume_fuel(true))?;
@@ -69,26 +90,37 @@ fn run_example(example: &str, input_bytes: Vec<u8>) -> Result<(Vec<u8>, u64)> {
     deterministic_wasi_ctx::replace_scheduling_functions_for_wasi_preview_0(&mut linker)
         .expect("Failed to replace scheduling functions in wasi-ctx");
 
-    let stdin = MemoryInputPipe::new(input_bytes);
-    let stderr = MemoryOutputPipe::new(usize::MAX);
-    let stdout = MemoryOutputPipe::new(usize::MAX);
     let mut wasi_builder = WasiCtxBuilder::new();
-    wasi_builder
-        .stdin(stdin)
-        .stdout(stdout.clone())
-        .stderr(stderr.clone());
+    let stdout = MemoryOutputPipe::new(usize::MAX);
+    if api.is_wasi() {
+        let stdin = MemoryInputPipe::new(input_bytes.clone());
+        let stderr = MemoryOutputPipe::new(usize::MAX);
+        wasi_builder
+            .stdin(stdin)
+            .stdout(stdout.clone())
+            .stderr(stderr);
+    }
     deterministic_wasi_ctx::add_determinism_to_wasi_ctx_builder(&mut wasi_builder);
     let wasi = wasi_builder.build_p1();
     let mut store = Store::new(&engine, wasi);
-    store.set_fuel(STARTING_FUEL)?;
 
     let provider_instance = linker.instantiate(&mut store, &provider)?;
+    if api.is_wasm() {
+        store.set_fuel(STARTING_FUEL)?;
+        let init_func = provider_instance.get_typed_func::<i32, i32>(&mut store, "initialize")?;
+        let input_buffer_offset = init_func.call(&mut store, input_bytes.len() as i32)?;
+        provider_instance
+            .get_memory(&mut store, "memory")
+            .unwrap()
+            .write(&mut store, input_buffer_offset as usize, &input_bytes)?;
+    }
     linker.instance(
         &mut store,
         shopify_function_provider::PROVIDER_MODULE_NAME,
         provider_instance,
     )?;
 
+    store.set_fuel(STARTING_FUEL)?;
     let instance = linker.instantiate(&mut store, &module)?;
 
     let func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
@@ -97,19 +129,41 @@ fn run_example(example: &str, input_bytes: Vec<u8>) -> Result<(Vec<u8>, u64)> {
 
     let instructions = STARTING_FUEL.saturating_sub(store.get_fuel().unwrap_or_default());
 
-    drop(store);
+    let mut output = Vec::new();
+    let mut logs = Vec::new();
+    if api.is_wasm() {
+        let results_offset = provider_instance
+            .get_typed_func::<(), u32>(&mut store, "finalize")?
+            .call(&mut store, ())?;
+        let memory = provider_instance.get_memory(&mut store, "memory").unwrap();
+        let mut buf = [0; 16];
+        memory.read(&store, results_offset as usize, &mut buf)?;
 
-    if let Err(e) = result {
-        let error = stderr.contents().to_vec();
-        return Err(anyhow::anyhow!(
-            "{}\n\nSTDERR:\n{}",
-            e,
-            String::from_utf8(error)?
-        ));
+        let output_offset = u32::from_le_bytes(buf[0..4].try_into().unwrap()) as usize;
+        let output_len = u32::from_le_bytes(buf[4..8].try_into().unwrap()) as usize;
+        let logs_offset = u32::from_le_bytes(buf[8..12].try_into().unwrap()) as usize;
+        let logs_len = u32::from_le_bytes(buf[12..16].try_into().unwrap()) as usize;
+        output = vec![0; output_len];
+        memory.read(&store, output_offset, &mut output)?;
+        logs = vec![0; logs_len];
+        memory.read(&store, logs_offset, &mut logs)?;
     }
 
-    let output = stdout.contents().to_vec();
-    Ok((output, instructions))
+    drop(store);
+
+    let logs = String::from_utf8_lossy(&logs).to_string();
+    if let Err(e) = result {
+        return Err(anyhow::anyhow!(CallFuncError {
+            trap_error: e,
+            logs,
+        }));
+    }
+
+    if api.is_wasi() {
+        output = stdout.contents().to_vec();
+    }
+
+    Ok((output, logs, instructions))
 }
 
 fn decode_msgpack_output(output: Vec<u8>) -> Result<serde_json::Value> {
@@ -151,8 +205,20 @@ fn prepare_wasi_json_input(input: serde_json::Value) -> Result<Vec<u8>> {
 
 fn run_wasm_api_example(example: &str, input: serde_json::Value) -> Result<serde_json::Value> {
     let input_bytes = prepare_wasm_api_input(input)?;
-    let (output, _fuel) = run_example(example, input_bytes)?;
+    let (output, _logs, _fuel) = run_example(example, input_bytes, Api::Wasm)?;
     decode_msgpack_output(output)
+}
+
+#[derive(Debug)]
+struct CallFuncError {
+    trap_error: Error,
+    logs: String,
+}
+
+impl Display for CallFuncError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}\n\nLogs: {}", self.trap_error, self.logs)
+    }
 }
 
 static ECHO_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("echo"));
@@ -160,6 +226,8 @@ static BENCHMARK_EXAMPLE_RESULT: LazyLock<Result<()>> =
     LazyLock::new(|| prepare_example("cart-checkout-validation-wasm-api"));
 static BENCHMARK_NON_WASM_API_EXAMPLE_RESULT: LazyLock<Result<()>> =
     LazyLock::new(|| prepare_example("cart-checkout-validation-wasi-json"));
+static LOG_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("log"));
+static PANIC_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("panic"));
 
 #[test]
 fn test_echo_with_bool_input() -> Result<()> {
@@ -341,10 +409,14 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
     let input = generate_cart_with_size(2, true);
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
-    let (_, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
+    let (_, _, wasm_api_fuel) = run_example(
+        "cart-checkout-validation-wasm-api",
+        wasm_api_input,
+        Api::Wasm,
+    )?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(14828, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(11504, wasm_api_fuel);
     Ok(())
 }
 
@@ -360,13 +432,19 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
     let input = generate_cart_with_size(2, true);
 
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
-    let (wasm_api_output, wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
+    let (wasm_api_output, _logs, wasm_api_fuel) = run_example(
+        "cart-checkout-validation-wasm-api",
+        wasm_api_input,
+        Api::Wasm,
+    )?;
     let wasm_api_value = decode_msgpack_output(wasm_api_output)?;
 
     let wasi_json_input = prepare_wasi_json_input(input)?;
-    let (non_wasm_api_output, non_wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasi-json", wasi_json_input)?;
+    let (non_wasm_api_output, _logs, non_wasm_api_fuel) = run_example(
+        "cart-checkout-validation-wasi-json",
+        wasi_json_input,
+        Api::Wasi,
+    )?;
     let non_wasm_api_value = decode_json_output(non_wasm_api_output)?;
 
     assert_eq!(wasm_api_value, non_wasm_api_value);
@@ -384,7 +462,7 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
         wasm_api_fuel, non_wasm_api_fuel, improvement
     );
 
-    assert_fuel_consumed_within_threshold(14828, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(11504, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(23858, non_wasm_api_fuel);
 
     Ok(())
@@ -402,13 +480,19 @@ fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
     let input = generate_cart_with_size(100, false);
 
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
-    let (wasm_api_output, wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
+    let (wasm_api_output, _logs, wasm_api_fuel) = run_example(
+        "cart-checkout-validation-wasm-api",
+        wasm_api_input,
+        Api::Wasm,
+    )?;
     let wasm_api_value = decode_msgpack_output(wasm_api_output)?;
 
     let wasi_json_input = prepare_wasi_json_input(input)?;
-    let (non_wasm_api_output, non_wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasi-json", wasi_json_input)?;
+    let (non_wasm_api_output, _logs, non_wasm_api_fuel) = run_example(
+        "cart-checkout-validation-wasi-json",
+        wasi_json_input,
+        Api::Wasi,
+    )?;
     let non_wasm_api_value = decode_json_output(non_wasm_api_output)?;
 
     assert_eq!(wasm_api_value, non_wasm_api_value);
@@ -427,8 +511,35 @@ fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
     );
 
     // Add fuel consumption threshold checks for both implementations
-    assert_fuel_consumed_within_threshold(16880, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(11440, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(736695, non_wasm_api_fuel);
 
+    Ok(())
+}
+
+#[test]
+fn test_log() -> Result<()> {
+    LOG_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
+    let (_, logs, fuel) = run_example("log", vec![], Api::Wasm)?;
+    assert_eq!(logs, "Hi!\nHello\nHere's a third string\n✌️\n");
+    assert_fuel_consumed_within_threshold(1895, fuel);
+    Ok(())
+}
+
+#[test]
+fn test_panic() -> Result<()> {
+    PANIC_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
+    let error = run_example("panic", vec![], Api::Wasm)
+        .unwrap_err()
+        .downcast::<CallFuncError>()?;
+    assert_eq!(
+        error.logs,
+        "panicked at api/examples/panic.rs:7:5:
+at the disco"
+    );
     Ok(())
 }

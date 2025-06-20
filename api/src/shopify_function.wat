@@ -7,15 +7,6 @@
 ;; host and guest.
 
 (module
-  ;; Creates and returns a new Context handle.
-  ;;
-  ;; The context represents an isolated scope in which values and state
-  ;; are bound. Every API call operates within this context, ensuring
-  ;; that the execution environment remains distinct and independent.
-  (import "shopify_function_v1" "shopify_function_context_new" 
-    (func)
-  )
-
   ;; Read API Functions - Used to access input data.
 
   ;; Retrieves the root input value from the context.
@@ -133,16 +124,6 @@
     (func (result i32))
   )
 
-  ;; Finalizes the output, making it available to the host.
-  ;; Must be called after output construction is complete.
-  ;; This is typically the last API call made before function returns.
-  ;; Signals that the response is complete and ready to be used.
-  ;; Returns:
-  ;;   - i32 status code indicating success or failure
-  (import "shopify_function_v1" "shopify_function_output_finalize" 
-    (func (result i32))
-  )
-
   ;; Writes a new integer output value.
   ;; Used for numeric values that fit within 32 bits.
   ;; More efficient than f64 for integral values.
@@ -245,5 +226,17 @@
   ;;   - i32 ID of the interned string (to be used in other API calls).
   (import "shopify_function_v1" "shopify_function_intern_utf8_str" 
     (func (param $ptr i32) (param $len i32) (result i32))
+  )
+
+  ;; Logs a new string output value.
+  ;; Used for text values in the logs.
+  ;; The string data is copied from WebAssembly memory.
+  ;; Parameters:
+  ;;   - ptr: i32 pointer to string data in WebAssembly memory.
+  ;;   - len: i32 length of string in bytes.
+  ;; Returns:
+  ;;   - i32 status code indicating success or failure
+  (import "shopify_function_v1" "shopify_function_log_new_utf8_str"
+    (func (param $len i32) (result i32))
   )
 )
