@@ -40,8 +40,6 @@ fn main(context: &mut Context) -> Result<()> {
 
     // Function logic
 
-    context.finalize_output()?;
-    
     Ok(())
 }
 ```

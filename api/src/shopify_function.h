@@ -104,14 +104,6 @@ __attribute__((import_name("shopify_function_output_new_null")))
 extern WriteResult shopify_function_output_new_null();
 
 /**
- * Finalizes the output and returns the result
- * @return WriteResult indicating success or failure
- */
-__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
-__attribute__((import_name("shopify_function_output_finalize")))
-extern WriteResult shopify_function_output_finalize();
-
-/**
  * Creates a new 32-bit integer output value
  * @param value The integer value
  * @return WriteResult indicating success or failure

@@ -119,6 +119,17 @@ pub fn initialize_from_msgpack_bytes(bytes: Vec<u8>) {
     CONTEXT.with_borrow_mut(|context| *context = Context::new(bytes))
 }
 
+#[cfg(target_family = "wasm")]
+#[export_name = "finalize"]
+extern "C" fn finalize() -> u64 {
+    Context::with(|context| {
+        let output = context.output_bytes.as_vec();
+        let ptr = output.as_ptr();
+        let len = output.len();
+        ((ptr as u64) << u32::BITS) | len as u64
+    })
+}
+
 decorate_for_target! {
     fn shopify_function_intern_utf8_str(len: usize) -> DoubleUsize {
         Context::with_mut(|context| {

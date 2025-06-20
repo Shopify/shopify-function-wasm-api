@@ -90,13 +90,13 @@ fn run_example(example: &str, input_bytes: Vec<u8>, api: Api) -> Result<(Vec<u8>
     deterministic_wasi_ctx::replace_scheduling_functions_for_wasi_preview_0(&mut linker)
         .expect("Failed to replace scheduling functions in wasi-ctx");
 
-    let stderr = MemoryOutputPipe::new(usize::MAX);
     let stdout = MemoryOutputPipe::new(usize::MAX);
+    let stderr = MemoryOutputPipe::new(usize::MAX);
     let mut wasi_builder = WasiCtxBuilder::new();
-    wasi_builder.stdout(stdout.clone()).stderr(stderr.clone());
+    wasi_builder.stderr(stderr.clone());
     if api.is_wasi() {
         let stdin = MemoryInputPipe::new(input_bytes.clone());
-        wasi_builder.stdin(stdin);
+        wasi_builder.stdin(stdin).stdout(stdout.clone());
     }
     deterministic_wasi_ctx::add_determinism_to_wasi_ctx_builder(&mut wasi_builder);
     let wasi = wasi_builder.build_p1();
@@ -127,6 +127,21 @@ fn run_example(example: &str, input_bytes: Vec<u8>, api: Api) -> Result<(Vec<u8>
 
     let instructions = STARTING_FUEL.saturating_sub(store.get_fuel().unwrap_or_default());
 
+    let mut output = if api.is_wasm() && result.is_ok() {
+        let finalize_func = provider_instance.get_typed_func::<(), u64>(&mut store, "finalize")?;
+        let output = finalize_func.call(&mut store, ())?;
+        let output_ptr = (output >> u32::BITS) as u32;
+        let output_len = output as u32;
+        let mut output = vec![0; output_len as usize];
+        provider_instance
+            .get_memory(&mut store, "memory")
+            .unwrap()
+            .read(&store, output_ptr as usize, &mut output)?;
+        output
+    } else {
+        Vec::new()
+    };
+
     drop(store);
 
     if let Err(e) = result {
@@ -138,7 +153,9 @@ fn run_example(example: &str, input_bytes: Vec<u8>, api: Api) -> Result<(Vec<u8>
         ));
     }
 
-    let output = stdout.contents().to_vec();
+    if api.is_wasi() {
+        output = stdout.contents().to_vec();
+    }
     Ok((output, instructions))
 }
 
@@ -378,7 +395,7 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     )?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(12270, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(11504, wasm_api_fuel);
     Ok(())
 }
 
@@ -424,7 +441,7 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
         wasm_api_fuel, non_wasm_api_fuel, improvement
     );
 
-    assert_fuel_consumed_within_threshold(12270, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(11504, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(23858, non_wasm_api_fuel);
 
     Ok(())
@@ -473,7 +490,7 @@ fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
     );
 
     // Add fuel consumption threshold checks for both implementations
-    assert_fuel_consumed_within_threshold(12288, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(11092, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(736695, non_wasm_api_fuel);
 
     Ok(())

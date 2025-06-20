@@ -13,7 +13,6 @@
 //!     let input = context.input_get()?;
 //!     let value: i32 = Deserialize::deserialize(&input)?;
 //!     value.serialize(&mut context)?;
-//!     context.finalize_output()?;
 //!     Ok(())
 //! }
 //! ```
@@ -47,7 +46,6 @@ extern "C" {
     // Write API.
     fn shopify_function_output_new_bool(bool: u32) -> usize;
     fn shopify_function_output_new_null() -> usize;
-    fn shopify_function_output_finalize() -> usize;
     fn shopify_function_output_new_i32(int: i32) -> usize;
     fn shopify_function_output_new_f64(float: f64) -> usize;
     fn shopify_function_output_new_utf8_str(ptr: *const u8, len: usize) -> usize;
@@ -115,9 +113,6 @@ mod provider_fallback {
     }
     pub(crate) unsafe fn shopify_function_output_new_null() -> usize {
         shopify_function_provider::write::shopify_function_output_new_null() as usize
-    }
-    pub(crate) unsafe fn shopify_function_output_finalize() -> usize {
-        shopify_function_provider::write::shopify_function_output_finalize() as usize
     }
     pub(crate) unsafe fn shopify_function_output_new_i32(int: i32) -> usize {
         shopify_function_provider::write::shopify_function_output_new_i32(int) as usize
