@@ -44,29 +44,11 @@ impl Default for Context {
 }
 
 impl Context {
+    #[cfg(not(target_family = "wasm"))]
     fn new(input_bytes: Vec<u8>) -> Self {
-        let bump_allocator = bumpalo::Bump::new();
-        Self {
-            bump_allocator,
-            input_bytes,
-            output_bytes: ByteBuf::new(),
-            write_state: State::Start,
-            write_parent_state_stack: Vec::new(),
-            string_interner: StringInterner::new(),
-        }
-    }
-
-    #[cfg(target_family = "wasm")]
-    fn new_from_stdin() -> Self {
-        use std::io::Read;
-        let mut input_bytes: Vec<u8> = vec![];
-        let mut stdin = std::io::stdin();
-        // Temporary use of stdin, to copy data into the Wasm linear memory.
-        // Initial benchmarking doesn't seem to suggest that this represents
-        // a source of performance overhead.
-        stdin.read_to_end(&mut input_bytes).unwrap();
-
-        Self::new(input_bytes)
+        let mut context = Self::default();
+        context.input_bytes = input_bytes;
+        context
     }
 
     fn with<F, T>(f: F) -> T
@@ -108,7 +90,7 @@ pub(crate) use decorate_for_target;
 #[export_name = "initialize"]
 extern "C" fn initialize(input_len: usize) -> *const u8 {
     CONTEXT.with_borrow_mut(|context| {
-        *context = Context::new_from_stdin();
+        *context = Context::default();
         context.input_bytes = vec![0; input_len];
         context.input_bytes.as_ptr()
     })
