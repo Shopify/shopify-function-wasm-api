@@ -113,16 +113,12 @@ pub fn initialize_from_msgpack_bytes(bytes: Vec<u8>) {
 #[export_name = "finalize"]
 extern "C" fn finalize() -> *const usize {
     Context::with(|context| {
-        let output = context.output_bytes.as_vec();
-        let output_ptr = output.as_ptr();
-        let output_len = output.len();
-        let logs_ptr = context.logs.as_ptr();
-        let logs_len = context.logs.len();
         OUTPUT_AND_LOG_PTRS.with_borrow_mut(|output_and_log_ptrs| {
-            output_and_log_ptrs[0] = output_ptr as usize;
-            output_and_log_ptrs[1] = output_len;
-            output_and_log_ptrs[2] = logs_ptr as usize;
-            output_and_log_ptrs[3] = logs_len;
+            let output = context.output_bytes.as_vec();
+            output_and_log_ptrs[0] = output.as_ptr() as usize;
+            output_and_log_ptrs[1] = output.len();
+            output_and_log_ptrs[2] = context.logs.as_ptr() as usize;
+            output_and_log_ptrs[3] = context.logs.len();
             output_and_log_ptrs.as_ptr()
         })
     })
