@@ -108,8 +108,9 @@ fn run_example(example: &str, input_bytes: Vec<u8>, api: Api) -> Result<(Vec<u8>
     if api.is_wasm() {
         store.set_fuel(STARTING_FUEL)?;
         let init_func =
-            provider_instance.get_typed_func::<(i32, i32), i32>(&mut store, "initialize")?;
-        let input_buffer_offset = init_func.call(&mut store, (input_bytes.len() as i32, 1024))?;
+            provider_instance.get_typed_func::<(i32, i32, i32), i32>(&mut store, "initialize")?;
+        let input_buffer_offset =
+            init_func.call(&mut store, (input_bytes.len() as i32, 1024, 1024))?;
         provider_instance
             .get_memory(&mut store, "memory")
             .unwrap()
@@ -417,7 +418,7 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     )?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(11504, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10830, wasm_api_fuel);
     Ok(())
 }
 
@@ -463,7 +464,7 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
         wasm_api_fuel, non_wasm_api_fuel, improvement
     );
 
-    assert_fuel_consumed_within_threshold(11504, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10830, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(23858, non_wasm_api_fuel);
 
     Ok(())
@@ -512,7 +513,7 @@ fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
     );
 
     // Add fuel consumption threshold checks for both implementations
-    assert_fuel_consumed_within_threshold(11440, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10021, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(736695, non_wasm_api_fuel);
 
     Ok(())
