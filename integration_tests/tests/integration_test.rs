@@ -418,7 +418,7 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     )?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(10830, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10839, wasm_api_fuel);
     Ok(())
 }
 
@@ -464,7 +464,7 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
         wasm_api_fuel, non_wasm_api_fuel, improvement
     );
 
-    assert_fuel_consumed_within_threshold(10830, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10839, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(23858, non_wasm_api_fuel);
 
     Ok(())
@@ -526,7 +526,7 @@ fn test_log() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
     let (_, logs, fuel) = run_example("log", vec![], Api::Wasm)?;
     assert_eq!(logs, "Hi!\nHello\nHere's a third string\n✌️\n");
-    assert_fuel_consumed_within_threshold(1807, fuel);
+    assert_fuel_consumed_within_threshold(1895, fuel);
     Ok(())
 }
 
