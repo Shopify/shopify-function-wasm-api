@@ -4,46 +4,44 @@ expression: actual
 input_file: trampoline/src/test_data/consumer.wat
 ---
 (module
-  (type (;0;) (func))
-  (type (;1;) (func (result i32)))
-  (type (;2;) (func (result i64)))
-  (type (;3;) (func (param i32) (result i32)))
-  (type (;4;) (func (param i32) (result i64)))
-  (type (;5;) (func (param i32 i32) (result i32)))
-  (type (;6;) (func (param i32 i32 i32)))
-  (type (;7;) (func (param i32 i32 i32 i32) (result i32)))
-  (type (;8;) (func (param i64) (result i32)))
-  (type (;9;) (func (param i64 i32) (result i64)))
-  (type (;10;) (func (param i64 i32 i32) (result i64)))
-  (type (;11;) (func (param f64) (result i32)))
-  (import "shopify_function_v1" "_shopify_function_context_new" (func (;0;) (type 0)))
-  (import "shopify_function_v1" "_shopify_function_input_get" (func (;1;) (type 2)))
-  (import "shopify_function_v1" "_shopify_function_input_get_interned_obj_prop" (func (;2;) (type 9)))
-  (import "shopify_function_v1" "_shopify_function_input_get_at_index" (func (;3;) (type 9)))
-  (import "shopify_function_v1" "_shopify_function_input_get_obj_key_at_index" (func (;4;) (type 9)))
-  (import "shopify_function_v1" "_shopify_function_input_get_val_len" (func (;5;) (type 8)))
-  (import "shopify_function_v1" "_shopify_function_output_new_bool" (func (;6;) (type 3)))
-  (import "shopify_function_v1" "_shopify_function_output_new_null" (func (;7;) (type 1)))
-  (import "shopify_function_v1" "_shopify_function_output_new_i32" (func (;8;) (type 3)))
-  (import "shopify_function_v1" "_shopify_function_output_new_f64" (func (;9;) (type 11)))
-  (import "shopify_function_v1" "_shopify_function_output_new_object" (func (;10;) (type 3)))
-  (import "shopify_function_v1" "_shopify_function_output_finish_object" (func (;11;) (type 1)))
-  (import "shopify_function_v1" "_shopify_function_output_new_array" (func (;12;) (type 3)))
-  (import "shopify_function_v1" "_shopify_function_output_finish_array" (func (;13;) (type 1)))
-  (import "shopify_function_v1" "_shopify_function_output_new_interned_utf8_str" (func (;14;) (type 3)))
-  (import "shopify_function_v1" "_shopify_function_output_finalize" (func (;15;) (type 1)))
-  (import "shopify_function_v1" "_shopify_function_input_get_utf8_str_addr" (func (;16;) (type 3)))
+  (type (;0;) (func (result i32)))
+  (type (;1;) (func (result i64)))
+  (type (;2;) (func (param i32) (result i32)))
+  (type (;3;) (func (param i32) (result i64)))
+  (type (;4;) (func (param i32 i32) (result i32)))
+  (type (;5;) (func (param i32 i32 i32)))
+  (type (;6;) (func (param i32 i32 i32 i32) (result i32)))
+  (type (;7;) (func (param i64) (result i32)))
+  (type (;8;) (func (param i64 i32) (result i64)))
+  (type (;9;) (func (param i64 i32 i32) (result i64)))
+  (type (;10;) (func (param f64) (result i32)))
+  (import "shopify_function_v1" "_shopify_function_input_get" (func (;0;) (type 1)))
+  (import "shopify_function_v1" "_shopify_function_input_get_interned_obj_prop" (func (;1;) (type 8)))
+  (import "shopify_function_v1" "_shopify_function_input_get_at_index" (func (;2;) (type 8)))
+  (import "shopify_function_v1" "_shopify_function_input_get_obj_key_at_index" (func (;3;) (type 8)))
+  (import "shopify_function_v1" "_shopify_function_input_get_val_len" (func (;4;) (type 7)))
+  (import "shopify_function_v1" "_shopify_function_output_new_bool" (func (;5;) (type 2)))
+  (import "shopify_function_v1" "_shopify_function_output_new_null" (func (;6;) (type 0)))
+  (import "shopify_function_v1" "_shopify_function_output_new_i32" (func (;7;) (type 2)))
+  (import "shopify_function_v1" "_shopify_function_output_new_f64" (func (;8;) (type 10)))
+  (import "shopify_function_v1" "_shopify_function_output_new_object" (func (;9;) (type 2)))
+  (import "shopify_function_v1" "_shopify_function_output_finish_object" (func (;10;) (type 0)))
+  (import "shopify_function_v1" "_shopify_function_output_new_array" (func (;11;) (type 2)))
+  (import "shopify_function_v1" "_shopify_function_output_finish_array" (func (;12;) (type 0)))
+  (import "shopify_function_v1" "_shopify_function_output_new_interned_utf8_str" (func (;13;) (type 2)))
+  (import "shopify_function_v1" "_shopify_function_input_get_utf8_str_addr" (func (;14;) (type 2)))
   (import "shopify_function_v1" "memory" (memory (;0;) 1))
-  (import "shopify_function_v1" "_shopify_function_input_get_obj_prop" (func (;17;) (type 10)))
-  (import "shopify_function_v1" "shopify_function_realloc" (func (;18;) (type 7)))
-  (import "shopify_function_v1" "_shopify_function_output_new_utf8_str" (func (;19;) (type 4)))
-  (import "shopify_function_v1" "_shopify_function_intern_utf8_str" (func (;20;) (type 4)))
+  (import "shopify_function_v1" "_shopify_function_input_get_obj_prop" (func (;15;) (type 9)))
+  (import "shopify_function_v1" "shopify_function_realloc" (func (;16;) (type 6)))
+  (import "shopify_function_v1" "_shopify_function_output_new_utf8_str" (func (;17;) (type 3)))
+  (import "shopify_function_v1" "_shopify_function_intern_utf8_str" (func (;18;) (type 3)))
+  (import "shopify_function_v1" "_shopify_function_log_new_utf8_str" (func (;19;) (type 3)))
   (memory (;1;) 1)
   (export "memory" (memory 1))
-  (func (;21;) (type 5) (param i32 i32) (result i32)
+  (func (;20;) (type 4) (param i32 i32) (result i32)
     (local i64)
     local.get 1
-    call 20
+    call 18
     local.tee 2
     i64.const 32
     i64.shr_u
@@ -54,7 +52,21 @@ input_file: trampoline/src/test_data/consumer.wat
     local.get 1
     call 27
   )
-  (func (;22;) (type 5) (param i32 i32) (result i32)
+  (func (;21;) (type 4) (param i32 i32) (result i32)
+    (local i64)
+    local.get 1
+    call 17
+    local.tee 2
+    i64.const 32
+    i64.shr_u
+    i32.wrap_i64
+    local.get 2
+    i32.wrap_i64
+    local.get 0
+    local.get 1
+    call 27
+  )
+  (func (;22;) (type 4) (param i32 i32) (result i32)
     (local i64)
     local.get 1
     call 19
@@ -68,7 +80,7 @@ input_file: trampoline/src/test_data/consumer.wat
     local.get 1
     call 27
   )
-  (func (;23;) (type 10) (param i64 i32 i32) (result i64)
+  (func (;23;) (type 9) (param i64 i32 i32) (result i64)
     (local i32)
     local.get 2
     call 25
@@ -79,29 +91,29 @@ input_file: trampoline/src/test_data/consumer.wat
     local.get 0
     local.get 3
     local.get 2
-    call 17
+    call 15
   )
-  (func (;24;) (type 6) (param i32 i32 i32)
+  (func (;24;) (type 5) (param i32 i32 i32)
     local.get 1
     local.get 0
-    call 16
+    call 14
     local.get 2
     call 26
   )
-  (func (;25;) (type 3) (param i32) (result i32)
+  (func (;25;) (type 2) (param i32) (result i32)
     i32.const 0
     i32.const 0
     i32.const 1
     local.get 0
-    call 18
+    call 16
   )
-  (func (;26;) (type 6) (param i32 i32 i32)
+  (func (;26;) (type 5) (param i32 i32 i32)
     local.get 0
     local.get 1
     local.get 2
     memory.copy 1 0
   )
-  (func (;27;) (type 6) (param i32 i32 i32)
+  (func (;27;) (type 5) (param i32 i32 i32)
     local.get 0
     local.get 1
     local.get 2

@@ -1,7 +1,6 @@
 use crate::{decorate_for_target, Context, DoubleUsize};
 use rmp::encode;
 use shopify_function_wasm_api_core::write::WriteResult;
-use std::io::Write;
 
 mod state;
 
@@ -205,30 +204,6 @@ decorate_for_target! {
     }
 }
 
-decorate_for_target! {
-    fn shopify_function_output_finalize() -> WriteResult {
-        Context::with_mut(|context| {
-            let Context {
-                output_bytes,
-                write_state,
-                ..
-            } = &context;
-            if *write_state != State::End {
-                return WriteResult::ValueNotFinished;
-            }
-            let mut stdout = std::io::stdout();
-            if stdout.write_all(output_bytes.as_slice()).is_err() {
-                return WriteResult::IoError;
-            }
-            if stdout.flush().is_err() {
-                return WriteResult::IoError;
-            }
-            WriteResult::Ok
-        })
-    }
-}
-
-#[cfg(not(target_family = "wasm"))]
 pub fn shopify_function_output_finalize_and_return_msgpack_bytes() -> (WriteResult, Vec<u8>) {
     Context::with_mut(|context| {
         let Context {
