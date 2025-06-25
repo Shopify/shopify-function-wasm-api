@@ -102,7 +102,7 @@ pub struct TrampolineCodegen {
     provider_memory_id: OnceCell<MemoryId>,
     memcpy_to_guest: OnceCell<FunctionId>,
     memcpy_to_provider: OnceCell<FunctionId>,
-    imported_shopify_function_realloc: OnceCell<FunctionId>,
+    imported_shopify_function_alloc: OnceCell<FunctionId>,
     alloc: OnceCell<FunctionId>,
 }
 
@@ -116,7 +116,7 @@ impl TrampolineCodegen {
             provider_memory_id: OnceCell::new(),
             memcpy_to_guest: OnceCell::new(),
             memcpy_to_provider: OnceCell::new(),
-            imported_shopify_function_realloc: OnceCell::new(),
+            imported_shopify_function_alloc: OnceCell::new(),
             alloc: OnceCell::new(),
         })
     }
@@ -207,25 +207,23 @@ impl TrampolineCodegen {
         })
     }
 
-    fn emit_shopify_function_realloc_import(&mut self) -> FunctionId {
-        *self.imported_shopify_function_realloc.get_or_init(|| {
-            let shopify_function_realloc_type = self.module.types.add(
-                &[ValType::I32, ValType::I32, ValType::I32, ValType::I32],
-                &[ValType::I32],
-            );
+    fn emit_shopify_function_alloc_import(&mut self) -> FunctionId {
+        *self.imported_shopify_function_alloc.get_or_init(|| {
+            let shopify_function_alloc_type =
+                self.module.types.add(&[ValType::I32], &[ValType::I32]);
 
-            let (imported_shopify_function_realloc, _) = self.module.add_import_func(
+            let (imported_shopify_function_alloc, _) = self.module.add_import_func(
                 PROVIDER_MODULE_NAME,
-                "shopify_function_realloc",
-                shopify_function_realloc_type,
+                "shopify_function_alloc",
+                shopify_function_alloc_type,
             );
 
-            imported_shopify_function_realloc
+            imported_shopify_function_alloc
         })
     }
 
     fn emit_alloc(&mut self) -> FunctionId {
-        let imported_shopify_function_realloc = self.emit_shopify_function_realloc_import();
+        let imported_shopify_function_alloc = self.emit_shopify_function_alloc_import();
 
         *self.alloc.get_or_init(|| {
             let mut alloc =
@@ -235,11 +233,8 @@ impl TrampolineCodegen {
 
             alloc
                 .func_body()
-                .i32_const(0)
-                .i32_const(0)
-                .i32_const(1)
                 .local_get(size)
-                .call(imported_shopify_function_realloc);
+                .call(imported_shopify_function_alloc);
 
             alloc.finish(vec![size], &mut self.module.funcs)
         })
