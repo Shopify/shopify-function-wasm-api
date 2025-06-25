@@ -107,8 +107,9 @@ fn run_example(example: &str, input_bytes: Vec<u8>, api: Api) -> Result<(Vec<u8>
     let provider_instance = linker.instantiate(&mut store, &provider)?;
     if api.is_wasm() {
         store.set_fuel(STARTING_FUEL)?;
-        let init_func = provider_instance.get_typed_func::<i32, i32>(&mut store, "initialize")?;
-        let input_buffer_offset = init_func.call(&mut store, input_bytes.len() as i32)?;
+        let init_func =
+            provider_instance.get_typed_func::<(i32, i32), i32>(&mut store, "initialize")?;
+        let input_buffer_offset = init_func.call(&mut store, (input_bytes.len() as i32, 1024))?;
         provider_instance
             .get_memory(&mut store, "memory")
             .unwrap()
@@ -524,7 +525,7 @@ fn test_log() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
     let (_, logs, fuel) = run_example("log", vec![], Api::Wasm)?;
     assert_eq!(logs, "Hi!\nHello\nHere's a third string\n✌️\n");
-    assert_fuel_consumed_within_threshold(1895, fuel);
+    assert_fuel_consumed_within_threshold(1807, fuel);
     Ok(())
 }
 

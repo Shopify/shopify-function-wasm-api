@@ -96,10 +96,11 @@ pub(crate) use decorate_for_target;
 
 #[cfg(target_family = "wasm")]
 #[export_name = "initialize"]
-extern "C" fn initialize(input_len: usize) -> *const u8 {
+extern "C" fn initialize(input_len: usize, log_initial_capacity: usize) -> *const u8 {
     CONTEXT.with_borrow_mut(|context| {
         *context = Context::default();
         context.input_bytes = vec![0; input_len];
+        context.logs = Vec::with_capacity(log_initial_capacity);
         context.input_bytes.as_ptr()
     })
 }
