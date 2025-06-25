@@ -34,3 +34,7 @@ path = "examples/cart-checkout-validation-wasm-api.rs"
 name = "cart-checkout-validation-wasi-json"
 path = "examples/cart-checkout-validation-wasi-json.rs"
 
+[[example]]
+name = "null_fields"
+path = "../examples/null_fields.rs"
+

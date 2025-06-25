@@ -58,6 +58,83 @@ fn map_result(result: usize) -> Result<(), Error> {
     }
 }
 
+/// A helper for counting fields before writing objects with conditional fields.
+pub struct FieldCounter {
+    count: usize,
+}
+
+impl FieldCounter {
+    /// Create a new field counter.
+    pub fn new() -> Self {
+        Self { count: 0 }
+    }
+
+    /// Get the current field count.
+    pub fn count(&self) -> usize {
+        self.count
+    }
+
+    /// Count a field if the value would be written.
+    pub fn count_field<T: Serialize + ?Sized>(&mut self, _value: &T) {
+        self.count += 1;
+    }
+
+    /// Count a field only if the optional value is Some.
+    pub fn count_optional_field<T: Serialize>(&mut self, value: &Option<T>) {
+        if value.is_some() {
+            self.count += 1;
+        }
+    }
+}
+
+/// A helper for writing objects with conditional fields that automatically handles field counting and key writing.
+pub struct ConditionalObjectWriter {
+    fields: Vec<(String, Box<dyn FnOnce(&mut Context) -> Result<(), Error>>)>,
+}
+
+impl ConditionalObjectWriter {
+    /// Create a new conditional object writer.
+    pub fn new() -> Self {
+        Self { fields: Vec::new() }
+    }
+
+    /// Get the number of fields that will be written.
+    pub fn field_count(&self) -> usize {
+        self.fields.len()
+    }
+
+    /// Add a field that will always be written.
+    pub fn field<T: Serialize + ToOwned + ?Sized>(
+        &mut self,
+        key: &str,
+        value: &T,
+    ) -> Result<(), Error>
+    where
+        T::Owned: Serialize + 'static,
+    {
+        let key = key.to_string();
+        let value = value.to_owned();
+        self.fields
+            .push((key, Box::new(move |ctx| value.serialize(ctx))));
+        Ok(())
+    }
+
+    /// Add a field only if the optional value is Some.
+    pub fn optional_field<T: Serialize + Clone + 'static>(
+        &mut self,
+        key: &str,
+        value: &Option<T>,
+    ) -> Result<(), Error> {
+        if let Some(ref val) = value {
+            let key = key.to_string();
+            let val = val.clone();
+            self.fields
+                .push((key, Box::new(move |ctx| val.serialize(ctx))));
+        }
+        Ok(())
+    }
+}
+
 impl Context {
     /// Write a boolean value.
     pub fn write_bool(&mut self, value: bool) -> Result<(), Error> {
@@ -101,6 +178,46 @@ impl Context {
     ) -> Result<(), Error> {
         map_result(unsafe { crate::shopify_function_output_new_object(self.0 as _, len) })?;
         f(self)?;
+        map_result(unsafe { crate::shopify_function_output_finish_object(self.0 as _) })
+    }
+
+    /// Write an object with conditional fields using a two-pass approach.
+    ///
+    /// This method first counts the fields that will be written, then writes the object.
+    /// Use this with `SerializeOptional` to skip null fields and reduce output size.
+    pub fn write_object_conditional<C, W>(
+        &mut self,
+        count_fields: C,
+        write_fields: W,
+    ) -> Result<(), Error>
+    where
+        C: FnOnce(&mut FieldCounter),
+        W: FnOnce(&mut Self) -> Result<(), Error>,
+    {
+        // First pass: count fields
+        let mut counter = FieldCounter::new();
+        count_fields(&mut counter);
+
+        // Second pass: write object with correct field count
+        self.write_object(write_fields, counter.count())
+    }
+
+    /// Write an object with conditional fields
+    pub fn write_object_with_conditional_fields<F>(&mut self, f: F) -> Result<(), Error>
+    where
+        F: FnOnce(&mut ConditionalObjectWriter) -> Result<(), Error>,
+    {
+        let mut writer = ConditionalObjectWriter::new();
+        f(&mut writer)?;
+
+        let field_count = writer.field_count();
+        map_result(unsafe { crate::shopify_function_output_new_object(self.0 as _, field_count) })?;
+
+        for (key, value_fn) in writer.fields {
+            self.write_utf8_str(&key)?;
+            value_fn(self)?;
+        }
+
         map_result(unsafe { crate::shopify_function_output_finish_object(self.0 as _) })
     }
 
@@ -240,6 +357,29 @@ impl<K: AsRef<str>, V: Serialize> Serialize for HashMap<K, V> {
     }
 }
 
+/// A trait for types that can optionally skip serialization when None.
+///
+/// This trait allows for conditional field inclusion in objects, which can help
+/// reduce output size and avoid writing null values for optional fields.
+pub trait SerializeOptional {
+    /// Serialize the value if present, skip if None.
+    ///
+    /// Returns `true` if a value was written, `false` if the field was skipped.
+    fn serialize_optional(&self, context: &mut Context) -> Result<bool, Error>;
+}
+
+impl<T: Serialize> SerializeOptional for Option<T> {
+    fn serialize_optional(&self, context: &mut Context) -> Result<bool, Error> {
+        match self {
+            Some(value) => {
+                value.serialize(context)?;
+                Ok(true) // Field was written
+            }
+            None => Ok(false), // Field was skipped
+        }
+    }
+}
+
 impl<T: Serialize> Serialize for Option<T> {
     fn serialize(&self, context: &mut Context) -> Result<(), Error> {
         match self {
@@ -321,5 +461,119 @@ mod tests {
             let result = serialize_and_return(&option);
             assert_eq!(result, serde_json::json!(option));
         });
+    }
+
+    #[test]
+    fn test_serialize_optional_some() {
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        let option_value: Option<i32> = Some(42);
+
+        let was_written = option_value.serialize_optional(&mut context).unwrap();
+        assert!(was_written);
+
+        let result = context.finalize_output_and_return().unwrap();
+        assert_eq!(result, serde_json::json!(42));
+    }
+
+    #[test]
+    fn test_serialize_optional_none() {
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        let option_value: Option<i32> = None;
+
+        let was_written = option_value.serialize_optional(&mut context).unwrap();
+        assert!(!was_written);
+
+        // Since nothing was written, we can't finalize - this is expected behavior
+        // The SerializeOptional trait is meant to be used within objects
+    }
+
+    #[test]
+    fn test_field_counter() {
+        let mut counter = FieldCounter::new();
+        assert_eq!(counter.count(), 0);
+
+        counter.count_field("test");
+        assert_eq!(counter.count(), 1);
+
+        let some_option: Option<i32> = Some(42);
+        let none_option: Option<i32> = None;
+
+        counter.count_optional_field(&some_option);
+        assert_eq!(counter.count(), 2);
+
+        counter.count_optional_field(&none_option);
+        assert_eq!(counter.count(), 2); // Should not increment for None
+    }
+
+    #[test]
+    fn test_write_object_conditional() {
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        let optional_field: Option<i32> = None;
+        let other_optional: Option<String> = Some("test".to_string());
+        let required_field = "required_value";
+
+        context
+            .write_object_conditional(
+                |counter| {
+                    // Count fields that will be written
+                    counter.count_field(required_field);
+                    counter.count_optional_field(&optional_field);
+                    counter.count_optional_field(&other_optional);
+                },
+                |ctx| {
+                    // Write required field
+                    ctx.write_utf8_str("required")?;
+                    required_field.serialize(ctx)?;
+
+                    // Write optional fields only if they have values
+                    if optional_field.serialize_optional(ctx)? {
+                        ctx.write_utf8_str("optional")?;
+                    }
+
+                    if other_optional.serialize_optional(ctx)? {
+                        ctx.write_utf8_str("test")?;
+                    }
+
+                    Ok(())
+                },
+            )
+            .unwrap();
+
+        let result = context.finalize_output_and_return().unwrap();
+
+        // Verify the result contains exactly the expected fields
+        assert!(result.is_object());
+        let obj = result.as_object().unwrap();
+        assert_eq!(obj.len(), 2);
+        assert_eq!(obj.get("required").unwrap(), "required_value");
+        assert_eq!(obj.get("test").unwrap(), "test");
+        assert!(!obj.contains_key("optional")); // Verify null field was omitted
+    }
+
+    #[test]
+    fn test_write_object_with_conditional_fields_ergonomic() {
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        let optional_field: Option<i32> = None;
+        let other_optional: Option<String> = Some("test".to_string());
+        let required_field = "required_value";
+
+        context
+            .write_object_with_conditional_fields(|writer| {
+                writer.field("required", required_field)?;
+                writer.optional_field("optional", &optional_field)?;
+                writer.optional_field("test", &other_optional)?;
+                Ok(())
+            })
+            .unwrap();
+
+        let result = context.finalize_output_and_return().unwrap();
+
+        // Verify the result contains exactly the expected fields
+        assert!(result.is_object());
+        let obj = result.as_object().unwrap();
+        assert_eq!(obj.len(), 2);
+        assert_eq!(obj.get("required").unwrap(), "required_value");
+        assert_eq!(obj.get("test").unwrap(), "test");
+        assert!(!obj.contains_key("optional")); // Verify null field was omitted
     }
 }

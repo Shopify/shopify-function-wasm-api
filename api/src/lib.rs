@@ -34,7 +34,7 @@ pub mod read;
 pub mod write;
 
 pub use read::Deserialize;
-pub use write::Serialize;
+pub use write::{ConditionalObjectWriter, Serialize, SerializeOptional};
 
 #[cfg(target_family = "wasm")]
 #[link(wasm_import_module = "shopify_function_v1")]
