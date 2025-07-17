@@ -829,7 +829,7 @@ mod tests {
                 LazyValueRef::Array(array_ref) => {
                     assert_eq!(array_ref.processed_elements.len(), i + 1);
                 }
-                _ => panic!("Expected array, got {:?}", value),
+                _ => panic!("Expected array, got {value:?}"),
             }
         });
 
@@ -958,7 +958,7 @@ mod tests {
                     LazyValueRef::Object(obj_ref) => {
                         assert_eq!(obj_ref.processed_elements.len(), i + 1);
                     }
-                    _ => panic!("Expected object, got {:?}", value),
+                    _ => panic!("Expected object, got {value:?}"),
                 }
             });
 
