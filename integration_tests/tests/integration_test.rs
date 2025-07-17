@@ -28,17 +28,11 @@ fn assert_fuel_consumed_within_threshold(target_fuel: u64, fuel_consumed: u64) {
     if fuel_consumed > target_fuel {
         assert!(
             percentage_difference <= THRESHOLD_PERCENTAGE,
-            "fuel_consumed ({}) was not within {:.2}% of the target_fuel value ({}). Please consider if the changes are worth the increase in fuel consumption.",
-            fuel_consumed,
-            THRESHOLD_PERCENTAGE,
-            target_fuel
+            "fuel_consumed ({fuel_consumed}) was not within {THRESHOLD_PERCENTAGE:.2}% of the target_fuel value ({target_fuel}). Please consider if the changes are worth the increase in fuel consumption.",
         );
     } else if percentage_difference > THRESHOLD_PERCENTAGE {
         panic!(
-            "fuel_consumed ({}) was significantly better than target_fuel value ({}) by more than {:.2}%. This is a significant improvement! Please double check your changes and update the target fuel if this is a legitimate improvement.",
-            fuel_consumed,
-            target_fuel,
-            THRESHOLD_PERCENTAGE
+            "fuel_consumed ({fuel_consumed}) was significantly better than target_fuel value ({target_fuel}) by more than {THRESHOLD_PERCENTAGE:.2}%. This is a significant improvement! Please double check your changes and update the target fuel if this is a legitimate improvement.",
         );
     }
 }
@@ -124,8 +118,7 @@ fn decode_json_output(output: Vec<u8>) -> Result<serde_json::Value> {
             Err(_) => match String::from_utf8(output.clone()) {
                 Ok(string_output) => {
                     eprintln!(
-                        "Failed to parse output as JSON or MessagePack. Raw output: {}",
-                        string_output
+                        "Failed to parse output as JSON or MessagePack. Raw output: {string_output}",
                     );
                     Ok(serde_json::json!({ "raw_output": string_output }))
                 }
@@ -342,7 +335,7 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     let input = generate_cart_with_size(2, true);
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (_, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
-    eprintln!("WASM API fuel: {}", wasm_api_fuel);
+    eprintln!("WASM API fuel: {wasm_api_fuel}");
     // Using a target fuel value as reference similar to the Javy example
     assert_fuel_consumed_within_threshold(15880, wasm_api_fuel);
     Ok(())
@@ -372,16 +365,13 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
     assert_eq!(wasm_api_value, non_wasm_api_value);
     assert!(
         wasm_api_fuel < non_wasm_api_fuel,
-        "WASM API fuel usage ({}) should be less than non-WASM API fuel usage ({})",
-        wasm_api_fuel,
-        non_wasm_api_fuel
+        "WASM API fuel usage ({wasm_api_fuel}) should be less than non-WASM API fuel usage ({non_wasm_api_fuel})",
     );
 
     let improvement =
         ((non_wasm_api_fuel as f64 - wasm_api_fuel as f64) / non_wasm_api_fuel as f64) * 100.0;
     println!(
-        "WASM API fuel: {}, Non-WASM API fuel: {}, Improvement: {:.2}%",
-        wasm_api_fuel, non_wasm_api_fuel, improvement
+        "WASM API fuel: {wasm_api_fuel}, Non-WASM API fuel: {non_wasm_api_fuel}, Improvement: {improvement:.2}%",
     );
 
     assert_fuel_consumed_within_threshold(15880, wasm_api_fuel);
@@ -414,16 +404,13 @@ fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
     assert_eq!(wasm_api_value, non_wasm_api_value);
     assert!(
         wasm_api_fuel < non_wasm_api_fuel,
-        "WASM API fuel usage ({}) should be less than non-WASM API fuel usage ({})",
-        wasm_api_fuel,
-        non_wasm_api_fuel
+        "WASM API fuel usage ({wasm_api_fuel}) should be less than non-WASM API fuel usage ({non_wasm_api_fuel})",
     );
 
     let improvement =
         ((non_wasm_api_fuel as f64 - wasm_api_fuel as f64) / non_wasm_api_fuel as f64) * 100.0;
     println!(
-        "WASM API fuel: {}, Non-WASM API fuel: {}, Improvement: {:.2}%",
-        wasm_api_fuel, non_wasm_api_fuel, improvement
+        "WASM API fuel: {wasm_api_fuel}, Non-WASM API fuel: {non_wasm_api_fuel}, Improvement: {improvement:.2}%",
     );
 
     // Add fuel consumption threshold checks for both implementations

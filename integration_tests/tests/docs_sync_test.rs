@@ -43,7 +43,7 @@ fn load_wasm_bytes(relative_path: &str) -> Result<Vec<u8>> {
 fn get_module_function_concatenated_ids(file_path: &str) -> Result<HashSet<String>> {
     let wasm_bytes = load_wasm_bytes(file_path)?;
     let module = WalrusModule::from_buffer(&wasm_bytes)
-        .with_context(|| format!("Failed to parse WASM/WAT bytes from: {}", file_path))?;
+        .with_context(|| format!("Failed to parse WASM/WAT bytes from: {file_path}"))?;
 
     let mut function_api_module_names = HashSet::new();
     let mut concatenated_ids = HashSet::new();
@@ -57,9 +57,7 @@ fn get_module_function_concatenated_ids(file_path: &str) -> Result<HashSet<Strin
 
     if function_api_module_names.len() > 1 {
         anyhow::bail!(
-            "File '{}' imports functions from multiple modules: {:?}. Expected a single function API module for all function imports.",
-            file_path,
-            function_api_module_names
+            "File '{file_path}' imports functions from multiple modules: {function_api_module_names:?}. Expected a single function API module for all function imports.",
         );
     }
 
@@ -70,7 +68,7 @@ fn get_module_function_concatenated_ids(file_path: &str) -> Result<HashSet<Strin
 fn extract_imported_functions(file_path: &str, expected_module: &str) -> Result<HashSet<String>> {
     let wasm_bytes = load_wasm_bytes(file_path)?;
     let module = WalrusModule::from_buffer(&wasm_bytes)
-        .with_context(|| format!("Failed to parse WASM/WAT bytes from: {}", file_path))?;
+        .with_context(|| format!("Failed to parse WASM/WAT bytes from: {file_path}"))?;
 
     let imports: HashSet<String> = module
         .imports
@@ -89,7 +87,7 @@ fn extract_imported_functions(file_path: &str, expected_module: &str) -> Result<
 fn extract_imported_modules(file_path: &str) -> Result<HashSet<String>> {
     let wasm_bytes = load_wasm_bytes(file_path)?;
     let module = WalrusModule::from_buffer(&wasm_bytes)
-        .with_context(|| format!("Failed to parse WASM/WAT bytes from: {}", file_path))?;
+        .with_context(|| format!("Failed to parse WASM/WAT bytes from: {file_path}"))?;
 
     let modules: HashSet<String> = module
         .imports
@@ -111,13 +109,11 @@ fn test_shopify_function_wat_imports_consistency() -> Result<()> {
 
     assert!(
         !sf_ids.is_empty(),
-        "No function imports (`<module>.<function>`) found in '{}'. It should define the API.",
-        shopify_function_wat_path
+        "No function imports (`<module>.<function>`) found in '{shopify_function_wat_path}'. It should define the API.",
     );
     assert!(
         !c_ids.is_empty(),
-        "No function imports (`<module>.<function>`) found in '{}'. It should consume the API.",
-        consumer_wat_path
+        "No function imports (`<module>.<function>`) found in '{consumer_wat_path}'. It should consume the API.",
     );
 
     let sf_ids_sorted = sorted_vec_from_hashset(&sf_ids);
@@ -154,14 +150,12 @@ fn test_header_wasm_module_name_consistency() -> Result<()> {
     assert_eq!(
         header_wasm_modules_set.len(),
         1,
-        "Expected header_test.wasm to have exactly one import module, got: {:?}",
-        header_wasm_modules_set
+        "Expected header_test.wasm to have exactly one import module, got: {header_wasm_modules_set:?}",
     );
     assert_eq!(
         consumer_wat_modules_set.len(),
         1,
-        "Expected consumer.wat to have exactly one import module, got: {:?}",
-        consumer_wat_modules_set
+        "Expected consumer.wat to have exactly one import module, got: {consumer_wat_modules_set:?}",
     );
 
     let header_modules_sorted = sorted_vec_from_hashset(&header_wasm_modules_set);
@@ -186,8 +180,7 @@ fn test_header_wasm_module_name_consistency() -> Result<()> {
     assert_eq!(
         header_wasm_modules_set,
         consumer_wat_modules_set,
-        "Module names MUST be identical between '{}' and '{}'. Review snapshot 'header_wasm_module_name_consistency_diff'.",
-        header_wasm_path, consumer_wat_path
+        "Module names MUST be identical between '{header_wasm_path}' and '{consumer_wat_path}'. Review snapshot 'header_wasm_module_name_consistency_diff'.",
     );
 
     Ok(())
@@ -201,14 +194,13 @@ fn test_header_wasm_function_name_consistency() -> Result<()> {
 
     let header_module_names = extract_imported_modules(header_wasm_path)?;
     let module_name = header_module_names.iter().next().ok_or_else(||
-        anyhow::anyhow!("No import module found in '{}', this test assumes module consistency is checked separately.", header_wasm_path)
+        anyhow::anyhow!("No import module found in '{header_wasm_path}', this test assumes module consistency is checked separately.")
     )?.clone();
 
     let consumer_module_names = extract_imported_modules(consumer_wat_path)?;
     assert!(
         consumer_module_names.contains(&module_name) && consumer_module_names.len() == 1,
-        "consumer.wat (module(s): {:?}) does not align with the single module name '{}' from header_test.wasm. Ensure module consistency test passes.", 
-        consumer_module_names, module_name
+        "consumer.wat (module(s): {consumer_module_names:?}) does not align with the single module name '{module_name}' from header_test.wasm. Ensure module consistency test passes.", 
     );
 
     let header_wasm_imports_set = extract_imported_functions(header_wasm_path, &module_name)?;
@@ -245,24 +237,19 @@ fn test_consistency_across_all_files() -> Result<()> {
 
     let header_wasm_modules_set = extract_imported_modules(header_wasm_path)?;
     let module_name = header_wasm_modules_set.iter().next().ok_or_else(|| {
-        anyhow::anyhow!(
-            "No module name found in {} for overall consistency check",
-            header_wasm_path
-        )
+        anyhow::anyhow!("No module name found in {header_wasm_path} for overall consistency check",)
     })?;
 
     // Check if all files use the same module name (basic sanity check)
     let api_wat_module_names = extract_imported_modules(api_wat_path)?;
     assert!(
         api_wat_module_names.contains(module_name),
-        "api/src/shopify_function.wat does not use module name '{}'",
-        module_name
+        "api/src/shopify_function.wat does not use module name '{module_name}'",
     );
     let consumer_wat_module_names = extract_imported_modules(consumer_wat_path)?;
     assert!(
         consumer_wat_module_names.contains(module_name),
-        "trampoline/src/test_data/consumer.wat does not use module name '{}'",
-        module_name
+        "trampoline/src/test_data/consumer.wat does not use module name '{module_name}'",
     );
 
     let header_wasm_imports_set = extract_imported_functions(header_wasm_path, module_name)?;
@@ -295,8 +282,8 @@ fn test_consistency_across_all_files() -> Result<()> {
         if let Some(presence) = function_map.get(&func_name) {
             if presence[0] != presence[1] || presence[1] != presence[2] {
                 inconsistencies.push(format!(
-                    "Function '{}' presence inconsistent: header_test.wasm={}, shopify_function.wat={}, consumer.wat={}",
-                    func_name, presence[0], presence[1], presence[2]
+                    "Function '{func_name}' presence inconsistent: header_test.wasm={}, shopify_function.wat={}, consumer.wat={}",
+                    presence[0], presence[1], presence[2]
                 ));
             }
         }

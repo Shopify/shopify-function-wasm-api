@@ -209,8 +209,8 @@ impl Tag {
 
     fn from_val(v: Val) -> Result<Self, Box<dyn Error>> {
         match u8::try_from(v) {
-            Ok(v) => Self::from_repr(v).ok_or_else(|| format!("Unknown tag: {}", v).into()),
-            Err(_) => Err(format!("Unknown tag: {}", v).into()),
+            Ok(v) => Self::from_repr(v).ok_or_else(|| format!("Unknown tag: {v}").into()),
+            Err(_) => Err(format!("Unknown tag: {v}").into()),
         }
     }
 }

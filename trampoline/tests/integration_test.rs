@@ -22,7 +22,7 @@ fn example_module_path(name: &str) -> PathBuf {
     let workspace_root = workspace_root();
     workspace_root
         .join("target/wasm32-wasip1/release/examples")
-        .join(format!("{}.wasm", name))
+        .join(format!("{name}.wasm"))
 }
 
 fn build_example(name: &str) -> Result<()> {
