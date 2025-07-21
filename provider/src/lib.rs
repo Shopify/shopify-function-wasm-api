@@ -22,7 +22,7 @@ struct Context {
     bump_allocator: bumpalo::Bump,
     input_bytes: Vec<u8>,
     output_bytes: ByteBuf,
-    logs: Vec<u8>,
+    logs: Logs,
     write_state: State,
     write_parent_state_stack: Vec<State>,
     string_interner: StringInterner,
@@ -43,7 +43,7 @@ impl Default for Context {
             bump_allocator: Bump::new(),
             input_bytes: Vec::new(),
             output_bytes: ByteBuf::with_capacity(1024),
-            logs: Vec::with_capacity(1024),
+            logs: Logs::default(),
             write_state: State::Start,
             write_parent_state_stack: Vec::new(),
             string_interner: StringInterner::new(),
@@ -65,7 +65,7 @@ impl Context {
             bump_allocator: Bump::new(),
             input_bytes: Vec::with_capacity(0),
             output_bytes: ByteBuf::with_capacity(output_capacity),
-            logs: Vec::with_capacity(log_capacity),
+            logs: Logs::default(),
             write_state: State::Start,
             write_parent_state_stack: Vec::new(),
             string_interner: StringInterner::new(),
@@ -106,6 +106,8 @@ macro_rules! decorate_for_target {
 }
 
 pub(crate) use decorate_for_target;
+
+use crate::log::Logs;
 
 #[cfg(target_family = "wasm")]
 #[export_name = "initialize"]

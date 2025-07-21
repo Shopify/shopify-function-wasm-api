@@ -41,21 +41,27 @@ input_file: trampoline/src/test_data/consumer.wat
   (func (;20;) (type 4) (param i32 i32) (result i32)
     (local i64)
     local.get 1
-    call 18
+    call 19
     local.tee 2
     i64.const 32
     i64.shr_u
     i32.wrap_i64
-    local.get 2
-    i32.wrap_i64
-    local.get 0
-    local.get 1
-    call 27
+    local.tee 1
+    i32.const 0
+    i32.ne
+    if ;; label = @1
+      local.get 2
+      i32.wrap_i64
+      local.get 0
+      local.get 1
+      call 27
+    else
+    end
   )
   (func (;21;) (type 4) (param i32 i32) (result i32)
     (local i64)
     local.get 1
-    call 17
+    call 18
     local.tee 2
     i64.const 32
     i64.shr_u
@@ -69,7 +75,7 @@ input_file: trampoline/src/test_data/consumer.wat
   (func (;22;) (type 4) (param i32 i32) (result i32)
     (local i64)
     local.get 1
-    call 19
+    call 17
     local.tee 2
     i64.const 32
     i64.shr_u
