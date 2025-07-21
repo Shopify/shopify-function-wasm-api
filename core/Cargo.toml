@@ -8,4 +8,4 @@ homepage = "https://github.com/Shopify/shopify-function-wasm-api"
 description = "Low-level primitives of the Shopify Function Wasm API"
 
 [dependencies]
-strum = { version = "0.27.1", features = ["derive"] }
+strum = { version = "0.27.2", features = ["derive"] }

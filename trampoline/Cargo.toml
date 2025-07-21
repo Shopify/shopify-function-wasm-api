@@ -10,7 +10,7 @@ description = "Tool for augmenting Wasm modules to be compatible with the Shopif
 [dependencies]
 walrus = "0.23.3"
 anyhow = "1.0"
-clap = { version = "4.5.40", features = ["derive"] }
+clap = { version = "4.5.41", features = ["derive"] }
 
 [dev-dependencies]
 uuid = { version = "1.17.0", features = ["v4"] }
