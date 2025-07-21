@@ -99,6 +99,8 @@ fn run_example(example: &str, input_bytes: Vec<u8>, api: Api) -> Result<(Vec<u8>
             .stdin(stdin)
             .stdout(stdout.clone())
             .stderr(stderr);
+    } else {
+        wasi_builder.inherit_stderr();
     }
     deterministic_wasi_ctx::add_determinism_to_wasi_ctx_builder(&mut wasi_builder);
     let wasi = wasi_builder.build_p1();
@@ -230,6 +232,7 @@ static BENCHMARK_NON_WASM_API_EXAMPLE_RESULT: LazyLock<Result<()>> =
     LazyLock::new(|| prepare_example("cart-checkout-validation-wasi-json"));
 static LOG_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("log"));
 static PANIC_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("panic"));
+static LOG_LEN_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("log-len"));
 
 #[test]
 fn test_echo_with_bool_input() -> Result<()> {
@@ -527,6 +530,34 @@ fn test_log() -> Result<()> {
     let (_, logs, fuel) = run_example("log", vec![], Api::Wasm)?;
     assert_eq!(logs, "Hi!\nHello\nHere's a third string\n✌️\n");
     assert_fuel_consumed_within_threshold(1895, fuel);
+    Ok(())
+}
+
+#[test]
+fn test_log_len() -> Result<()> {
+    LOG_LEN_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
+    let run = |len| -> Result<u64> {
+        Ok(run_example(
+            "log-len",
+            prepare_wasm_api_input(serde_json::json!(len))?,
+            Api::Wasm,
+        )?
+        .2)
+    };
+    let fuel = run(1)?;
+    assert_fuel_consumed_within_threshold(766, fuel);
+    let fuel = run(500)?;
+    assert_fuel_consumed_within_threshold(4_308, fuel);
+    let fuel = run(1_000)?;
+    assert_fuel_consumed_within_threshold(7_243, fuel);
+    let fuel = run(5_000)?;
+    assert_fuel_consumed_within_threshold(31_419, fuel);
+    let fuel = run(10_000)?;
+    assert_fuel_consumed_within_threshold(61_001, fuel);
+    let fuel = run(100_000)?;
+    assert_fuel_consumed_within_threshold(591_022, fuel);
     Ok(())
 }
 
