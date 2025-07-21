@@ -233,6 +233,8 @@ static BENCHMARK_NON_WASM_API_EXAMPLE_RESULT: LazyLock<Result<()>> =
 static LOG_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("log"));
 static PANIC_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("panic"));
 static LOG_LEN_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("log-len"));
+static LOG_PAST_CAPACITY_EXAMPLE_RESULT: LazyLock<Result<()>> =
+    LazyLock::new(|| prepare_example("log-past-capacity"));
 
 #[test]
 fn test_echo_with_bool_input() -> Result<()> {
@@ -529,7 +531,7 @@ fn test_log() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
     let (_, logs, fuel) = run_example("log", vec![], Api::Wasm)?;
     assert_eq!(logs, "Hi!\nHello\nHere's a third string\n✌️\n");
-    assert_fuel_consumed_within_threshold(1895, fuel);
+    assert_fuel_consumed_within_threshold(466, fuel);
     Ok(())
 }
 
@@ -549,15 +551,26 @@ fn test_log_len() -> Result<()> {
     let fuel = run(1)?;
     assert_fuel_consumed_within_threshold(766, fuel);
     let fuel = run(500)?;
-    assert_fuel_consumed_within_threshold(4_308, fuel);
+    assert_fuel_consumed_within_threshold(2_878, fuel);
     let fuel = run(1_000)?;
-    assert_fuel_consumed_within_threshold(7_243, fuel);
+    assert_fuel_consumed_within_threshold(4_383, fuel);
     let fuel = run(5_000)?;
-    assert_fuel_consumed_within_threshold(31_419, fuel);
+    assert_fuel_consumed_within_threshold(16_423, fuel);
     let fuel = run(10_000)?;
-    assert_fuel_consumed_within_threshold(61_001, fuel);
+    assert_fuel_consumed_within_threshold(31_473, fuel);
     let fuel = run(100_000)?;
-    assert_fuel_consumed_within_threshold(591_022, fuel);
+    assert_fuel_consumed_within_threshold(302_403, fuel);
+    Ok(())
+}
+
+#[test]
+fn test_log_past_capacity() -> Result<()> {
+    LOG_PAST_CAPACITY_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
+    let (_, logs, fuel) = run_example("log-past-capacity", vec![], Api::Wasm)?;
+    assert_eq!(logs, format!("{}bbbb", "a".repeat(1020)));
+    assert_fuel_consumed_within_threshold(1297, fuel);
     Ok(())
 }
 

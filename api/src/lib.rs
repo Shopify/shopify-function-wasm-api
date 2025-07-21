@@ -60,7 +60,7 @@ extern "C" {
     fn shopify_function_output_finish_array() -> usize;
 
     // Log API.
-    fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize) -> usize;
+    fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize);
 
     // Other.
     fn shopify_function_intern_utf8_str(ptr: *const u8, len: usize) -> usize;
@@ -153,14 +153,11 @@ mod provider_fallback {
     }
 
     // Logging.
-    pub(crate) unsafe fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize) -> usize {
+    pub(crate) unsafe fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize) {
         let result = shopify_function_provider::log::shopify_function_log_new_utf8_str(len);
-        let write_result = (result >> usize::BITS) as usize;
+        let len = (result >> usize::BITS) as usize;
         let dst = result as usize;
-        if write_result == WriteResult::Ok as usize {
-            std::ptr::copy(ptr as _, dst as _, len);
-        }
-        write_result
+        std::ptr::copy(ptr as _, dst as _, len);
     }
 
     // Other.
