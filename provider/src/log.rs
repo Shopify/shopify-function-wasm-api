@@ -4,7 +4,7 @@ use shopify_function_wasm_api_core::log::LogResult;
 impl Context {
     fn allocate_log(&mut self, len: usize) -> *const u8 {
         let write_offset = self.logs.len();
-        self.logs.append(&mut vec![0; len]);
+        self.logs.resize(write_offset + len, 0);
         unsafe { self.logs.as_ptr().add(write_offset) }
     }
 }
