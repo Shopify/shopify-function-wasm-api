@@ -34,7 +34,7 @@ thread_local! {
 
 #[cfg(target_family = "wasm")]
 thread_local! {
-    static OUTPUT_AND_LOG_PTRS: RefCell<[usize; 4]> = RefCell::new([0; 4]);
+    static OUTPUT_AND_LOG_PTRS: RefCell<[usize; 6]> = RefCell::new([0; 6]);
 }
 
 impl Default for Context {
@@ -136,8 +136,11 @@ extern "C" fn finalize() -> *const usize {
             let output = context.output_bytes.as_vec();
             output_and_log_ptrs[0] = output.as_ptr() as usize;
             output_and_log_ptrs[1] = output.len();
-            output_and_log_ptrs[2] = context.logs.as_ptr() as usize;
-            output_and_log_ptrs[3] = context.logs.len();
+            let (log_offset1, log_len1, log_offset2, log_len2) = context.logs.read_ptrs();
+            output_and_log_ptrs[2] = log_offset1 as _;
+            output_and_log_ptrs[3] = log_len1;
+            output_and_log_ptrs[4] = log_offset2 as _;
+            output_and_log_ptrs[5] = log_len2;
             output_and_log_ptrs.as_ptr()
         })
     })
