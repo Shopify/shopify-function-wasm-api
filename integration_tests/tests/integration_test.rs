@@ -131,11 +131,22 @@ fn run_example(example: &str, input_bytes: Vec<u8>, api: Api) -> Result<(Vec<u8>
 
     let result = func.call(&mut store, ());
 
-    let instructions = STARTING_FUEL.saturating_sub(store.get_fuel().unwrap_or_default());
+    let mut instructions = STARTING_FUEL.saturating_sub(store.get_fuel().unwrap_or_default());
 
     let mut output = Vec::new();
     let mut logs = Vec::new();
     if api.is_wasm() {
+        let log_output = instance
+            .get_typed_func::<(), u64>(&mut store, "logs")?
+            .call(&mut store, ())?;
+        let logs_len = (log_output >> u32::BITS) as usize;
+        let logs_offset = log_output as u32 as usize;
+        let memory = instance.get_memory(&mut store, "memory").unwrap();
+        logs = vec![0; logs_len];
+        memory.read(&store, logs_offset, &mut logs)?;
+
+        instructions = STARTING_FUEL.saturating_sub(store.get_fuel().unwrap_or_default());
+
         let results_offset = provider_instance
             .get_typed_func::<(), u32>(&mut store, "finalize")?
             .call(&mut store, ())?;
@@ -145,12 +156,8 @@ fn run_example(example: &str, input_bytes: Vec<u8>, api: Api) -> Result<(Vec<u8>
 
         let output_offset = u32::from_le_bytes(buf[0..4].try_into().unwrap()) as usize;
         let output_len = u32::from_le_bytes(buf[4..8].try_into().unwrap()) as usize;
-        let logs_offset = u32::from_le_bytes(buf[8..12].try_into().unwrap()) as usize;
-        let logs_len = u32::from_le_bytes(buf[12..16].try_into().unwrap()) as usize;
         output = vec![0; output_len];
         memory.read(&store, output_offset, &mut output)?;
-        logs = vec![0; logs_len];
-        memory.read(&store, logs_offset, &mut logs)?;
     }
 
     drop(store);
@@ -421,7 +428,7 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     )?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(10839, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(11_486, wasm_api_fuel);
     Ok(())
 }
 
@@ -467,7 +474,7 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
         wasm_api_fuel, non_wasm_api_fuel, improvement
     );
 
-    assert_fuel_consumed_within_threshold(10839, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(11_486, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(23858, non_wasm_api_fuel);
 
     Ok(())
@@ -529,7 +536,7 @@ fn test_log() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
     let (_, logs, fuel) = run_example("log", vec![], Api::Wasm)?;
     assert_eq!(logs, "Hi!\nHello\nHere's a third string\n✌️\n");
-    assert_fuel_consumed_within_threshold(618, fuel);
+    assert_fuel_consumed_within_threshold(1035, fuel);
     Ok(())
 }
 
@@ -547,17 +554,17 @@ fn test_log_len() -> Result<()> {
         .2)
     };
     let fuel = run(1)?;
-    assert_fuel_consumed_within_threshold(766, fuel);
+    assert_fuel_consumed_within_threshold(1_420, fuel);
     let fuel = run(500)?;
-    assert_fuel_consumed_within_threshold(3_068, fuel);
+    assert_fuel_consumed_within_threshold(3_044, fuel);
     let fuel = run(1_000)?;
-    assert_fuel_consumed_within_threshold(4_763, fuel);
+    assert_fuel_consumed_within_threshold(4_584, fuel);
     let fuel = run(5_000)?;
-    assert_fuel_consumed_within_threshold(19_019, fuel);
+    assert_fuel_consumed_within_threshold(17_495, fuel);
     let fuel = run(10_000)?;
-    assert_fuel_consumed_within_threshold(36_201, fuel);
+    assert_fuel_consumed_within_threshold(33_092, fuel);
     let fuel = run(100_000)?;
-    assert_fuel_consumed_within_threshold(343_022, fuel);
+    assert_fuel_consumed_within_threshold(293_071, fuel);
     Ok(())
 }
 

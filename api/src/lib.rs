@@ -152,13 +152,6 @@ mod provider_fallback {
         shopify_function_provider::write::shopify_function_output_finish_array() as usize
     }
 
-    // Logging.
-    pub(crate) unsafe fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize) {
-        let result = shopify_function_provider::log::shopify_function_log_new_utf8_str(len);
-        let dst = result as usize;
-        std::ptr::copy(ptr as _, dst as _, len);
-    }
-
     // Other.
     pub(crate) unsafe fn shopify_function_intern_utf8_str(ptr: *const u8, len: usize) -> usize {
         let result = shopify_function_provider::shopify_function_intern_utf8_str(len);
@@ -445,18 +438,12 @@ impl Context {
     }
 }
 
-impl Default for Context {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Configures panics to write to the logging API.
 pub fn init_panic_handler() {
     #[cfg(target_family = "wasm")]
     std::panic::set_hook(Box::new(|info| {
         let message = format!("{info}");
-        log::log_utf8_str(&message);
+        crate::log::log(&message);
     }));
 }
 

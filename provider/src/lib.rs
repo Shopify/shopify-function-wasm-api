@@ -22,7 +22,6 @@ struct Context {
     bump_allocator: bumpalo::Bump,
     input_bytes: Vec<u8>,
     output_bytes: ByteBuf,
-    logs: Vec<u8>,
     write_state: State,
     write_parent_state_stack: Vec<State>,
     string_interner: StringInterner,
@@ -34,7 +33,7 @@ thread_local! {
 
 #[cfg(target_family = "wasm")]
 thread_local! {
-    static OUTPUT_AND_LOG_PTRS: RefCell<[usize; 4]> = RefCell::new([0; 4]);
+    static OUTPUT_AND_LOG_PTRS: RefCell<[usize; 2]> = RefCell::new([0; 2]);
 }
 
 impl Default for Context {
@@ -43,7 +42,6 @@ impl Default for Context {
             bump_allocator: Bump::new(),
             input_bytes: Vec::new(),
             output_bytes: ByteBuf::with_capacity(1024),
-            logs: Vec::with_capacity(1024),
             write_state: State::Start,
             write_parent_state_stack: Vec::new(),
             string_interner: StringInterner::new(),
@@ -65,7 +63,6 @@ impl Context {
             bump_allocator: Bump::new(),
             input_bytes: Vec::with_capacity(0),
             output_bytes: ByteBuf::with_capacity(output_capacity),
-            logs: Vec::with_capacity(log_capacity),
             write_state: State::Start,
             write_parent_state_stack: Vec::new(),
             string_interner: StringInterner::new(),
@@ -134,8 +131,6 @@ extern "C" fn finalize() -> *const usize {
             let output = context.output_bytes.as_vec();
             output_and_log_ptrs[0] = output.as_ptr() as usize;
             output_and_log_ptrs[1] = output.len();
-            output_and_log_ptrs[2] = context.logs.as_ptr() as usize;
-            output_and_log_ptrs[3] = context.logs.len();
             output_and_log_ptrs.as_ptr()
         })
     })
