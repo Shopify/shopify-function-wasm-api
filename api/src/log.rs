@@ -8,26 +8,50 @@ thread_local! {
     static LOGS: RefCell<Logs> = RefCell::new(Logs::default());
 }
 
+const CAPACITY: usize = 1024;
+
 #[derive(Debug)]
 pub(crate) struct Logs {
-    buffer: Vec<u8>,
+    buffer: [u8; CAPACITY],
+    overflow_buffer: Vec<u8>,
+    inline_len: usize,
 }
 
 impl Default for Logs {
     fn default() -> Self {
         Self {
-            buffer: Vec::with_capacity(1024),
+            buffer: [0; CAPACITY],
+            overflow_buffer: Vec::new(),
+            inline_len: 0,
         }
     }
 }
 
 impl Logs {
     fn append(&mut self, buffer: &[u8]) {
-        self.buffer.extend_from_slice(buffer);
+        if self.overflow_buffer.is_empty() {
+            // Try to fit in inline buffer first
+            let remaining = CAPACITY - self.inline_len;
+            if buffer.len() <= remaining {
+                self.buffer[self.inline_len..self.inline_len + buffer.len()]
+                    .copy_from_slice(buffer);
+                self.inline_len += buffer.len();
+                return;
+            }
+            // Move to overflow buffer
+            self.overflow_buffer.reserve(self.inline_len + buffer.len());
+            self.overflow_buffer
+                .extend_from_slice(&self.buffer[..self.inline_len]);
+        }
+        self.overflow_buffer.extend_from_slice(buffer);
     }
 
     fn read_ptrs(&self) -> (*const u8, usize) {
-        (self.buffer.as_ptr(), self.buffer.len())
+        if self.overflow_buffer.is_empty() {
+            (self.buffer.as_ptr(), self.inline_len)
+        } else {
+            (self.overflow_buffer.as_ptr(), self.overflow_buffer.len())
+        }
     }
 }
 
