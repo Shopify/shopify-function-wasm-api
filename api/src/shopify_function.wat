@@ -237,6 +237,6 @@
   ;; Returns:
   ;;   - i32 status code indicating success or failure
   (import "shopify_function_v1" "shopify_function_log_new_utf8_str"
-    (func (param $len i32) (result i32))
+    (func (param $len i32))
   )
 )

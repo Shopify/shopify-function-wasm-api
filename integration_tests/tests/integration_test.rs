@@ -529,7 +529,7 @@ fn test_log() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
     let (_, logs, fuel) = run_example("log", vec![], Api::Wasm)?;
     assert_eq!(logs, "Hi!\nHello\nHere's a third string\n✌️\n");
-    assert_fuel_consumed_within_threshold(646, fuel);
+    assert_fuel_consumed_within_threshold(618, fuel);
     Ok(())
 }
 
@@ -549,15 +549,15 @@ fn test_log_len() -> Result<()> {
     let fuel = run(1)?;
     assert_fuel_consumed_within_threshold(766, fuel);
     let fuel = run(500)?;
-    assert_fuel_consumed_within_threshold(3_103, fuel);
+    assert_fuel_consumed_within_threshold(3_068, fuel);
     let fuel = run(1_000)?;
-    assert_fuel_consumed_within_threshold(4_833, fuel);
+    assert_fuel_consumed_within_threshold(4_763, fuel);
     let fuel = run(5_000)?;
-    assert_fuel_consumed_within_threshold(19_369, fuel);
+    assert_fuel_consumed_within_threshold(19_019, fuel);
     let fuel = run(10_000)?;
-    assert_fuel_consumed_within_threshold(36_901, fuel);
+    assert_fuel_consumed_within_threshold(36_201, fuel);
     let fuel = run(100_000)?;
-    assert_fuel_consumed_within_threshold(350_022, fuel);
+    assert_fuel_consumed_within_threshold(343_022, fuel);
     Ok(())
 }
 
