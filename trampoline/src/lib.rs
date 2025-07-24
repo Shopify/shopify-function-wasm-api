@@ -455,7 +455,7 @@ impl TrampolineCodegen {
         };
 
         let shopify_function_log_new_utf8_str_type =
-            self.module.types.add(&[ValType::I32], &[ValType::I32]);
+            self.module.types.add(&[ValType::I32], &[ValType::I64]);
 
         let (provider_shopify_function_log_new_utf8_str, _) = self.module.add_import_func(
             PROVIDER_MODULE_NAME,
@@ -464,6 +464,7 @@ impl TrampolineCodegen {
         );
 
         let memcpy_to_provider = self.emit_memcpy_to_provider();
+        let output = self.module.locals.add(ValType::I64);
 
         self.module.replace_imported_func(
             imported_shopify_function_log_new_utf8_str,
@@ -474,11 +475,30 @@ impl TrampolineCodegen {
                 builder
                     .func_body()
                     .local_get(len)
-                    // puts dst_ptr on to stack
+                    // most significant 32 bits are the length, least significant 32 bits are the pointer
                     .call(provider_shopify_function_log_new_utf8_str)
-                    .local_get(src_ptr)
-                    .local_get(len)
-                    .call(memcpy_to_provider);
+                    .local_tee(output)
+                    // extract the length with a bit shift and wrap it to i32
+                    .i64_const(32)
+                    .binop(BinaryOp::I64ShrU)
+                    .unop(UnaryOp::I32WrapI64) // length is on the stack now
+                    .local_tee(len)
+                    // exit early if len == 0
+                    .i32_const(0)
+                    .binop(BinaryOp::I32Ne)
+                    .if_else(
+                        None,
+                        |then| {
+                            then
+                                // extract the pointer by wrapping the output to i32
+                                .local_get(output)
+                                .unop(UnaryOp::I32WrapI64) // dst_ptr is on the stack now
+                                .local_get(src_ptr)
+                                .local_get(len)
+                                .call(memcpy_to_provider);
+                        },
+                        |_else| {},
+                    );
             },
         )?;
 

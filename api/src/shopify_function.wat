@@ -234,8 +234,6 @@
   ;; Parameters:
   ;;   - ptr: i32 pointer to string data in WebAssembly memory.
   ;;   - len: i32 length of string in bytes.
-  ;; Returns:
-  ;;   - i32 status code indicating success or failure
   (import "shopify_function_v1" "shopify_function_log_new_utf8_str"
     (func (param $len i32))
   )

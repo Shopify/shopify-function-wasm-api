@@ -110,9 +110,8 @@ fn run_example(example: &str, input_bytes: Vec<u8>, api: Api) -> Result<(Vec<u8>
     if api.is_wasm() {
         store.set_fuel(STARTING_FUEL)?;
         let init_func =
-            provider_instance.get_typed_func::<(i32, i32, i32), i32>(&mut store, "initialize")?;
-        let input_buffer_offset =
-            init_func.call(&mut store, (input_bytes.len() as i32, 1024, 1024))?;
+            provider_instance.get_typed_func::<(i32, i32), i32>(&mut store, "initialize")?;
+        let input_buffer_offset = init_func.call(&mut store, (input_bytes.len() as i32, 1024))?;
         provider_instance
             .get_memory(&mut store, "memory")
             .unwrap()
@@ -233,6 +232,8 @@ static BENCHMARK_NON_WASM_API_EXAMPLE_RESULT: LazyLock<Result<()>> =
 static LOG_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("log"));
 static PANIC_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("panic"));
 static LOG_LEN_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("log-len"));
+static LOG_PAST_CAPACITY_EXAMPLE_RESULT: LazyLock<Result<()>> =
+    LazyLock::new(|| prepare_example("log-past-capacity"));
 
 #[test]
 fn test_echo_with_bool_input() -> Result<()> {
@@ -529,7 +530,7 @@ fn test_log() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
     let (_, logs, fuel) = run_example("log", vec![], Api::Wasm)?;
     assert_eq!(logs, "Hi!\nHello\nHere's a third string\n✌️\n");
-    assert_fuel_consumed_within_threshold(618, fuel);
+    assert_fuel_consumed_within_threshold(478, fuel);
     Ok(())
 }
 
@@ -549,15 +550,26 @@ fn test_log_len() -> Result<()> {
     let fuel = run(1)?;
     assert_fuel_consumed_within_threshold(766, fuel);
     let fuel = run(500)?;
-    assert_fuel_consumed_within_threshold(3_068, fuel);
+    assert_fuel_consumed_within_threshold(2_893, fuel);
     let fuel = run(1_000)?;
-    assert_fuel_consumed_within_threshold(4_763, fuel);
+    assert_fuel_consumed_within_threshold(4_413, fuel);
     let fuel = run(5_000)?;
-    assert_fuel_consumed_within_threshold(19_019, fuel);
+    assert_fuel_consumed_within_threshold(16_183, fuel);
     let fuel = run(10_000)?;
-    assert_fuel_consumed_within_threshold(36_201, fuel);
+    assert_fuel_consumed_within_threshold(30_883, fuel);
     let fuel = run(100_000)?;
-    assert_fuel_consumed_within_threshold(343_022, fuel);
+    assert_fuel_consumed_within_threshold(295_513, fuel);
+    Ok(())
+}
+
+#[test]
+fn test_log_past_capacity() -> Result<()> {
+    LOG_PAST_CAPACITY_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
+    let (_, logs, fuel) = run_example("log-past-capacity", vec![], Api::Wasm)?;
+    assert_eq!(logs, format!("{}bbbb", "a".repeat(1020)));
+    assert_fuel_consumed_within_threshold(1297, fuel);
     Ok(())
 }
 
