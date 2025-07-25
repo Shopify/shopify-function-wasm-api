@@ -12,3 +12,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     Ok(())
 }
+
+#[no_mangle]
+pub extern "C" fn run() {
+    main().unwrap()
+}

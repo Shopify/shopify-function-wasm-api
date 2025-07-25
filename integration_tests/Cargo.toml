@@ -14,7 +14,12 @@ shopify_function_trampoline = { path = "../trampoline" }
 shopify_function_provider = { path = "../provider" }
 
 [dev-dependencies]
+criterion = "0.6"
 walrus = "0.23.3"
 anyhow = "1.0"
 wat = "1.229.0"
-insta = "1" 
+insta = "1"
+
+[[bench]]
+name = "benchmark"
+harness = false
