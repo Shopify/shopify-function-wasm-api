@@ -139,17 +139,24 @@ fn run_example(example: &str, input_bytes: Vec<u8>, api: Api) -> Result<(Vec<u8>
             .get_typed_func::<(), u32>(&mut store, "finalize")?
             .call(&mut store, ())?;
         let memory = provider_instance.get_memory(&mut store, "memory").unwrap();
-        let mut buf = [0; 16];
+        let mut buf = [0; 24];
         memory.read(&store, results_offset as usize, &mut buf)?;
 
         let output_offset = u32::from_le_bytes(buf[0..4].try_into().unwrap()) as usize;
         let output_len = u32::from_le_bytes(buf[4..8].try_into().unwrap()) as usize;
-        let logs_offset = u32::from_le_bytes(buf[8..12].try_into().unwrap()) as usize;
-        let logs_len = u32::from_le_bytes(buf[12..16].try_into().unwrap()) as usize;
+        let logs_offset1 = u32::from_le_bytes(buf[8..12].try_into().unwrap()) as usize;
+        let logs_len1 = u32::from_le_bytes(buf[12..16].try_into().unwrap()) as usize;
+        let logs_offset2 = u32::from_le_bytes(buf[16..20].try_into().unwrap()) as usize;
+        let logs_len2 = u32::from_le_bytes(buf[20..24].try_into().unwrap()) as usize;
         output = vec![0; output_len];
         memory.read(&store, output_offset, &mut output)?;
-        logs = vec![0; logs_len];
-        memory.read(&store, logs_offset, &mut logs)?;
+        let mut logs1 = vec![0; logs_len1];
+        memory.read(&store, logs_offset1, &mut logs1)?;
+        let mut logs2 = vec![0; logs_len2];
+        memory.read(&store, logs_offset2, &mut logs2)?;
+        logs = Vec::with_capacity(logs_len1 + logs_len2);
+        logs.extend(logs1);
+        logs.extend(logs2);
     }
 
     drop(store);
