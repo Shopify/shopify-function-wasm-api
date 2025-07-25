@@ -154,9 +154,7 @@ mod provider_fallback {
 
     // Logging.
     pub(crate) unsafe fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize) {
-        let result = shopify_function_provider::log::shopify_function_log_new_utf8_str(len);
-        let len = (result >> usize::BITS) as usize;
-        let dst = result as usize;
+        let dst = shopify_function_provider::log::shopify_function_log_new_utf8_str(len);
         std::ptr::copy(ptr as _, dst as _, len);
     }
 

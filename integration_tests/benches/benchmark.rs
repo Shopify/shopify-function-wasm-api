@@ -85,6 +85,7 @@ fn routine(
     let output_len = u32::from_le_bytes(buf[4..8].try_into().unwrap()) as usize;
     let logs_offset = u32::from_le_bytes(buf[8..12].try_into().unwrap()) as usize;
     let logs_len = u32::from_le_bytes(buf[12..16].try_into().unwrap()) as usize;
+    let logs_len = logs_len.min(1024);
     let mut output = vec![0; output_len];
     memory.read(&store, output_offset, &mut output)?;
     let mut logs = vec![0; logs_len];
