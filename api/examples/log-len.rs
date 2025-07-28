@@ -4,11 +4,11 @@ use shopify_function_wasm_api::Context;
 
 fn main() -> Result<(), Box<dyn Error>> {
     shopify_function_wasm_api::init_panic_handler();
-    let mut context = Context::new();
+    let context = Context::new();
     let input = context.input_get()?;
     let len = input.as_number().unwrap() as usize;
     for _ in 0..len / 100 {
-        context.log(&"a".repeat(100));
+        eprintln!("{}", &"a".repeat(100));
     }
     Ok(())
 }
