@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wasmtime = "32.0.1"
+wasmtime = "35.0.0"
 wasmtime-wasi = "32.0.1"
 anyhow = "1.0"
 deterministic-wasi-ctx = "1.2.0"
