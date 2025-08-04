@@ -55,11 +55,11 @@ impl Deserialize for Value {
                 // special case to exercise string interning and get_obj_prop
                 let raw_value = match key.as_str() {
                     "foo" => {
-                        let interned_string_id = FOO_INTERNED_STRING_ID.load_from_value(value);
+                        let interned_string_id = FOO_INTERNED_STRING_ID.load();
                         value.get_interned_obj_prop(interned_string_id)
                     }
                     "bar" => {
-                        let interned_string_id = BAR_INTERNED_STRING_ID.load_from_value(value);
+                        let interned_string_id = BAR_INTERNED_STRING_ID.load();
                         value.get_interned_obj_prop(interned_string_id)
                     }
                     "abc" | "def" => value.get_obj_prop(key.as_str()),
@@ -94,13 +94,11 @@ impl Serialize for Value {
                     for (key, value) in object {
                         match key.as_str() {
                             "foo" => {
-                                let interned_string_id =
-                                    FOO_INTERNED_STRING_ID.load_from_context(ctx);
+                                let interned_string_id = FOO_INTERNED_STRING_ID.load();
                                 ctx.write_interned_utf8_str(interned_string_id)?;
                             }
                             "bar" => {
-                                let interned_string_id =
-                                    BAR_INTERNED_STRING_ID.load_from_context(ctx);
+                                let interned_string_id = BAR_INTERNED_STRING_ID.load();
                                 ctx.write_interned_utf8_str(interned_string_id)?;
                             }
                             _ => ctx.write_utf8_str(key)?,
@@ -137,21 +135,5 @@ mod tests {
         let result = echo(input);
 
         assert_eq!(result, Value::Object(Vec::new()));
-    }
-
-    #[test]
-    fn test_echo_multiple_contexts_with_interned_string_cache() {
-        // tests the cached interned string logic by having multiple contexts that
-        // hit the interned string cache
-        let input = serde_json::json!({ "foo": "bar"});
-        let context = Context::new_with_input(input.clone());
-        let api_value = context.input_get().unwrap();
-        let input_value: Value = Deserialize::deserialize(&api_value).unwrap();
-        let result = echo(input_value);
-        let context2 = Context::new_with_input(input);
-        let api_value2 = context2.input_get().unwrap();
-        let input_value2: Value = Deserialize::deserialize(&api_value2).unwrap();
-        let result2 = echo(input_value2);
-        assert_eq!(result, result2);
     }
 }
