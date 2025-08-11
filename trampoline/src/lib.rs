@@ -1,7 +1,7 @@
 use std::cell::OnceCell;
 use std::path::Path;
 use walrus::{
-    ir::{BinaryOp, UnaryOp},
+    ir::{BinaryOp, MemArg, UnaryOp},
     FunctionBuilder, FunctionId, ImportKind, MemoryId, Module, ValType,
 };
 
@@ -455,7 +455,7 @@ impl TrampolineCodegen {
         };
 
         let shopify_function_log_new_utf8_str_type =
-            self.module.types.add(&[ValType::I32], &[ValType::I64]);
+            self.module.types.add(&[ValType::I32], &[ValType::I32]);
 
         let (provider_shopify_function_log_new_utf8_str, _) = self.module.add_import_func(
             PROVIDER_MODULE_NAME,
@@ -464,7 +464,13 @@ impl TrampolineCodegen {
         );
 
         let memcpy_to_provider = self.emit_memcpy_to_provider();
-        let output = self.module.locals.add(ValType::I64);
+        let provider_memory = self.provider_memory_id();
+        let array_addr = self.module.locals.add(ValType::I32);
+        let source_offset = self.module.locals.add(ValType::I32);
+        let dst_offset1 = self.module.locals.add(ValType::I32);
+        let len1 = self.module.locals.add(ValType::I32);
+        let dst_offset2 = self.module.locals.add(ValType::I32);
+        let len2 = self.module.locals.add(ValType::I32);
 
         self.module.replace_imported_func(
             imported_shopify_function_log_new_utf8_str,
@@ -475,26 +481,83 @@ impl TrampolineCodegen {
                 builder
                     .func_body()
                     .local_get(len)
-                    // most significant 32 bits are the length, least significant 32 bits are the pointer
+                    // return value is memory address for (src_offset, dst_offset1, len1, dst_offset2, len2)
                     .call(provider_shopify_function_log_new_utf8_str)
-                    .local_tee(output)
-                    // extract the length with a bit shift and wrap it to i32
-                    .i64_const(32)
-                    .binop(BinaryOp::I64ShrU)
-                    .unop(UnaryOp::I32WrapI64) // length is on the stack now
-                    .local_tee(len)
-                    // exit early if len == 0
-                    .i32_const(0)
+                    .local_tee(array_addr)
+                    .load(
+                        provider_memory,
+                        walrus::ir::LoadKind::I32 { atomic: false },
+                        MemArg {
+                            offset: 0,
+                            align: 4,
+                        },
+                    )
+                    .local_set(source_offset)
+                    .local_get(array_addr)
+                    .load(
+                        provider_memory,
+                        walrus::ir::LoadKind::I32 { atomic: false },
+                        MemArg {
+                            offset: 4,
+                            align: 4,
+                        },
+                    )
+                    .local_set(dst_offset1)
+                    .local_get(array_addr)
+                    .load(
+                        provider_memory,
+                        walrus::ir::LoadKind::I32 { atomic: false },
+                        MemArg {
+                            offset: 8,
+                            align: 4,
+                        },
+                    )
+                    .local_set(len1)
+                    // prep and call first memcpy
+                    // need to get (dst1, src + src_offset, len1) on stack
+                    .local_get(dst_offset1)
+                    .local_get(src_ptr)
+                    .local_get(source_offset)
+                    .binop(BinaryOp::I32Add)
+                    .local_tee(src_ptr)
+                    .local_get(len1)
+                    .call(memcpy_to_provider)
+                    // exit early if len1 == len which implies len2 will be 0
+                    .local_get(len1)
+                    .local_get(len)
                     .binop(BinaryOp::I32Ne)
                     .if_else(
                         None,
                         |then| {
-                            then
-                                // extract the pointer by wrapping the output to i32
-                                .local_get(output)
-                                .unop(UnaryOp::I32WrapI64) // dst_ptr is on the stack now
+                            // load locals for second memcpy
+                            then.local_get(array_addr)
+                                .load(
+                                    provider_memory,
+                                    walrus::ir::LoadKind::I32 { atomic: false },
+                                    MemArg {
+                                        offset: 12,
+                                        align: 4,
+                                    },
+                                )
+                                .local_set(dst_offset2)
+                                .local_get(array_addr)
+                                .load(
+                                    provider_memory,
+                                    walrus::ir::LoadKind::I32 { atomic: false },
+                                    MemArg {
+                                        offset: 16,
+                                        align: 4,
+                                    },
+                                )
+                                .local_set(len2)
+                                // prep and call second memcpy
+                                // need to get (dst2, src + src_offset + len1, len2) on stack
+                                .local_get(dst_offset2)
+                                // contains (src + src_offset) from last memcpy
                                 .local_get(src_ptr)
-                                .local_get(len)
+                                .local_get(len1)
+                                .binop(BinaryOp::I32Add)
+                                .local_get(len2)
                                 .call(memcpy_to_provider);
                         },
                         |_else| {},

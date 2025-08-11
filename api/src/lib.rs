@@ -154,10 +154,16 @@ mod provider_fallback {
 
     // Logging.
     pub(crate) unsafe fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize) {
-        let result = shopify_function_provider::log::shopify_function_log_new_utf8_str(len);
-        let len = (result >> usize::BITS) as usize;
-        let dst = result as usize;
-        std::ptr::copy(ptr as _, dst as _, len);
+        let addr = shopify_function_provider::log::shopify_function_log_new_utf8_str(len)
+            as *const [usize; 5];
+        let array = *addr;
+        let source_offset = array[0];
+        let dst_offset1 = array[1];
+        let len1 = array[2];
+        let dst_offset2 = array[3];
+        let len2 = array[4];
+        std::ptr::copy(ptr.add(source_offset) as _, dst_offset1 as _, len1);
+        std::ptr::copy(ptr.add(source_offset).add(len1), dst_offset2 as _, len2);
     }
 
     // Other.
