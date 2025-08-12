@@ -108,3 +108,105 @@ decorate_for_target! {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_append_fits_in_buffer() {
+        let mut logs = Logs::default();
+        let (source_offset, ptr1, len1, ptr2, len2) = logs.append(100);
+
+        assert_eq!(source_offset, 0);
+        assert_eq!(ptr1, logs.buffer.as_ptr());
+        assert_eq!(len1, 100);
+        assert_eq!(len2, 0);
+        assert!(ptr2.is_null());
+        assert_eq!(logs.len, 100);
+        assert_eq!(logs.write_offset, 100);
+        assert_eq!(logs.read_offset, 0);
+    }
+
+    #[test]
+    fn test_append_exceeds_capacity() {
+        let mut logs = Logs::default();
+        let large_len = CAPACITY + 100;
+
+        let (source_offset, ptr1, len1, ptr2, len2) = logs.append(large_len);
+
+        assert_eq!(source_offset, 100);
+        assert_eq!(ptr1, logs.buffer.as_ptr());
+        assert_eq!(len1, CAPACITY);
+        assert_eq!(len2, 0);
+        assert!(ptr2.is_null());
+        assert_eq!(logs.len, CAPACITY);
+        assert_eq!(logs.write_offset, 0);
+        assert_eq!(logs.read_offset, 0);
+    }
+
+    #[test]
+    fn test_append_zero_length() {
+        let mut logs = Logs::default();
+        let (source_offset, ptr1, len1, ptr2, len2) = logs.append(0);
+
+        assert_eq!(source_offset, 0);
+        assert_eq!(ptr1, logs.buffer.as_ptr());
+        assert_eq!(len1, 0);
+        assert_eq!(len2, 0);
+        assert!(ptr2.is_null());
+        assert_eq!(logs.len, 0);
+        assert_eq!(logs.write_offset, 0);
+        assert_eq!(logs.read_offset, 0);
+    }
+
+    #[test]
+    fn test_append_exact_capacity() {
+        let mut logs = Logs::default();
+        let (source_offset, ptr1, len1, ptr2, len2) = logs.append(CAPACITY);
+
+        assert_eq!(source_offset, 0);
+        assert_eq!(ptr1, logs.buffer.as_ptr());
+        assert_eq!(len1, CAPACITY);
+        assert_eq!(len2, 0);
+        assert!(ptr2.is_null());
+        assert_eq!(logs.len, CAPACITY);
+        assert_eq!(logs.write_offset, 0);
+        assert_eq!(logs.read_offset, 0);
+    }
+
+    #[test]
+    fn test_append_multiple_operations() {
+        let mut logs = Logs::default();
+
+        let (source_offset, ptr1, len1, ptr2, len2) = logs.append(300);
+        assert_eq!(source_offset, 0);
+        assert_eq!(ptr1, logs.buffer.as_ptr());
+        assert_eq!(len1, 300);
+        assert_eq!(ptr2, ptr::null());
+        assert_eq!(len2, 0);
+        assert_eq!(logs.len, 300);
+        assert_eq!(logs.write_offset, 300);
+        assert_eq!(logs.read_offset, 0);
+
+        let (source_offset, ptr1, len1, ptr2, len2) = logs.append(200);
+        assert_eq!(source_offset, 0);
+        assert_eq!(ptr1, unsafe { logs.buffer.as_ptr().add(300) });
+        assert_eq!(len1, 200);
+        assert_eq!(ptr2, ptr::null());
+        assert_eq!(len2, 0);
+        assert_eq!(logs.len, 500);
+        assert_eq!(logs.write_offset, 500);
+        assert_eq!(logs.read_offset, 0);
+
+        let (source_offset, ptr1, len1, ptr2, len2) = logs.append(600); // Total would be 1100, exceeds CAPACITY (1025)
+        assert_eq!(source_offset, 0);
+        assert_eq!(ptr1, unsafe { logs.buffer.as_ptr().add(500) });
+        assert_eq!(len1, 525);
+        assert_eq!(ptr2, logs.buffer.as_ptr());
+        assert_eq!(len2, 75);
+        assert_eq!(logs.len, CAPACITY);
+        assert_eq!(logs.write_offset, 75); // (500 + 600) % CAPACITY
+        assert_eq!(logs.read_offset, 75); // Advanced by overflow amount
+    }
+}
