@@ -6,11 +6,13 @@ static mut LOG_RET_AREA: [usize; 5] = [0; 5];
 // One more byte so we can check if we're truncating.
 const CAPACITY: usize = 1025;
 
+// A kind of ring buffer implementation. Since all reads are guaranteed to
+// start after all writes have finished, we can simplify the
+// implementation by only using a single offset for reads and writes.
 #[derive(Debug)]
 pub(crate) struct Logs {
     buffer: [u8; CAPACITY],
-    read_offset: usize,
-    write_offset: usize,
+    offset: usize,
     len: usize,
 }
 
@@ -18,8 +20,7 @@ impl Default for Logs {
     fn default() -> Self {
         Self {
             buffer: [0; CAPACITY],
-            read_offset: 0,
-            write_offset: 0,
+            offset: 0,
             len: 0,
         }
     }
@@ -28,7 +29,7 @@ impl Default for Logs {
 impl Logs {
     fn append(&mut self, mut len: usize) -> (usize, *const u8, usize, *const u8, usize) {
         let mut source_offset = 0;
-        let dst_offset1 = unsafe { self.buffer.as_ptr().add(self.write_offset) };
+        let dst_offset1 = unsafe { self.buffer.as_ptr().add(self.offset) };
         let len1;
         let mut dst_offset2 = ptr::null();
         let mut len2 = 0;
@@ -39,45 +40,36 @@ impl Logs {
             len = CAPACITY;
         }
 
-        let space_to_end = CAPACITY - self.write_offset;
+        let space_to_end = CAPACITY - self.offset;
         if len <= space_to_end {
             // Incoming buffer fits in one block.
             len1 = len;
+            self.len += len;
         } else {
             // Incoming data wrap will wrap around.
             len1 = space_to_end;
             dst_offset2 = self.buffer.as_ptr();
             len2 = len - space_to_end;
-        }
-
-        self.write_offset = (self.write_offset + len) % CAPACITY;
-
-        if self.len + len <= CAPACITY {
-            // No overwriting.
-            self.len += len;
-        } else {
-            // Overwriting.
-            let overwritten_bytes = self.len + len - CAPACITY;
-            self.read_offset = (self.read_offset + overwritten_bytes) % CAPACITY;
             self.len = CAPACITY;
         }
+
+        self.offset = (self.offset + len) % CAPACITY;
 
         (source_offset, dst_offset1, len1, dst_offset2, len2)
     }
 
     #[cfg(target_family = "wasm")]
     pub(crate) fn read_ptrs(&self) -> (*const u8, usize, *const u8, usize) {
-        let data_to_end = CAPACITY - self.read_offset;
-        if self.len <= data_to_end {
-            (
-                unsafe { self.buffer.as_ptr().add(self.read_offset) },
-                self.len,
-                ptr::null(),
-                0,
-            )
+        // _After_ filling the buffer, the read offset will _always_ be the
+        // same as the write offset.
+        let read_offset = if self.len <= CAPACITY { 0 } else { self.offset };
+
+        if read_offset == 0 {
+            (self.buffer.as_ptr(), self.len, ptr::null(), 0)
         } else {
+            let data_to_end = CAPACITY - read_offset;
             (
-                unsafe { self.buffer.as_ptr().add(self.read_offset) },
+                unsafe { self.buffer.as_ptr().add(self.offset) },
                 data_to_end,
                 self.buffer.as_ptr(),
                 self.len - data_to_end,
@@ -124,8 +116,7 @@ mod tests {
         assert_eq!(len2, 0);
         assert!(ptr2.is_null());
         assert_eq!(logs.len, 100);
-        assert_eq!(logs.write_offset, 100);
-        assert_eq!(logs.read_offset, 0);
+        assert_eq!(logs.offset, 100);
     }
 
     #[test]
@@ -141,8 +132,7 @@ mod tests {
         assert_eq!(len2, 0);
         assert!(ptr2.is_null());
         assert_eq!(logs.len, CAPACITY);
-        assert_eq!(logs.write_offset, 0);
-        assert_eq!(logs.read_offset, 0);
+        assert_eq!(logs.offset, 0);
     }
 
     #[test]
@@ -156,8 +146,7 @@ mod tests {
         assert_eq!(len2, 0);
         assert!(ptr2.is_null());
         assert_eq!(logs.len, 0);
-        assert_eq!(logs.write_offset, 0);
-        assert_eq!(logs.read_offset, 0);
+        assert_eq!(logs.offset, 0);
     }
 
     #[test]
@@ -171,8 +160,7 @@ mod tests {
         assert_eq!(len2, 0);
         assert!(ptr2.is_null());
         assert_eq!(logs.len, CAPACITY);
-        assert_eq!(logs.write_offset, 0);
-        assert_eq!(logs.read_offset, 0);
+        assert_eq!(logs.offset, 0);
     }
 
     #[test]
@@ -186,8 +174,7 @@ mod tests {
         assert_eq!(ptr2, ptr::null());
         assert_eq!(len2, 0);
         assert_eq!(logs.len, 300);
-        assert_eq!(logs.write_offset, 300);
-        assert_eq!(logs.read_offset, 0);
+        assert_eq!(logs.offset, 300);
 
         let (source_offset, ptr1, len1, ptr2, len2) = logs.append(200);
         assert_eq!(source_offset, 0);
@@ -196,8 +183,7 @@ mod tests {
         assert_eq!(ptr2, ptr::null());
         assert_eq!(len2, 0);
         assert_eq!(logs.len, 500);
-        assert_eq!(logs.write_offset, 500);
-        assert_eq!(logs.read_offset, 0);
+        assert_eq!(logs.offset, 500);
 
         let (source_offset, ptr1, len1, ptr2, len2) = logs.append(600); // Total would be 1100, exceeds CAPACITY (1025)
         assert_eq!(source_offset, 0);
@@ -206,7 +192,6 @@ mod tests {
         assert_eq!(ptr2, logs.buffer.as_ptr());
         assert_eq!(len2, 75);
         assert_eq!(logs.len, CAPACITY);
-        assert_eq!(logs.write_offset, 75); // (500 + 600) % CAPACITY
-        assert_eq!(logs.read_offset, 75); // Advanced by overflow amount
+        assert_eq!(logs.offset, 75); // (500 + 600) % CAPACITY
     }
 }
