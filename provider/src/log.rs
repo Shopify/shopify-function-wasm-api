@@ -3,7 +3,8 @@ use std::ptr;
 use crate::{decorate_for_target, Context};
 
 static mut LOG_RET_AREA: [usize; 5] = [0; 5];
-const CAPACITY: usize = 1024;
+// One more byte so we can check if we're truncating.
+const CAPACITY: usize = 1025;
 
 #[derive(Debug)]
 pub(crate) struct Logs {
