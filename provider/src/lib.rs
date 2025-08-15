@@ -59,19 +59,6 @@ impl Context {
         context
     }
 
-    #[cfg(target_family = "wasm")]
-    fn new(output_capacity: usize) -> Self {
-        Self {
-            bump_allocator: Bump::new(),
-            input_bytes: Vec::with_capacity(0),
-            output_bytes: ByteBuf::with_capacity(output_capacity),
-            logs: Logs::default(),
-            write_state: State::Start,
-            write_parent_state_stack: Vec::new(),
-            string_interner: StringInterner::new(),
-        }
-    }
-
     fn with<F, T>(f: F) -> T
     where
         F: FnOnce(&Context) -> T,
@@ -111,9 +98,9 @@ use crate::log::Logs;
 
 #[cfg(target_family = "wasm")]
 #[export_name = "initialize"]
-extern "C" fn initialize(input_len: usize, output_capacity: usize) -> *const u8 {
+extern "C" fn initialize(input_len: usize) -> *const u8 {
     CONTEXT.with_borrow_mut(|context| {
-        *context = Context::new(output_capacity);
+        *context = Context::default();
         context.input_bytes = vec![0; input_len];
         context.input_bytes.as_ptr()
     })

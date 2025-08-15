@@ -31,7 +31,7 @@ pub use read::Deserialize;
 pub use write::Serialize;
 
 #[cfg(target_family = "wasm")]
-#[link(wasm_import_module = "shopify_function_v1")]
+#[link(wasm_import_module = "shopify_function_v2")]
 extern "C" {
     // Read API.
     fn shopify_function_input_get() -> Val;
