@@ -62,7 +62,7 @@ impl Logs {
     pub(crate) fn read_ptrs(&self) -> (*const u8, usize, *const u8, usize) {
         // _After_ filling the buffer, the read offset will _always_ be the
         // same as the write offset.
-        let read_offset = if self.len <= CAPACITY { 0 } else { self.offset };
+        let read_offset = if self.len < CAPACITY { 0 } else { self.offset };
 
         if read_offset == 0 {
             (self.buffer.as_ptr(), self.len, ptr::null(), 0)

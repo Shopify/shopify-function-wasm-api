@@ -5,7 +5,7 @@
 // To update this file you will need a compiler toolchain:
 // `brew install llvm lld`
 // On updating this file, regenerate the header_test.wasm file with the following command:
-// `/opt/homebrew/opt/llvm/bin/clang --target=wasm32-wasip1 -I .. -nostdlib -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -o header_test.wasm header_test.c`
+// `/opt/homebrew/opt/llvm/bin/clang --target=wasm32-unknown-unknown -I .. -nostdlib -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -o header_test.wasm header_test.c`
 
 volatile void* imports[] = {
     (void*)shopify_function_input_get,

@@ -14,7 +14,7 @@ typedef size_t InternedStringId;
 #define WRITE_RESULT_ERROR 1
 
 // Import module declaration
-#define SHOPIFY_FUNCTION_IMPORT_MODULE "shopify_function_v1"
+#define SHOPIFY_FUNCTION_IMPORT_MODULE "shopify_function_v2"
 
 // Read API
 /**

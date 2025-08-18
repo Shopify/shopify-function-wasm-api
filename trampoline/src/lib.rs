@@ -635,7 +635,10 @@ mod test {
         let buf = wat::parse_bytes(input).unwrap();
         let module = Module::from_buffer(&buf).unwrap();
         for (import, _) in IMPORTS {
-            assert!(module.imports.find(PROVIDER_MODULE_NAME, import).is_some());
+            assert!(
+                module.imports.find(PROVIDER_MODULE_NAME, import).is_some(),
+                "{import} not found"
+            );
         }
     }
 
