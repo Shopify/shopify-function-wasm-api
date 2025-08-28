@@ -536,7 +536,7 @@ fn test_log() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
     let (_, logs, fuel) = run_example("log", vec![], Api::Wasm)?;
     assert_eq!(logs, "Hi!\nHello\nHere's a third string\n✌️\n");
-    assert_fuel_consumed_within_threshold(670, fuel);
+    assert_fuel_consumed_within_threshold(694, fuel);
     Ok(())
 }
 

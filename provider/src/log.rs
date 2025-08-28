@@ -44,7 +44,7 @@ impl Logs {
         if len <= space_to_end {
             // Incoming buffer fits in one block.
             len1 = len;
-            self.len += len;
+            self.len = (self.len + len).min(CAPACITY);
         } else {
             // Incoming data wrap will wrap around.
             len1 = space_to_end;
@@ -111,12 +111,12 @@ mod tests {
         let (source_offset, ptr1, len1, ptr2, len2) = logs.append(100);
 
         assert_eq!(source_offset, 0);
+        assert_eq!(logs.len, 100);
+        assert_eq!(logs.offset, 100);
         assert_eq!(ptr1, logs.buffer.as_ptr());
         assert_eq!(len1, 100);
         assert_eq!(len2, 0);
         assert!(ptr2.is_null());
-        assert_eq!(logs.len, 100);
-        assert_eq!(logs.offset, 100);
     }
 
     #[test]
@@ -127,12 +127,12 @@ mod tests {
         let (source_offset, ptr1, len1, ptr2, len2) = logs.append(large_len);
 
         assert_eq!(source_offset, 100);
+        assert_eq!(logs.len, CAPACITY);
+        assert_eq!(logs.offset, 0);
         assert_eq!(ptr1, logs.buffer.as_ptr());
         assert_eq!(len1, CAPACITY);
         assert_eq!(len2, 0);
         assert!(ptr2.is_null());
-        assert_eq!(logs.len, CAPACITY);
-        assert_eq!(logs.offset, 0);
     }
 
     #[test]
@@ -141,12 +141,12 @@ mod tests {
         let (source_offset, ptr1, len1, ptr2, len2) = logs.append(0);
 
         assert_eq!(source_offset, 0);
+        assert_eq!(logs.len, 0);
+        assert_eq!(logs.offset, 0);
         assert_eq!(ptr1, logs.buffer.as_ptr());
         assert_eq!(len1, 0);
         assert_eq!(len2, 0);
         assert!(ptr2.is_null());
-        assert_eq!(logs.len, 0);
-        assert_eq!(logs.offset, 0);
     }
 
     #[test]
@@ -155,12 +155,12 @@ mod tests {
         let (source_offset, ptr1, len1, ptr2, len2) = logs.append(CAPACITY);
 
         assert_eq!(source_offset, 0);
+        assert_eq!(logs.len, CAPACITY);
+        assert_eq!(logs.offset, 0);
         assert_eq!(ptr1, logs.buffer.as_ptr());
         assert_eq!(len1, CAPACITY);
         assert_eq!(len2, 0);
         assert!(ptr2.is_null());
-        assert_eq!(logs.len, CAPACITY);
-        assert_eq!(logs.offset, 0);
     }
 
     #[test]
@@ -169,29 +169,38 @@ mod tests {
 
         let (source_offset, ptr1, len1, ptr2, len2) = logs.append(300);
         assert_eq!(source_offset, 0);
+        assert_eq!(logs.len, 300);
+        assert_eq!(logs.offset, 300);
         assert_eq!(ptr1, logs.buffer.as_ptr());
         assert_eq!(len1, 300);
         assert_eq!(ptr2, ptr::null());
         assert_eq!(len2, 0);
-        assert_eq!(logs.len, 300);
-        assert_eq!(logs.offset, 300);
 
         let (source_offset, ptr1, len1, ptr2, len2) = logs.append(200);
         assert_eq!(source_offset, 0);
+        assert_eq!(logs.len, 500);
+        assert_eq!(logs.offset, 500);
         assert_eq!(ptr1, unsafe { logs.buffer.as_ptr().add(300) });
         assert_eq!(len1, 200);
         assert_eq!(ptr2, ptr::null());
         assert_eq!(len2, 0);
-        assert_eq!(logs.len, 500);
-        assert_eq!(logs.offset, 500);
 
-        let (source_offset, ptr1, len1, ptr2, len2) = logs.append(600); // Total would be 1100, exceeds CAPACITY (1025)
+        let (source_offset, ptr1, len1, ptr2, len2) = logs.append(600); // Total would be 1100, exceeds capacity (1025)
         assert_eq!(source_offset, 0);
+        assert_eq!(logs.len, CAPACITY);
+        assert_eq!(logs.offset, 75); // (500 + 600) % CAPACITY
         assert_eq!(ptr1, unsafe { logs.buffer.as_ptr().add(500) });
         assert_eq!(len1, 525);
         assert_eq!(ptr2, logs.buffer.as_ptr());
         assert_eq!(len2, 75);
+
+        let (source_offset, ptr1, len1, ptr2, len2) = logs.append(100); // Total would be 1200
+        assert_eq!(source_offset, 0);
         assert_eq!(logs.len, CAPACITY);
-        assert_eq!(logs.offset, 75); // (500 + 600) % CAPACITY
+        assert_eq!(logs.offset, 175); // (500 + 600 + 100) % CAPACITY
+        assert_eq!(ptr1, unsafe { logs.buffer.as_ptr().add(75) });
+        assert_eq!(len1, 100);
+        assert_eq!(ptr2, ptr::null());
+        assert_eq!(len2, 0);
     }
 }
