@@ -2,6 +2,7 @@ use shopify_function_wasm_api::{Context, Value};
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    shopify_function_wasm_api::init_panic_handler();
     let mut context = Context::new();
 
     let input = context.input_get()?;
@@ -37,8 +38,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         },
         1,
     )?;
-
-    context.finalize_output()?;
 
     Ok(())
 }

@@ -113,11 +113,6 @@ impl Context {
         map_result(unsafe { crate::shopify_function_output_finish_array() })
     }
 
-    /// Finalize the output. This must be called exactly once, and must be called after all other writes.
-    pub fn finalize_output(self) -> Result<(), Error> {
-        map_result(unsafe { crate::shopify_function_output_finalize() })
-    }
-
     #[cfg(not(target_family = "wasm"))]
     /// Finalize the output and return the serialized value as a `serde_json::Value`.
     /// This is only available in non-Wasm targets, and therefore only recommended for use in tests.

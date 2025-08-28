@@ -7,15 +7,6 @@
 ;; host and guest.
 
 (module
-  ;; Creates and returns a new Context handle.
-  ;;
-  ;; The context represents an isolated scope in which values and state
-  ;; are bound. Every API call operates within this context, ensuring
-  ;; that the execution environment remains distinct and independent.
-  (import "shopify_function_v1" "shopify_function_context_new" 
-    (func)
-  )
-
   ;; Read API Functions - Used to access input data.
 
   ;; Retrieves the root input value from the context.
@@ -24,7 +15,7 @@
   ;; The resulting value can be traversed using the other input API functions.
   ;; Returns:
   ;;   - NanBox value representing the root input value.
-  (import "shopify_function_v1" "shopify_function_input_get" 
+  (import "shopify_function_v2" "shopify_function_input_get" 
     (func (result i64))
   )
 
@@ -44,7 +35,7 @@
   ;;   - scope: NaNBox encoded value.
   ;; Returns
   ;;   - The value length.
-  (import "shopify_function_v1" "shopify_function_input_get_val_len" 
+  (import "shopify_function_v2" "shopify_function_input_get_val_len" 
     (func (param $scope i64) (result i32))
   )
 
@@ -56,7 +47,7 @@
   ;;   - src: i32 memory address of the string.
   ;;   - out: i32 pointer to the destination buffer.
   ;;   - len: i32 length of the string in bytes.
-  (import "shopify_function_v1" "shopify_function_input_read_utf8_str" 
+  (import "shopify_function_v2" "shopify_function_input_read_utf8_str" 
     (func (param $src i32) (param $out i32) (param $len i32))
   )
 
@@ -69,7 +60,7 @@
   ;;   - len: i32 length of the property name in bytes.
   ;; Returns:
   ;;   - i64 NanBox value of the property.
-  (import "shopify_function_v1" "shopify_function_input_get_obj_prop" 
+  (import "shopify_function_v2" "shopify_function_input_get_obj_prop" 
     (func (param $scope i64) (param $ptr i32) (param $len i32) (result i64))
   )
 
@@ -82,7 +73,7 @@
   ;;   - interned_string_id: i32 ID of the interned string.
   ;; Returns:
   ;;   - i64 NanBox value of the property.
-  (import "shopify_function_v1" "shopify_function_input_get_interned_obj_prop" 
+  (import "shopify_function_v2" "shopify_function_input_get_interned_obj_prop" 
     (func (param $scope i64) (param $interned_string_id i32) (result i64))
   )
 
@@ -94,7 +85,7 @@
   ;;   - i64 NanBox value at the index.
   ;; Errors:
   ;;   - If index is out of bounds, returns a NanBox with ErrorCode::IndexOutOfBounds.
-  (import "shopify_function_v1" "shopify_function_input_get_at_index" 
+  (import "shopify_function_v2" "shopify_function_input_get_at_index" 
     (func (param $scope i64) (param $index i32) (result i64))
   )
 
@@ -107,7 +98,7 @@
   ;;   - i64 NanBox string value of the key.
   ;; Errors:
   ;;   - If index is out of bounds, returns a NanBox with ErrorCode::IndexOutOfBounds.
-  (import "shopify_function_v1" "shopify_function_input_get_obj_key_at_index" 
+  (import "shopify_function_v2" "shopify_function_input_get_obj_key_at_index" 
     (func (param $scope i64) (param $index i32) (result i64))
   )
 
@@ -120,7 +111,7 @@
   ;;   - value: i32 boolean value (0 = false, 1 = true).
   ;; Returns:
   ;;   - i32 status code indicating success or failure
-  (import "shopify_function_v1" "shopify_function_output_new_bool" 
+  (import "shopify_function_v2" "shopify_function_output_new_bool" 
     (func (param $value i32) (result i32))
   )
 
@@ -129,17 +120,7 @@
   ;; Different from omitting a property.
   ;; Returns:
   ;;   - i32 status code indicating success or failure
-  (import "shopify_function_v1" "shopify_function_output_new_null" 
-    (func (result i32))
-  )
-
-  ;; Finalizes the output, making it available to the host.
-  ;; Must be called after output construction is complete.
-  ;; This is typically the last API call made before function returns.
-  ;; Signals that the response is complete and ready to be used.
-  ;; Returns:
-  ;;   - i32 status code indicating success or failure
-  (import "shopify_function_v1" "shopify_function_output_finalize" 
+  (import "shopify_function_v2" "shopify_function_output_new_null" 
     (func (result i32))
   )
 
@@ -150,7 +131,7 @@
   ;;   - value: i32 integer value.
   ;; Returns:
   ;;   - i32 status code indicating success or failure
-  (import "shopify_function_v1" "shopify_function_output_new_i32" 
+  (import "shopify_function_v2" "shopify_function_output_new_i32" 
     (func (param $value i32) (result i32))
   )
 
@@ -161,7 +142,7 @@
   ;;   - value: f64 floating point value.
   ;; Returns:
   ;;   - i32 status code indicating success or failure.
-  (import "shopify_function_v1" "shopify_function_output_new_f64" 
+  (import "shopify_function_v2" "shopify_function_output_new_f64" 
     (func (param $value f64) (result i32))
   )
 
@@ -173,7 +154,7 @@
   ;;   - len: i32 length of string in bytes.
   ;; Returns:
   ;;   - i32 status code indicating success or failure
-  (import "shopify_function_v1" "shopify_function_output_new_utf8_str" 
+  (import "shopify_function_v2" "shopify_function_output_new_utf8_str" 
     (func (param $ptr i32) (param $len i32) (result i32))
   )
 
@@ -184,7 +165,7 @@
   ;;   - id: i32 ID of the interned string from shopify_function_intern_utf8_str.
   ;; Returns:
   ;;   - i32 status code indicating success or failure.
-  (import "shopify_function_v1" "shopify_function_output_new_interned_utf8_str" 
+  (import "shopify_function_v2" "shopify_function_output_new_interned_utf8_str" 
     (func (param $id i32) (result i32))
   )
 
@@ -196,7 +177,7 @@
   ;;   - len: i32 number of properties in the object (key-value pairs).
   ;; Returns:
   ;;   - i32 status code indicating success or failure.
-  (import "shopify_function_v1" "shopify_function_output_new_object" 
+  (import "shopify_function_v2" "shopify_function_output_new_object" 
     (func (param $len i32) (result i32))
   )
 
@@ -205,7 +186,7 @@
   ;; Validates that the correct number of properties were added.
   ;; Returns:
   ;;   - i32 status code indicating success or failure.
-  (import "shopify_function_v1" "shopify_function_output_finish_object" 
+  (import "shopify_function_v2" "shopify_function_output_finish_object" 
     (func (result i32))
   )
 
@@ -217,7 +198,7 @@
   ;;   - len: i32 number of elements in the array.
   ;; Returns:
   ;;   - i32 status code indicating success or failure.
-  (import "shopify_function_v1" "shopify_function_output_new_array" 
+  (import "shopify_function_v2" "shopify_function_output_new_array" 
     (func (param $len i32) (result i32))
   )
 
@@ -226,7 +207,7 @@
   ;; Validates that the correct number of elements were added.
   ;; Returns:
   ;;   - i32 status code indicating success or failure.
-  (import "shopify_function_v1" "shopify_function_output_finish_array" 
+  (import "shopify_function_v2" "shopify_function_output_finish_array" 
     (func (result i32))
   )
 
@@ -243,7 +224,17 @@
   ;;   - len: i32 length of string in bytes.
   ;; Returns:
   ;;   - i32 ID of the interned string (to be used in other API calls).
-  (import "shopify_function_v1" "shopify_function_intern_utf8_str" 
+  (import "shopify_function_v2" "shopify_function_intern_utf8_str" 
     (func (param $ptr i32) (param $len i32) (result i32))
+  )
+
+  ;; Logs a new string output value.
+  ;; Used for text values in the logs.
+  ;; The string data is copied from WebAssembly memory.
+  ;; Parameters:
+  ;;   - ptr: i32 pointer to string data in WebAssembly memory.
+  ;;   - len: i32 length of string in bytes.
+  (import "shopify_function_v2" "shopify_function_log_new_utf8_str"
+    (func (param $ptr i32) (param $len i32))
   )
 )

@@ -36,12 +36,11 @@ Here's a simple example of how to use the API:
 
 ```rust
 fn main(context: &mut Context) -> Result<()> {
+    shopify_function_wasm_api::init_panic_handler();
     let input = context.input_get()?;
 
     // Function logic
 
-    context.finalize_output()?;
-    
     Ok(())
 }
 ```
