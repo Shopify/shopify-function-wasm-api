@@ -1841,6 +1841,7 @@ dependencies = [
  "predicates",
  "uuid",
  "walrus",
+ "wasmparser 0.238.0",
  "wasmprinter 0.235.0",
  "wat",
 ]
@@ -2385,6 +2386,19 @@ dependencies = [
  "bitflags",
  "indexmap 2.8.0",
  "semver",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.238.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0ad4ca2ecb86b79ea410cd970985665de1d05774b7107b214bc5852b1bcbad7"
+dependencies = [
+ "bitflags",
+ "hashbrown 0.15.2",
+ "indexmap 2.8.0",
+ "semver",
+ "serde",
 ]
 
 [[package]]
