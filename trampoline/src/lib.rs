@@ -1,3 +1,4 @@
+use anyhow::Context;
 use std::cell::OnceCell;
 use std::path::Path;
 use walrus::{
@@ -89,7 +90,7 @@ pub fn trampoline_existing_module(
     source_path: impl AsRef<Path>,
     destination_path: impl AsRef<Path>,
 ) -> anyhow::Result<()> {
-    let module = Module::from_file(source_path)?;
+    let module = Module::from_file(source_path).context("Parsing input module failed")?;
 
     TrampolineCodegen::new(module)?
         .apply()?
@@ -487,6 +488,8 @@ impl TrampolineCodegen {
             };
         }
 
+        wasmparser::validate(&self.module.emit_wasm())
+            .context("Validating output module failed")?;
         Ok(self.module)
     }
 }
@@ -554,6 +557,27 @@ mod test {
         assert_eq!(
             err.to_string(),
             "multiple non-imported memories are not supported"
+        );
+    }
+
+    #[test]
+    fn test_with_invalid_output_wasm() {
+        let module = r#"
+        (module
+            (import "shopify_function_v1" "shopify_function_output_new_utf8_str" (func $write_str (param i32 i32 i32) (result f64)))
+            (memory 1)
+            (func $start
+                (call $write_str (i32.const 0) (i32.const 0) (i32.const 0))
+                i64.trunc_f64_s
+                drop
+            )
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(
+            format!("{err:?}"),
+            "Validating output module failed\n\nCaused by:\n    type mismatch: expected f64, found i32 (at offset 0xa5)"
         );
     }
 }
