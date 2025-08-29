@@ -625,7 +625,7 @@ impl<'a> LazyValueRef<'a> {
         index: usize,
         bytes: &[u8],
         bump: &'a Bump,
-    ) -> Result<&LazyValueRef, ErrorCode> {
+    ) -> Result<&LazyValueRef<'_>, ErrorCode> {
         match self {
             Self::Array(array_ref) => array_ref.get_at_index(index, bytes, bump),
             Self::Object(obj_ref) => obj_ref.get_at_index(index, bytes, bump).map(|v| &v.1),
@@ -638,7 +638,7 @@ impl<'a> LazyValueRef<'a> {
         index: usize,
         bytes: &[u8],
         bump: &'a Bump,
-    ) -> Result<&LazyValueRef, ErrorCode> {
+    ) -> Result<&LazyValueRef<'_>, ErrorCode> {
         match self {
             Self::Object(obj_ref) => obj_ref.get_at_index(index, bytes, bump).map(|v| &v.0),
             _ => Err(ErrorCode::NotAnObject),
