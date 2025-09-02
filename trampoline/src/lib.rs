@@ -494,6 +494,20 @@ impl TrampolineCodegen {
             return Ok(self.module);
         }
 
+        if let Some(unexpected_import) = self.module.imports.iter().find(|import| {
+            import.module == PROVIDER_MODULE_NAME
+                && (!IMPORTS.iter().any(|(orig_name, new_name)| {
+                    *orig_name == import.name || *new_name == import.name
+                }) && import.name != "_shopify_function_input_get_utf8_str_addr"
+                    && import.name != "shopify_function_realloc"
+                    && import.name != "memory")
+        }) {
+            bail!(
+                "Found unexpected import named `{}`. Ensure your Shopify CLI is up-to-date and any Wasm imports are correct.",
+                unexpected_import.name
+            );
+        }
+
         for (original, new) in IMPORTS {
             match *original {
                 INPUT_READ_UTF8_STR => self.emit_shopify_function_input_read_utf8_str()?,
@@ -704,6 +718,22 @@ mod test {
         assert_eq!(
             format!("{err:?}"),
             "Results for shopify_function_intern_utf8_str are incorrect. Expected [I32], got []."
+        );
+    }
+
+    #[test]
+    fn test_unexpected_import() {
+        let module = r#"
+        (module
+            (import "shopify_function_v1" "foo" (func))
+            (memory 1)
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(
+            format!("{err:?}"),
+            "Found unexpected import named `foo`. Ensure your Shopify CLI is up-to-date and any Wasm imports are correct."
         );
     }
 }
