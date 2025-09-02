@@ -1,10 +1,15 @@
-use anyhow::Context;
+use anyhow::{bail, Context, Result};
 use std::cell::OnceCell;
 use std::path::Path;
 use walrus::{
     ir::{BinaryOp, UnaryOp},
     FunctionBuilder, FunctionId, ImportKind, MemoryId, Module, ValType,
 };
+
+const INPUT_READ_UTF8_STR: &str = "shopify_function_input_read_utf8_str";
+const INPUT_GET_OBJ_PROP: &str = "shopify_function_input_get_obj_prop";
+const OUTPUT_NEW_STR: &str = "shopify_function_output_new_utf8_str";
+const INTERN_STR: &str = "shopify_function_intern_utf8_str";
 
 static IMPORTS: &[(&str, &str)] = &[
     (
@@ -16,11 +21,8 @@ static IMPORTS: &[(&str, &str)] = &[
         "shopify_function_input_get_val_len",
         "_shopify_function_input_get_val_len",
     ),
-    ("shopify_function_input_read_utf8_str", ""),
-    (
-        "shopify_function_input_get_obj_prop",
-        "_shopify_function_input_get_obj_prop",
-    ),
+    (INPUT_READ_UTF8_STR, ""),
+    (INPUT_GET_OBJ_PROP, "_shopify_function_input_get_obj_prop"),
     (
         "shopify_function_input_get_interned_obj_prop",
         "_shopify_function_input_get_interned_obj_prop",
@@ -53,14 +55,8 @@ static IMPORTS: &[(&str, &str)] = &[
         "shopify_function_output_new_f64",
         "_shopify_function_output_new_f64",
     ),
-    (
-        "shopify_function_output_new_utf8_str",
-        "_shopify_function_output_new_utf8_str",
-    ),
-    (
-        "shopify_function_intern_utf8_str",
-        "_shopify_function_intern_utf8_str",
-    ),
+    (OUTPUT_NEW_STR, "_shopify_function_output_new_utf8_str"),
+    (INTERN_STR, "_shopify_function_intern_utf8_str"),
     (
         "shopify_function_output_new_interned_utf8_str",
         "_shopify_function_output_new_interned_utf8_str",
@@ -266,10 +262,17 @@ impl TrampolineCodegen {
         let Ok(imported_shopify_function_input_read_utf8_str) = self
             .module
             .imports
-            .get_func(PROVIDER_MODULE_NAME, "shopify_function_input_read_utf8_str")
+            .get_func(PROVIDER_MODULE_NAME, INPUT_READ_UTF8_STR)
         else {
             return Ok(());
         };
+
+        self.validate_params_and_results(
+            INPUT_READ_UTF8_STR,
+            imported_shopify_function_input_read_utf8_str,
+            &[ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+            &[],
+        )?;
 
         let shopify_function_input_get_utf8_str_addr = self
             .module
@@ -310,8 +313,15 @@ impl TrampolineCodegen {
         if let Ok(imported_shopify_function_input_get_obj_prop) = self
             .module
             .imports
-            .get_func(PROVIDER_MODULE_NAME, "shopify_function_input_get_obj_prop")
+            .get_func(PROVIDER_MODULE_NAME, INPUT_GET_OBJ_PROP)
         {
+            self.validate_params_and_results(
+                INPUT_GET_OBJ_PROP,
+                imported_shopify_function_input_get_obj_prop,
+                &[ValType::I32, ValType::I64, ValType::I32, ValType::I32],
+                &[ValType::I64],
+            )?;
+
             let shopify_function_input_get_obj_prop_type = self.module.types.add(
                 &[ValType::I32, ValType::I64, ValType::I32, ValType::I32],
                 &[ValType::I64],
@@ -365,6 +375,13 @@ impl TrampolineCodegen {
             return Ok(());
         };
 
+        self.validate_params_and_results(
+            OUTPUT_NEW_STR,
+            imported_shopify_function_output_new_utf8_str,
+            &[ValType::I32, ValType::I32, ValType::I32],
+            &[ValType::I32],
+        )?;
+
         let shopify_function_output_new_utf8_str_type = self
             .module
             .types
@@ -414,10 +431,17 @@ impl TrampolineCodegen {
         let Ok(imported_shopify_function_intern_utf8_str) = self
             .module
             .imports
-            .get_func(PROVIDER_MODULE_NAME, "shopify_function_intern_utf8_str")
+            .get_func(PROVIDER_MODULE_NAME, INTERN_STR)
         else {
             return Ok(());
         };
+
+        self.validate_params_and_results(
+            INTERN_STR,
+            imported_shopify_function_intern_utf8_str,
+            &[ValType::I32, ValType::I32, ValType::I32],
+            &[ValType::I32],
+        )?;
 
         let shopify_function_intern_utf8_str_type = self
             .module
@@ -472,18 +496,10 @@ impl TrampolineCodegen {
 
         for (original, new) in IMPORTS {
             match *original {
-                "shopify_function_input_read_utf8_str" => {
-                    self.emit_shopify_function_input_read_utf8_str()?
-                }
-                "shopify_function_input_get_obj_prop" => {
-                    self.emit_shopify_function_input_get_obj_prop()?
-                }
-                "shopify_function_output_new_utf8_str" => {
-                    self.emit_shopify_function_output_new_utf8_str()?
-                }
-                "shopify_function_intern_utf8_str" => {
-                    self.emit_shopify_function_intern_utf8_str()?
-                }
+                INPUT_READ_UTF8_STR => self.emit_shopify_function_input_read_utf8_str()?,
+                INPUT_GET_OBJ_PROP => self.emit_shopify_function_input_get_obj_prop()?,
+                OUTPUT_NEW_STR => self.emit_shopify_function_output_new_utf8_str()?,
+                INTERN_STR => self.emit_shopify_function_intern_utf8_str()?,
                 original => self.rename_imported_func(original, new)?,
             };
         }
@@ -491,6 +507,30 @@ impl TrampolineCodegen {
         wasmparser::validate(&self.module.emit_wasm())
             .context("Validating output module failed")?;
         Ok(self.module)
+    }
+
+    fn validate_params_and_results(
+        &self,
+        func_name: &str,
+        func_id: FunctionId,
+        expected_params: &[ValType],
+        expected_results: &[ValType],
+    ) -> Result<()> {
+        let ty = self.module.funcs.get(func_id).ty();
+        let ty = self.module.types.get(ty);
+        if ty.params() != expected_params {
+            bail!(
+                "Params for {func_name} are incorrect. Expected {expected_params:?}, got {:?}.",
+                ty.params()
+            );
+        }
+        if ty.results() != expected_results {
+            bail!(
+                "Results for {func_name} are incorrect. Expected {expected_results:?}, got {:?}.",
+                ty.results()
+            );
+        }
+        Ok(())
     }
 }
 
@@ -561,23 +601,109 @@ mod test {
     }
 
     #[test]
-    fn test_with_invalid_output_wasm() {
+    fn test_wrong_param_type_for_read_str() {
         let module = r#"
         (module
-            (import "shopify_function_v1" "shopify_function_output_new_utf8_str" (func $write_str (param i32 i32 i32) (result f64)))
+            (import "shopify_function_v1" "shopify_function_input_read_utf8_str" (func (param i32)))
             (memory 1)
-            (func $start
-                (call $write_str (i32.const 0) (i32.const 0) (i32.const 0))
-                i64.trunc_f64_s
-                drop
-            )
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(format!("{err:?}"), "Params for shopify_function_input_read_utf8_str are incorrect. Expected [I32, I32, I32, I32], got [I32].");
+    }
+
+    #[test]
+    fn test_wrong_result_for_read_str() {
+        let module = r#"
+        (module
+            (import "shopify_function_v1" "shopify_function_input_read_utf8_str" (func (param i32 i32 i32 i32) (result i32)))
+            (memory 1)
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(format!("{err:?}"), "Results for shopify_function_input_read_utf8_str are incorrect. Expected [], got [I32].");
+    }
+
+    #[test]
+    fn test_wrong_param_type_for_get_obj_prop() {
+        let module = r#"
+        (module
+            (import "shopify_function_v1" "shopify_function_input_get_obj_prop" (func (param i32) (result i64)))
+            (memory 1)
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(format!("{err:?}"), "Params for shopify_function_input_get_obj_prop are incorrect. Expected [I32, I64, I32, I32], got [I32].");
+    }
+
+    #[test]
+    fn test_wrong_result_type_for_get_obj_prop() {
+        let module = r#"
+        (module
+            (import "shopify_function_v1" "shopify_function_input_get_obj_prop" (func (param i32 i64 i32 i32)))
+            (memory 1)
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(format!("{err:?}"), "Results for shopify_function_input_get_obj_prop are incorrect. Expected [I64], got [].");
+    }
+
+    #[test]
+    fn test_wrong_param_type_for_new_str() {
+        let module = r#"
+        (module
+            (import "shopify_function_v1" "shopify_function_output_new_utf8_str" (func (param i32)))
+            (memory 1)
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(format!("{err:?}"), "Params for shopify_function_output_new_utf8_str are incorrect. Expected [I32, I32, I32], got [I32].");
+    }
+
+    #[test]
+    fn test_wrong_result_type_for_new_str() {
+        let module = r#"
+        (module
+            (import "shopify_function_v1" "shopify_function_output_new_utf8_str" (func (param i32 i32 i32)))
+            (memory 1)
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(format!("{err:?}"), "Results for shopify_function_output_new_utf8_str are incorrect. Expected [I32], got [].");
+    }
+
+    #[test]
+    fn test_wrong_param_type_for_intern_str() {
+        let module = r#"
+        (module
+            (import "shopify_function_v1" "shopify_function_intern_utf8_str" (func (param i32)))
+            (memory 1)
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(format!("{err:?}"), "Params for shopify_function_intern_utf8_str are incorrect. Expected [I32, I32, I32], got [I32].");
+    }
+
+    #[test]
+    fn test_wrong_result_type_for_intern_str() {
+        let module = r#"
+        (module
+            (import "shopify_function_v1" "shopify_function_intern_utf8_str" (func (param i32 i32 i32)))
+            (memory 1)
         )
         "#;
         let result = trampoline_wat(module.as_bytes());
         let err = result.unwrap_err();
         assert_eq!(
             format!("{err:?}"),
-            "Validating output module failed\n\nCaused by:\n    type mismatch: expected f64, found i32 (at offset 0xa5)"
+            "Results for shopify_function_intern_utf8_str are incorrect. Expected [I32], got []."
         );
     }
 }
