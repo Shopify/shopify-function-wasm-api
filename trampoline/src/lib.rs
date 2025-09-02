@@ -494,6 +494,15 @@ impl TrampolineCodegen {
             return Ok(self.module);
         }
 
+        if let Some(unsupported_import) = self.module.imports.iter().find(|import| {
+            import.module.starts_with("shopify_function_v") && import.module != PROVIDER_MODULE_NAME
+        }) {
+            bail!(
+                "Imports from module named `{}` are not supported. Imports must be from `{PROVIDER_MODULE_NAME}`. If you are using Rust, ensure you are using an up-to-date Shopify CLI and `shopify_function` Rust crate.",
+                unsupported_import.module
+            );
+        }
+
         for (original, new) in IMPORTS {
             match *original {
                 INPUT_READ_UTF8_STR => self.emit_shopify_function_input_read_utf8_str()?,
@@ -597,6 +606,22 @@ mod test {
         assert_eq!(
             err.to_string(),
             "multiple non-imported memories are not supported"
+        );
+    }
+
+    #[test]
+    fn test_import_from_unsupported_function_module() {
+        let module = r#"
+        (module
+            (import "shopify_function_v2" "foo" (func))
+            (memory 1)
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Imports from module named `shopify_function_v2` are not supported. Imports must be from `shopify_function_v1`. If you are using Rust, ensure you are using an up-to-date Shopify CLI and `shopify_function` Rust crate."
         );
     }
 
