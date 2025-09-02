@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::cell::OnceCell;
 use std::path::Path;
 use walrus::{
@@ -86,7 +86,7 @@ pub fn trampoline_existing_module(
     source_path: impl AsRef<Path>,
     destination_path: impl AsRef<Path>,
 ) -> anyhow::Result<()> {
-    let module = Module::from_file(source_path)?;
+    let module = Module::from_file(source_path).context("Parsing input module failed")?;
 
     TrampolineCodegen::new(module)?
         .apply()?
@@ -504,6 +504,8 @@ impl TrampolineCodegen {
             };
         }
 
+        wasmparser::validate(&self.module.emit_wasm())
+            .context("Validating output module failed")?;
         Ok(self.module)
     }
 

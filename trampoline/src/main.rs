@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, process};
 
 use clap::Parser;
 use shopify_function_trampoline::trampoline_existing_module;
@@ -18,5 +18,9 @@ struct Args {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    trampoline_existing_module(args.input, args.output)
+    if let Err(err) = trampoline_existing_module(args.input, args.output) {
+        eprintln!("Error: {err:?}");
+        process::exit(1);
+    }
+    Ok(())
 }
