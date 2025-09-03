@@ -337,7 +337,7 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     let (_, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
     eprintln!("WASM API fuel: {wasm_api_fuel}");
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(15880, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(14828, wasm_api_fuel);
     Ok(())
 }
 
@@ -374,7 +374,7 @@ fn test_benchmark_comparison_with_input() -> Result<()> {
         "WASM API fuel: {wasm_api_fuel}, Non-WASM API fuel: {non_wasm_api_fuel}, Improvement: {improvement:.2}%",
     );
 
-    assert_fuel_consumed_within_threshold(15880, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(14828, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(23858, non_wasm_api_fuel);
 
     Ok(())
@@ -414,7 +414,7 @@ fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
     );
 
     // Add fuel consumption threshold checks for both implementations
-    assert_fuel_consumed_within_threshold(17826, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(16880, wasm_api_fuel);
     assert_fuel_consumed_within_threshold(736695, non_wasm_api_fuel);
 
     Ok(())
