@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 wasmtime = "32.0.1"
-wasmtime-wasi = "32.0.1"
+wasmtime-wasi = "33.0.2"
 anyhow = "1.0"
 deterministic-wasi-ctx = "1.2.0"
 rmp-serde = "1.3"
