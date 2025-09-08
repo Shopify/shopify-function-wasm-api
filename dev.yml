@@ -18,11 +18,11 @@ commands:
     run: |
       cargo fmt
       cargo clippy --all-features -- -D warnings
-      cargo clippy --target wasm32-wasip1 --all-features --workspace --exclude shopify_function_trampoline --exclude integration_tests -- -D warnings
+      cargo clippy --target wasm32-unknown-unknown --all-features --workspace --exclude shopify_function_trampoline --exclude integration_tests -- -D warnings
       cargo clippy --tests --all-features
       cargo clippy --benches --all-features
       cargo clippy --examples --all-features
-      cargo clippy --examples --target wasm32-wasip1 --all-features
+      cargo clippy --examples --target wasm32-unknown-unknown --all-features
   build:
     run: cargo build --release --all-features
 
