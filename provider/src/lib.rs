@@ -3,9 +3,9 @@ pub mod read;
 mod string_interner;
 pub mod write;
 
+use bumpalo::Bump;
 use rmp::encode::ByteBuf;
-use shopify_function_wasm_api_core::ContextPtr;
-use std::ptr::NonNull;
+use std::cell::RefCell;
 use string_interner::StringInterner;
 use write::State;
 
@@ -26,9 +26,21 @@ struct Context {
     string_interner: StringInterner,
 }
 
-#[derive(Debug)]
-enum ContextError {
-    NullPointer,
+thread_local! {
+    static CONTEXT: RefCell<Context> = RefCell::new(Context::default())
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self {
+            bump_allocator: Bump::new(),
+            input_bytes: Vec::new(),
+            output_bytes: ByteBuf::new(),
+            write_state: State::Start,
+            write_parent_state_stack: Vec::new(),
+            string_interner: StringInterner::new(),
+        }
+    }
 }
 
 impl Context {
@@ -57,16 +69,18 @@ impl Context {
         Self::new(input_bytes)
     }
 
-    fn ref_from_raw<'a>(raw: ContextPtr) -> Result<&'a Self, ContextError> {
-        NonNull::new(raw as _)
-            .ok_or(ContextError::NullPointer)
-            .map(|ptr| unsafe { ptr.as_ref() })
+    fn with<F, T>(f: F) -> T
+    where
+        F: FnOnce(&Context) -> T,
+    {
+        CONTEXT.with_borrow(f)
     }
 
-    fn mut_from_raw<'a>(raw: ContextPtr) -> Result<&'a mut Self, ContextError> {
-        NonNull::new(raw as _)
-            .ok_or(ContextError::NullPointer)
-            .map(|mut ptr| unsafe { ptr.as_mut() })
+    fn with_mut<F, T>(f: F) -> T
+    where
+        F: FnOnce(&mut Context) -> T,
+    {
+        CONTEXT.with_borrow_mut(f)
     }
 }
 
@@ -92,23 +106,20 @@ pub(crate) use decorate_for_target;
 
 #[cfg(target_family = "wasm")]
 #[export_name = "_shopify_function_context_new"]
-extern "C" fn shopify_function_context_new() -> ContextPtr {
-    Box::into_raw(Box::new(Context::new_from_stdin())) as _
+extern "C" fn shopify_function_context_new() {
+    CONTEXT.with_borrow_mut(|context| *context = Context::new_from_stdin())
 }
 
 #[cfg(not(target_family = "wasm"))]
-pub fn shopify_function_context_new_from_msgpack_bytes(bytes: Vec<u8>) -> ContextPtr {
-    Box::into_raw(Box::new(Context::new(bytes))) as _
+pub fn shopify_function_context_new_from_msgpack_bytes(bytes: Vec<u8>) {
+    CONTEXT.with_borrow_mut(|context| *context = Context::new(bytes))
 }
 
 decorate_for_target! {
-    fn shopify_function_intern_utf8_str(context: ContextPtr, len: usize) -> DoubleUsize {
-        match Context::mut_from_raw(context) {
-            Ok(context) => {
+    fn shopify_function_intern_utf8_str(len: usize) -> DoubleUsize {
+        Context::with_mut(|context| {
             let (id, ptr) = context.string_interner.preallocate(len);
-                ((id as DoubleUsize) << usize::BITS) | (ptr as DoubleUsize)
-            }
-            Err(_) => 0,
-        }
+            ((id as DoubleUsize) << usize::BITS) | (ptr as DoubleUsize)
+        })
     }
 }
