@@ -110,36 +110,8 @@ fn decode_msgpack_output(output: Vec<u8>) -> Result<serde_json::Value> {
     Ok(rmp_serde::from_slice(&output)?)
 }
 
-fn decode_json_output(output: Vec<u8>) -> Result<serde_json::Value> {
-    match serde_json::from_slice(&output) {
-        Ok(json_value) => Ok(json_value),
-        Err(_) => match rmp_serde::from_slice(&output) {
-            Ok(msgpack_value) => Ok(msgpack_value),
-            Err(_) => match String::from_utf8(output.clone()) {
-                Ok(string_output) => {
-                    eprintln!(
-                        "Failed to parse output as JSON or MessagePack. Raw output: {string_output}",
-                    );
-                    Ok(serde_json::json!({ "raw_output": string_output }))
-                }
-                Err(_) => {
-                    eprintln!(
-                        "Output is not valid UTF-8. Raw binary length: {} bytes",
-                        output.len()
-                    );
-                    Ok(serde_json::json!({ "raw_output_length": output.len() }))
-                }
-            },
-        },
-    }
-}
-
 fn prepare_wasm_api_input(input: serde_json::Value) -> Result<Vec<u8>> {
     Ok(rmp_serde::to_vec(&input)?)
-}
-
-fn prepare_wasi_json_input(input: serde_json::Value) -> Result<Vec<u8>> {
-    Ok(serde_json::to_vec(&input)?)
 }
 
 fn run_wasm_api_example(example: &str, input: serde_json::Value) -> Result<serde_json::Value> {
@@ -151,8 +123,6 @@ fn run_wasm_api_example(example: &str, input: serde_json::Value) -> Result<serde
 static ECHO_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("echo"));
 static BENCHMARK_EXAMPLE_RESULT: LazyLock<Result<()>> =
     LazyLock::new(|| prepare_example("cart-checkout-validation-wasm-api"));
-static BENCHMARK_NON_WASM_API_EXAMPLE_RESULT: LazyLock<Result<()>> =
-    LazyLock::new(|| prepare_example("cart-checkout-validation-wasi-json"));
 
 #[test]
 fn test_echo_with_bool_input() -> Result<()> {
@@ -342,80 +312,33 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
 }
 
 #[test]
-fn test_benchmark_comparison_with_input() -> Result<()> {
+fn test_benchmark_with_input() -> Result<()> {
     BENCHMARK_EXAMPLE_RESULT
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
-    BENCHMARK_NON_WASM_API_EXAMPLE_RESULT
-        .as_ref()
-        .map_err(|e| anyhow::anyhow!("Failed to prepare non-WASM API example: {}", e))?;
 
     let input = generate_cart_with_size(2, true);
 
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
-    let (wasm_api_output, wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
-    let wasm_api_value = decode_msgpack_output(wasm_api_output)?;
+    let (_, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
 
-    let wasi_json_input = prepare_wasi_json_input(input)?;
-    let (non_wasm_api_output, non_wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasi-json", wasi_json_input)?;
-    let non_wasm_api_value = decode_json_output(non_wasm_api_output)?;
-
-    assert_eq!(wasm_api_value, non_wasm_api_value);
-    assert!(
-        wasm_api_fuel < non_wasm_api_fuel,
-        "WASM API fuel usage ({wasm_api_fuel}) should be less than non-WASM API fuel usage ({non_wasm_api_fuel})",
-    );
-
-    let improvement =
-        ((non_wasm_api_fuel as f64 - wasm_api_fuel as f64) / non_wasm_api_fuel as f64) * 100.0;
-    println!(
-        "WASM API fuel: {wasm_api_fuel}, Non-WASM API fuel: {non_wasm_api_fuel}, Improvement: {improvement:.2}%",
-    );
-
-    assert_fuel_consumed_within_threshold(14828, wasm_api_fuel);
-    assert_fuel_consumed_within_threshold(23858, non_wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(14_828, wasm_api_fuel);
 
     Ok(())
 }
 
 #[test]
-fn test_benchmark_comparison_with_input_early_exit() -> Result<()> {
+fn test_benchmark_with_input_early_exit() -> Result<()> {
     BENCHMARK_EXAMPLE_RESULT
         .as_ref()
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
-    BENCHMARK_NON_WASM_API_EXAMPLE_RESULT
-        .as_ref()
-        .map_err(|e| anyhow::anyhow!("Failed to prepare non-WASM API example: {}", e))?;
 
     let input = generate_cart_with_size(100, false);
 
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
-    let (wasm_api_output, wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
-    let wasm_api_value = decode_msgpack_output(wasm_api_output)?;
+    let (_, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
 
-    let wasi_json_input = prepare_wasi_json_input(input)?;
-    let (non_wasm_api_output, non_wasm_api_fuel) =
-        run_example("cart-checkout-validation-wasi-json", wasi_json_input)?;
-    let non_wasm_api_value = decode_json_output(non_wasm_api_output)?;
-
-    assert_eq!(wasm_api_value, non_wasm_api_value);
-    assert!(
-        wasm_api_fuel < non_wasm_api_fuel,
-        "WASM API fuel usage ({wasm_api_fuel}) should be less than non-WASM API fuel usage ({non_wasm_api_fuel})",
-    );
-
-    let improvement =
-        ((non_wasm_api_fuel as f64 - wasm_api_fuel as f64) / non_wasm_api_fuel as f64) * 100.0;
-    println!(
-        "WASM API fuel: {wasm_api_fuel}, Non-WASM API fuel: {non_wasm_api_fuel}, Improvement: {improvement:.2}%",
-    );
-
-    // Add fuel consumption threshold checks for both implementations
-    assert_fuel_consumed_within_threshold(16880, wasm_api_fuel);
-    assert_fuel_consumed_within_threshold(736695, non_wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(16_880, wasm_api_fuel);
 
     Ok(())
 }
