@@ -204,6 +204,7 @@ decorate_for_target! {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 pub fn shopify_function_output_finalize_and_return_msgpack_bytes() -> (WriteResult, Vec<u8>) {
     Context::with_mut(|context| {
         let Context {
