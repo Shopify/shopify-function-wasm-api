@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use std::cell::OnceCell;
 use std::path::Path;
 use walrus::{
-    ir::{BinaryOp, UnaryOp},
+    ir::{BinaryOp, MemArg, UnaryOp},
     FunctionBuilder, FunctionId, ImportKind, MemoryId, Module, ValType,
 };
 
@@ -10,12 +10,9 @@ const INPUT_READ_UTF8_STR: &str = "shopify_function_input_read_utf8_str";
 const INPUT_GET_OBJ_PROP: &str = "shopify_function_input_get_obj_prop";
 const OUTPUT_NEW_STR: &str = "shopify_function_output_new_utf8_str";
 const INTERN_STR: &str = "shopify_function_intern_utf8_str";
+const LOG_STR: &str = "shopify_function_log_new_utf8_str";
 
 static IMPORTS: &[(&str, &str)] = &[
-    (
-        "shopify_function_context_new",
-        "_shopify_function_context_new",
-    ),
     ("shopify_function_input_get", "_shopify_function_input_get"),
     (
         "shopify_function_input_get_val_len",
@@ -42,10 +39,6 @@ static IMPORTS: &[(&str, &str)] = &[
     (
         "shopify_function_output_new_null",
         "_shopify_function_output_new_null",
-    ),
-    (
-        "shopify_function_output_finalize",
-        "_shopify_function_output_finalize",
     ),
     (
         "shopify_function_output_new_i32",
@@ -77,6 +70,7 @@ static IMPORTS: &[(&str, &str)] = &[
         "shopify_function_output_finish_array",
         "_shopify_function_output_finish_array",
     ),
+    (LOG_STR, "_shopify_function_log_new_utf8_str"),
 ];
 
 pub const PROVIDER_MODULE_NAME: &str =
@@ -469,6 +463,134 @@ impl TrampolineCodegen {
         Ok(())
     }
 
+    fn emit_shopify_function_log_new_utf8_str(&mut self) -> walrus::Result<()> {
+        let Ok(imported_shopify_function_log_new_utf8_str) =
+            self.module.imports.get_func(PROVIDER_MODULE_NAME, LOG_STR)
+        else {
+            return Ok(());
+        };
+
+        self.validate_params_and_results(
+            LOG_STR,
+            imported_shopify_function_log_new_utf8_str,
+            &[ValType::I32, ValType::I32],
+            &[],
+        )?;
+
+        let shopify_function_log_new_utf8_str_type =
+            self.module.types.add(&[ValType::I32], &[ValType::I32]);
+
+        let (provider_shopify_function_log_new_utf8_str, _) = self.module.add_import_func(
+            PROVIDER_MODULE_NAME,
+            "_shopify_function_log_new_utf8_str",
+            shopify_function_log_new_utf8_str_type,
+        );
+
+        let memcpy_to_provider = self.emit_memcpy_to_provider();
+        let provider_memory = self.provider_memory_id();
+        let array_addr = self.module.locals.add(ValType::I32);
+        let source_offset = self.module.locals.add(ValType::I32);
+        let dst_offset1 = self.module.locals.add(ValType::I32);
+        let len1 = self.module.locals.add(ValType::I32);
+        let dst_offset2 = self.module.locals.add(ValType::I32);
+        let len2 = self.module.locals.add(ValType::I32);
+
+        self.module.replace_imported_func(
+            imported_shopify_function_log_new_utf8_str,
+            |(builder, arg_locals)| {
+                let src_ptr = arg_locals[0];
+                let len = arg_locals[1];
+
+                builder
+                    .func_body()
+                    .local_get(len)
+                    // return value is memory address for (src_offset, dst_offset1, len1, dst_offset2, len2)
+                    .call(provider_shopify_function_log_new_utf8_str)
+                    .local_tee(array_addr)
+                    .load(
+                        provider_memory,
+                        walrus::ir::LoadKind::I32 { atomic: false },
+                        MemArg {
+                            offset: 0,
+                            align: 4,
+                        },
+                    )
+                    .local_set(source_offset)
+                    .local_get(array_addr)
+                    .load(
+                        provider_memory,
+                        walrus::ir::LoadKind::I32 { atomic: false },
+                        MemArg {
+                            offset: 4,
+                            align: 4,
+                        },
+                    )
+                    .local_set(dst_offset1)
+                    .local_get(array_addr)
+                    .load(
+                        provider_memory,
+                        walrus::ir::LoadKind::I32 { atomic: false },
+                        MemArg {
+                            offset: 8,
+                            align: 4,
+                        },
+                    )
+                    .local_set(len1)
+                    // prep and call first memcpy
+                    // need to get (dst1, src + src_offset, len1) on stack
+                    .local_get(dst_offset1)
+                    .local_get(src_ptr)
+                    .local_get(source_offset)
+                    .binop(BinaryOp::I32Add)
+                    .local_tee(src_ptr)
+                    .local_get(len1)
+                    .call(memcpy_to_provider)
+                    // exit early if len1 == len which implies len2 will be 0
+                    .local_get(len1)
+                    .local_get(len)
+                    .binop(BinaryOp::I32Ne)
+                    .if_else(
+                        None,
+                        |then| {
+                            // load locals for second memcpy
+                            then.local_get(array_addr)
+                                .load(
+                                    provider_memory,
+                                    walrus::ir::LoadKind::I32 { atomic: false },
+                                    MemArg {
+                                        offset: 12,
+                                        align: 4,
+                                    },
+                                )
+                                .local_set(dst_offset2)
+                                .local_get(array_addr)
+                                .load(
+                                    provider_memory,
+                                    walrus::ir::LoadKind::I32 { atomic: false },
+                                    MemArg {
+                                        offset: 16,
+                                        align: 4,
+                                    },
+                                )
+                                .local_set(len2)
+                                // prep and call second memcpy
+                                // need to get (dst2, src + src_offset + len1, len2) on stack
+                                .local_get(dst_offset2)
+                                // contains (src + src_offset) from last memcpy
+                                .local_get(src_ptr)
+                                .local_get(len1)
+                                .binop(BinaryOp::I32Add)
+                                .local_get(len2)
+                                .call(memcpy_to_provider);
+                        },
+                        |_else| {},
+                    );
+            },
+        )?;
+
+        Ok(())
+    }
+
     pub fn apply(mut self) -> walrus::Result<Module> {
         // If the module does not have a memory, we should no-op
         if self.guest_memory_id.is_none() {
@@ -504,6 +626,7 @@ impl TrampolineCodegen {
                 INPUT_GET_OBJ_PROP => self.emit_shopify_function_input_get_obj_prop()?,
                 OUTPUT_NEW_STR => self.emit_shopify_function_output_new_utf8_str()?,
                 INTERN_STR => self.emit_shopify_function_intern_utf8_str()?,
+                LOG_STR => self.emit_shopify_function_log_new_utf8_str()?,
                 original => self.rename_imported_func(original, new)?,
             };
         }
@@ -574,7 +697,10 @@ mod test {
         let buf = wat::parse_bytes(input).unwrap();
         let module = Module::from_buffer(&buf).unwrap();
         for (import, _) in IMPORTS {
-            assert!(module.imports.find(PROVIDER_MODULE_NAME, import).is_some());
+            assert!(
+                module.imports.find(PROVIDER_MODULE_NAME, import).is_some(),
+                "{import} not found"
+            );
         }
     }
 
@@ -724,6 +850,35 @@ mod test {
         assert_eq!(
             format!("{err:?}"),
             "Results for shopify_function_intern_utf8_str are incorrect. Expected [I32], got []."
+        );
+    }
+
+    #[test]
+    fn test_wrong_param_type_for_log_str() {
+        let module = r#"
+        (module
+            (import "shopify_function_v2" "shopify_function_log_new_utf8_str" (func (param i32)))
+            (memory 1)
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(format!("{err:?}"), "Params for shopify_function_log_new_utf8_str are incorrect. Expected [I32, I32], got [I32].");
+    }
+
+    #[test]
+    fn test_wrong_result_type_for_log_str() {
+        let module = r#"
+        (module
+            (import "shopify_function_v2" "shopify_function_log_new_utf8_str" (func (param i32 i32) (result i32)))
+            (memory 1)
+        )
+        "#;
+        let result = trampoline_wat(module.as_bytes());
+        let err = result.unwrap_err();
+        assert_eq!(
+            format!("{err:?}"),
+            "Results for shopify_function_log_new_utf8_str are incorrect. Expected [], got [I32]."
         );
     }
 

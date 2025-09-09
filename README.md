@@ -36,20 +36,19 @@ Here's a simple example of how to use the API:
 
 ```rust
 fn main(context: &mut Context) -> Result<()> {
+    shopify_function_wasm_api::init_panic_handler();
     let input = context.input_get()?;
 
     // Function logic
 
-    context.finalize_output()?;
-    
     Ok(())
 }
 ```
 
-To build a function example, create a new example and build it targeting `wasm32-wasip1`:
+To build a function example, create a new example and build it targeting `wasm32-unknown-unknown`:
 
 ```shell
-cargo build --release --target wasm32-wasip1 -p shopify_function_wasm_api --example echo
+cargo build --release --target wasm32-unknown-unknown -p shopify_function_wasm_api --example echo
 ```
 
 
