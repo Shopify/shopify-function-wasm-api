@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,16 +27,16 @@ jobs:
         run: cargo fmt --check
       - name: Run clippy
         run: cargo clippy --all-features -- -D warnings
-      - name: Run clippy (wasm32-wasip1 target)
-        run: cargo clippy --target wasm32-wasip1 --all-features --workspace --exclude shopify_function_trampoline --exclude integration_tests -- -D warnings
+      - name: Run clippy (wasm32-unknown-unknown target)
+        run: cargo clippy --target wasm32-unknown-unknown --all-features --workspace --exclude shopify_function_trampoline --exclude integration_tests -- -D warnings
       - name: Run clippy (tests)
         run: cargo clippy --tests --all-features
       - name: Run clippy (benches)
         run: cargo clippy --benches --all-features
       - name: Run clippy (examples)
         run: cargo clippy --examples --all-features
-      - name: Run clippy (examples, wasm32-wasip1 target)
-        run: cargo clippy --examples --target wasm32-wasip1 --all-features
+      - name: Run clippy (examples, wasm32-unknown-unknown target)
+        run: cargo clippy --examples --target wasm32-unknown-unknown --all-features
 
   test:
     runs-on: ubuntu-latest

@@ -15,12 +15,12 @@ jobs:
   compile-provider:
     name: Compile provider
     runs-on: ubuntu-latest
-    if:  ${{ startsWith(inputs.tag_name || github.event.release.tag_name, 'shopify_function_provider/v') }}
+    if: ${{ startsWith(inputs.tag_name || github.event.release.tag_name, 'shopify_function_provider/v') }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Install wasm32-wasip1 target
-        run: rustup target add wasm32-wasip1
+      - name: Install wasm32-unknown-unknown target
+        run: rustup target add wasm32-unknown-unknown
 
       - name: Extract provider version
         id: provider_version
@@ -29,10 +29,10 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build provider asset
-        run: cargo build --release --target wasm32-wasip1 --package shopify_function_provider
+        run: cargo build --release --target wasm32-unknown-unknown --package shopify_function_provider
 
       - name: Archive asset
-        run: gzip -k -f target/wasm32-wasip1/release/shopify_function_provider.wasm && mv target/wasm32-wasip1/release/shopify_function_provider.wasm.gz shopify_function_v${{ steps.provider_version.outputs.version }}.wasm.gz
+        run: gzip -k -f target/wasm32-unknown-unknown/release/shopify_function_provider.wasm && mv target/wasm32-unknown-unknown/release/shopify_function_provider.wasm.gz shopify_function_v${{ steps.provider_version.outputs.version }}.wasm.gz
 
       - name: Generate asset hash
         run: sha256sum shopify_function_v${{ steps.provider_version.outputs.version }}.wasm.gz | awk '{ print $1 }' > shopify_function_v${{ steps.provider_version.outputs.version }}.wasm.gz.sha256
@@ -59,7 +59,7 @@ jobs:
   compile:
     name: Compile trampoline-cli-${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    if:  ${{ startsWith(inputs.tag_name || github.event.release.tag_name, 'shopify_function_trampoline/v') }}
+    if: ${{ startsWith(inputs.tag_name || github.event.release.tag_name, 'shopify_function_trampoline/v') }}
     strategy:
       matrix:
         include:
