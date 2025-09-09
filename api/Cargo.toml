@@ -29,7 +29,3 @@ path = "examples/echo.rs"
 [[example]]
 name = "cart-checkout-validation-wasm-api"
 path = "examples/cart-checkout-validation-wasm-api.rs"
-
-[[example]]
-name = "cart-checkout-validation-wasi-json"
-path = "examples/cart-checkout-validation-wasi-json.rs"

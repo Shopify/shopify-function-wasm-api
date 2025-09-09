@@ -1188,7 +1188,6 @@ dependencies = [
  "shopify_function_trampoline",
  "walrus",
  "wasmtime",
- "wasmtime-wasi",
  "wat",
 ]
 
