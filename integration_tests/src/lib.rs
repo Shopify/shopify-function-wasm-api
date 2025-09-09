@@ -14,7 +14,7 @@ fn build_provider() -> Result<()> {
             "build",
             "--release",
             "--target",
-            "wasm32-wasip1",
+            "wasm32-unknown-unknown",
             "-p",
             "shopify_function_provider",
         ])
@@ -32,7 +32,7 @@ fn build_example(name: &str) -> Result<()> {
             "build",
             "--release",
             "--target",
-            "wasm32-wasip1",
+            "wasm32-unknown-unknown",
             "-p",
             "shopify_function_wasm_api",
             "--example",
@@ -48,7 +48,7 @@ fn build_example(name: &str) -> Result<()> {
 /// Applies the trampoline to the example
 fn apply_trampoline_to_example(name: &str) -> Result<()> {
     let workspace_root = workspace_root();
-    let examples_dir = workspace_root.join("target/wasm32-wasip1/release/examples");
+    let examples_dir = workspace_root.join("target/wasm32-unknown-unknown/release/examples");
     let example_path = examples_dir.join(name).with_extension("wasm");
     let merged_path = example_path.with_extension("merged.wasm");
     shopify_function_trampoline::trampoline_existing_module(example_path, merged_path)?;

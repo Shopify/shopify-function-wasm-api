@@ -16,14 +16,6 @@ typedef size_t InternedStringId;
 // Import module declaration
 #define SHOPIFY_FUNCTION_IMPORT_MODULE "shopify_function_v2"
 
-// Common API
-/**
- * Creates a new context for the Shopify Function execution
- */
-__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
-__attribute__((import_name("shopify_function_context_new")))
-extern void shopify_function_context_new(void);
-
 // Read API
 /**
  * Gets the input value from the context
@@ -112,14 +104,6 @@ __attribute__((import_name("shopify_function_output_new_null")))
 extern WriteResult shopify_function_output_new_null();
 
 /**
- * Finalizes the output and returns the result
- * @return WriteResult indicating success or failure
- */
-__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
-__attribute__((import_name("shopify_function_output_finalize")))
-extern WriteResult shopify_function_output_finalize();
-
-/**
  * Creates a new 32-bit integer output value
  * @param value The integer value
  * @return WriteResult indicating success or failure
@@ -200,5 +184,14 @@ extern WriteResult shopify_function_output_finish_array();
 __attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
 __attribute__((import_name("shopify_function_intern_utf8_str")))
 extern InternedStringId shopify_function_intern_utf8_str(const uint8_t* ptr, size_t len);
+
+/**
+ * Logs a new UTF-8 string output value
+ * @param ptr The string data
+ * @param len The length of the string
+ */
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_log_new_utf8_str")))
+extern void shopify_function_log_new_utf8_str(const uint8_t* ptr, size_t len);
 
 #endif // SHOPIFY_FUNCTION_H

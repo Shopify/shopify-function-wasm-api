@@ -21,7 +21,7 @@ fn generate_output_path() -> PathBuf {
 fn example_module_path(name: &str) -> PathBuf {
     let workspace_root = workspace_root();
     workspace_root
-        .join("target/wasm32-wasip1/release/examples")
+        .join("target/wasm32-unknown-unknown/release/examples")
         .join(format!("{name}.wasm"))
 }
 
@@ -31,7 +31,7 @@ fn build_example(name: &str) -> Result<()> {
             "build",
             "--release",
             "--target",
-            "wasm32-wasip1",
+            "wasm32-unknown-unknown",
             "-p",
             "shopify_function_wasm_api",
             "--example",
