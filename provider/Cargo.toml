@@ -12,7 +12,7 @@ crate-type = ["lib", "cdylib"]
 
 [dependencies]
 rmp = "0.8.14"
-shopify_function_wasm_api_core = { path = "../core", version = "0.3.0" }
+shopify_function_wasm_api_core = { path = "../core", version = "0.2.0" }
 bumpalo = { version = "3.19.0", features = ["collections"] }
 
 [dev-dependencies]
