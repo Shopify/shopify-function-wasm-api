@@ -1848,7 +1848,7 @@ dependencies = [
 
 [[package]]
 name = "shopify_function_wasm_api"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "paste",
  "rmp-serde",
@@ -1861,7 +1861,7 @@ dependencies = [
 
 [[package]]
 name = "shopify_function_wasm_api_core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "strum",
 ]
