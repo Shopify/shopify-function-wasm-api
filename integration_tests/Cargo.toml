@@ -15,5 +15,5 @@ shopify_function_provider = { path = "../provider" }
 [dev-dependencies]
 walrus = "0.23.3"
 anyhow = "1.0"
-wat = "1.235.0"
+wat = "1.239.0"
 insta = "1"
