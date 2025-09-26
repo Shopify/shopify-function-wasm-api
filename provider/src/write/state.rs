@@ -176,7 +176,7 @@ impl ObjectState {
     }
 
     fn write_non_string_value(&mut self) -> WriteResult {
-        if self.num_inserted % 2 == 0 {
+        if self.num_inserted.is_multiple_of(2) {
             return WriteResult::ExpectedKey;
         }
         self.num_inserted += 1;
