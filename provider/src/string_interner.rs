@@ -1,6 +1,7 @@
 use core::ffi::c_void;
 use shopify_function_wasm_api_core::InternedStringId;
 
+#[derive(Default)]
 pub(crate) struct StringInterner {
     buf: Vec<u8>,
     spans: Vec<(usize, usize)>,
