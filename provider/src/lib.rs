@@ -109,7 +109,13 @@ extern "C" fn initialize(input_len: usize) -> *const u8 {
 
 #[cfg(not(target_family = "wasm"))]
 pub fn initialize_from_msgpack_bytes(bytes: Vec<u8>) {
-    CONTEXT.with_borrow_mut(|context| *context = Context::new(bytes))
+    CONTEXT.with_borrow_mut(|context| {
+        use std::mem;
+
+        let string_interner = mem::take(&mut context.string_interner);
+        *context = Context::new(bytes);
+        context.string_interner = string_interner;
+    })
 }
 
 #[cfg(target_family = "wasm")]

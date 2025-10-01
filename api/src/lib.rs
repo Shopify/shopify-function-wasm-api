@@ -25,7 +25,7 @@
 #![warn(missing_docs)]
 
 use shopify_function_wasm_api_core::read::{ErrorCode, NanBox, Val, ValueRef};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{cell::RefCell, collections::HashMap};
 
 pub mod log;
 pub mod read;
@@ -194,34 +194,31 @@ impl InternedStringId {
     }
 }
 
+// The underlying string interner is thread local so the cache needs to be thread local too
+thread_local! {
+    static INTERNED_STRING_CACHE: RefCell<HashMap::<&'static str, InternedStringId>> = RefCell::new(HashMap::new());
+}
+
 /// A mechanism for caching interned string IDs.
 pub struct CachedInternedStringId {
     value: &'static str,
-    interned_string_id: AtomicUsize,
 }
-
-const INITIAL_INTERN_STRING_ID: usize = usize::MAX;
 
 impl CachedInternedStringId {
     /// Create a new cached interned string ID.
     pub const fn new(value: &'static str) -> Self {
-        Self {
-            value,
-            interned_string_id: AtomicUsize::new(INITIAL_INTERN_STRING_ID),
-        }
+        Self { value }
     }
 
     /// Load the interned string ID.
     pub fn load(&self) -> InternedStringId {
-        let interned_string_id = self.interned_string_id.load(Ordering::Relaxed);
-        if interned_string_id == INITIAL_INTERN_STRING_ID {
-            let id =
-                unsafe { shopify_function_intern_utf8_str(self.value.as_ptr(), self.value.len()) };
-            self.interned_string_id.store(id, Ordering::Relaxed);
-            InternedStringId(id)
-        } else {
-            InternedStringId(interned_string_id)
-        }
+        INTERNED_STRING_CACHE.with_borrow_mut(|cache| {
+            *cache.entry(self.value).or_insert_with(|| {
+                InternedStringId(unsafe {
+                    shopify_function_intern_utf8_str(self.value.as_ptr(), self.value.len())
+                })
+            })
+        })
     }
 }
 
@@ -473,15 +470,47 @@ pub fn init_panic_handler() {
 
 #[cfg(test)]
 mod tests {
+    use std::thread;
+
     use super::*;
+
+    // A CachedInternedStringId does not have to be static but in practice, the `shopify_function`
+    // macro makes it static so we should test with it being static.
+    static CACHED_INTERNED_STRING_ID: CachedInternedStringId = CachedInternedStringId::new("test");
 
     #[test]
     fn test_interned_string_id_cache() {
-        let cached_interned_string_id = CachedInternedStringId::new("test");
-        Context::new_with_input(serde_json::json!({}));
-        let id = cached_interned_string_id.load();
-        let id2 = cached_interned_string_id.load();
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        let id = CACHED_INTERNED_STRING_ID.load();
+        let id2 = CACHED_INTERNED_STRING_ID.load();
+        context.write_interned_utf8_str(id).unwrap();
         assert_eq!(id, id2);
+
+        // Test writing again with new context in same test to test same thread execution.
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        context.write_interned_utf8_str(id).unwrap();
+    }
+
+    #[test]
+    fn test_interned_string_id_in_another_test() {
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        let id = CACHED_INTERNED_STRING_ID.load();
+        context.write_interned_utf8_str(id).unwrap();
+    }
+
+    #[test]
+    fn test_interned_string_in_new_thread() {
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        let id = CACHED_INTERNED_STRING_ID.load();
+        context.write_interned_utf8_str(id).unwrap();
+        // Test this still works across multiple threads.
+        thread::spawn(|| {
+            let mut context = Context::new_with_input(serde_json::json!({}));
+            let id = CACHED_INTERNED_STRING_ID.load();
+            context.write_interned_utf8_str(id).unwrap();
+        })
+        .join()
+        .unwrap();
     }
 
     #[test]
