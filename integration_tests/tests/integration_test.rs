@@ -386,7 +386,7 @@ fn test_log_len() -> Result<()> {
         Ok(run_example("log-len", prepare_wasm_api_input(serde_json::json!(len))?)?.2)
     };
     let fuel = run(1)?;
-    assert_fuel_consumed_within_threshold(799, fuel);
+    assert_fuel_consumed_within_threshold(757, fuel);
     let fuel = run(500)?;
     assert_fuel_consumed_within_threshold(2_883, fuel);
     let fuel = run(1_000)?;
