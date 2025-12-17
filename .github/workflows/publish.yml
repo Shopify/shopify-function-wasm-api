@@ -38,13 +38,13 @@ jobs:
         run: sha256sum shopify_function_v${{ steps.provider_version.outputs.version }}.wasm.gz | awk '{ print $1 }' > shopify_function_v${{ steps.provider_version.outputs.version }}.wasm.gz.sha256
 
       - name: Upload asset to artifacts
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: shopify_function_v${{ steps.provider_version.outputs.version }}.wasm.gz
           path: shopify_function_v${{ steps.provider_version.outputs.version }}.wasm.gz
 
       - name: Upload asset hash to artifacts
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: shopify_function_v${{ steps.provider_version.outputs.version }}.wasm.gz.sha256
           path: shopify_function_v${{ steps.provider_version.outputs.version }}.wasm.gz.sha256
@@ -128,7 +128,7 @@ jobs:
         run: gzip -k -f ${{ matrix.path }} && mv ${{ matrix.path }}.gz ${{ steps.asset_name.outputs.asset_name }}.gz
 
       - name: Upload assets to artifacts
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ${{ steps.asset_name.outputs.asset_name }}.gz
           path: ${{ steps.asset_name.outputs.asset_name }}.gz
@@ -142,7 +142,7 @@ jobs:
         run: ${{ matrix.shasum_cmd }} ${{ steps.asset_name.outputs.asset_name }}.gz | awk '{ print $1 }' > ${{ steps.asset_name.outputs.asset_name }}.gz.sha256
 
       - name: Upload asset hash to artifacts
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ${{ steps.asset_name.outputs.asset_name }}.gz.sha256
           path: ${{ steps.asset_name.outputs.asset_name }}.gz.sha256
