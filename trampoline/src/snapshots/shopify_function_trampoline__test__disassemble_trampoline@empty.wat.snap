@@ -5,6 +5,6 @@ input_file: trampoline/src/test_data/empty.wat
 ---
 (module
   (@producers
-    (processed-by "walrus" "0.23.3")
+    (processed-by "walrus" "0.24.4")
   )
 )

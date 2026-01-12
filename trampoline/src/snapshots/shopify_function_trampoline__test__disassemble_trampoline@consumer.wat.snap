@@ -142,6 +142,6 @@ input_file: trampoline/src/test_data/consumer.wat
     call 16
   )
   (@producers
-    (processed-by "walrus" "0.23.3")
+    (processed-by "walrus" "0.24.4")
   )
 )
