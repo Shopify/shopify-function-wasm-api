@@ -113,21 +113,24 @@ jobs:
       - name: Build provider
         run: cargo build --release --target wasm32-unknown-unknown -p shopify_function_provider
 
-      - name: Build C echo
-        run: make -C sdks/c echo
+      - name: Build C examples
+        run: make -C sdks/c all
 
-      - name: Build Zig echo
+      - name: Build Zig examples
         run: cd sdks/zig && zig build -Doptimize=ReleaseSmall
 
-      - name: Build Go echo
-        run: make -C sdks/go echo
+      - name: Build Go examples
+        run: make -C sdks/go all
 
       - name: Collect WASM files
         run: |
           mkdir -p target/conformance_wasm
           cp sdks/c/build/echo.wasm target/conformance_wasm/c-echo.wasm
+          cp sdks/c/build/cart-checkout-validation.wasm target/conformance_wasm/c-cart-checkout-validation.wasm
           cp sdks/zig/zig-out/bin/echo.wasm target/conformance_wasm/zig-echo.wasm
+          cp sdks/zig/zig-out/bin/cart-checkout-validation.wasm target/conformance_wasm/zig-cart-checkout-validation.wasm
           cp sdks/go/build/echo.wasm target/conformance_wasm/go-echo.wasm
+          cp sdks/go/build/cart-checkout-validation.wasm target/conformance_wasm/go-cart-checkout-validation.wasm
 
       - name: Run conformance tests
         run: cargo test -p conformance_tests

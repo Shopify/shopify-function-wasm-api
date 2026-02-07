@@ -1,6 +1,6 @@
 {
-  "description": "Conformance test cases for Shopify Function WASM API echo implementations",
-  "test_cases": [
+  "description": "Conformance test cases for Shopify Function WASM API implementations",
+  "echo": [
     {
       "name": "null",
       "category": "scalar",
@@ -150,6 +150,38 @@
       "category": "complex",
       "input": {"uvw": {"xyz": {"ghi": [1, 2, {"jkl": true}]}}},
       "expected_output": {"uvw": {"xyz": {"ghi": [1, 2, {"jkl": true}]}}}
+    }
+  ],
+  "cart-checkout-validation": [
+    {
+      "name": "no_errors_single_quantity",
+      "category": "validation",
+      "input": {"cart": {"lines": [{"quantity": 1, "merchandise": {"id": "gid://shopify/ProductVariant/1", "title": "Sample Product"}}]}},
+      "expected_output": {"errors": []}
+    },
+    {
+      "name": "error_quantity_exceeds_one",
+      "category": "validation",
+      "input": {"cart": {"lines": [{"quantity": 2, "merchandise": {"id": "gid://shopify/ProductVariant/1", "title": "Sample Product"}}]}},
+      "expected_output": {"errors": [{"localizedMessage": "Not possible to order more than one of each", "target": "$.cart"}]}
+    },
+    {
+      "name": "no_errors_empty_cart",
+      "category": "validation",
+      "input": {"cart": {"lines": []}},
+      "expected_output": {"errors": []}
+    },
+    {
+      "name": "error_second_line_exceeds",
+      "category": "validation",
+      "input": {"cart": {"lines": [{"quantity": 1, "merchandise": {"id": "gid://shopify/ProductVariant/1", "title": "P1"}}, {"quantity": 5, "merchandise": {"id": "gid://shopify/ProductVariant/2", "title": "P2"}}]}},
+      "expected_output": {"errors": [{"localizedMessage": "Not possible to order more than one of each", "target": "$.cart"}]}
+    },
+    {
+      "name": "no_errors_all_quantity_one",
+      "category": "validation",
+      "input": {"cart": {"lines": [{"quantity": 1, "merchandise": {"id": "gid://shopify/ProductVariant/1", "title": "P1"}}, {"quantity": 1, "merchandise": {"id": "gid://shopify/ProductVariant/2", "title": "P2"}}]}},
+      "expected_output": {"errors": []}
     }
   ]
 }
