@@ -28,7 +28,7 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-features -- -D warnings
       - name: Run clippy (wasm32-unknown-unknown target)
-        run: cargo clippy --target wasm32-unknown-unknown --all-features --workspace --exclude shopify_function_trampoline --exclude integration_tests -- -D warnings
+        run: cargo clippy --target wasm32-unknown-unknown --all-features --workspace --exclude shopify_function_trampoline --exclude integration_tests --exclude conformance_tests -- -D warnings
       - name: Run clippy (tests)
         run: cargo clippy --tests --all-features
       - name: Run clippy (benches)
@@ -77,3 +77,59 @@ jobs:
             cargo-target
       - name: Build
         run: cargo build --release --all-features
+
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Cargo Cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cargo
+          key: cargo-${{ hashFiles('Cargo.toml') }}
+          restore-keys: |
+            cargo-${{ hashFiles('Cargo.toml') }}
+            cargo
+      - name: Cargo Target Cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: target
+          key: cargo-target-conformance-${{ hashFiles('Cargo.toml') }}
+          restore-keys: |
+            cargo-target-conformance-${{ hashFiles('Cargo.toml') }}
+            cargo-target-conformance
+            cargo-target
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@a45b4e23a4ef06db3a69e6e8deca72e57e2b8e31 # v2.0.1
+        with:
+          version: 0.13.0
+
+      - name: Install TinyGo
+        run: |
+          wget -q https://github.com/tinygo-org/tinygo/releases/download/v0.33.0/tinygo_0.33.0_amd64.deb
+          sudo dpkg -i tinygo_0.33.0_amd64.deb
+
+      - name: Build provider
+        run: cargo build --release --target wasm32-unknown-unknown -p shopify_function_provider
+
+      - name: Build C echo
+        run: make -C sdks/c echo
+
+      - name: Build Zig echo
+        run: cd sdks/zig && zig build -Doptimize=ReleaseSmall
+
+      - name: Build Go echo
+        run: make -C sdks/go echo
+
+      - name: Collect WASM files
+        run: |
+          mkdir -p target/conformance_wasm
+          cp sdks/c/build/echo.wasm target/conformance_wasm/c-echo.wasm
+          cp sdks/zig/zig-out/bin/echo.wasm target/conformance_wasm/zig-echo.wasm
+          cp sdks/go/build/echo.wasm target/conformance_wasm/go-echo.wasm
+
+      - name: Run conformance tests
+        run: cargo test -p conformance_tests
+        env:
+          CONFORMANCE_WASM_DIR: target/conformance_wasm
