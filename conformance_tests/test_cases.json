@@ -1,0 +1,155 @@
+{
+  "description": "Conformance test cases for Shopify Function WASM API echo implementations",
+  "test_cases": [
+    {
+      "name": "null",
+      "category": "scalar",
+      "input": null,
+      "expected_output": null
+    },
+    {
+      "name": "bool_true",
+      "category": "scalar",
+      "input": true,
+      "expected_output": true
+    },
+    {
+      "name": "bool_false",
+      "category": "scalar",
+      "input": false,
+      "expected_output": false
+    },
+    {
+      "name": "int_zero",
+      "category": "number",
+      "input": 0,
+      "expected_output": 0
+    },
+    {
+      "name": "int_positive",
+      "category": "number",
+      "input": 42,
+      "expected_output": 42
+    },
+    {
+      "name": "int_negative",
+      "category": "number",
+      "input": -1,
+      "expected_output": -1
+    },
+    {
+      "name": "int_max",
+      "category": "number",
+      "input": 2147483647,
+      "expected_output": 2147483647
+    },
+    {
+      "name": "int_min",
+      "category": "number",
+      "input": -2147483648,
+      "expected_output": -2147483648
+    },
+    {
+      "name": "float_positive",
+      "category": "number",
+      "input": 3.14,
+      "expected_output": 3.14
+    },
+    {
+      "name": "float_negative",
+      "category": "number",
+      "input": -2.718,
+      "expected_output": -2.718
+    },
+    {
+      "name": "float_small",
+      "category": "number",
+      "input": 0.1,
+      "expected_output": 0.1
+    },
+    {
+      "name": "string_simple",
+      "category": "string",
+      "input": "hello",
+      "expected_output": "hello"
+    },
+    {
+      "name": "string_empty",
+      "category": "string",
+      "input": "",
+      "expected_output": ""
+    },
+    {
+      "name": "string_unicode",
+      "category": "string",
+      "input": "Hello, \u4e16\u754c! \ud83c\udf0d",
+      "expected_output": "Hello, \u4e16\u754c! \ud83c\udf0d"
+    },
+    {
+      "name": "string_special_chars",
+      "category": "string",
+      "input": "line1\nline2\ttab\"quote",
+      "expected_output": "line1\nline2\ttab\"quote"
+    },
+    {
+      "name": "object_empty",
+      "category": "object",
+      "input": {},
+      "expected_output": {}
+    },
+    {
+      "name": "object_simple",
+      "category": "object",
+      "input": {"uvw": 1, "xyz": 2},
+      "expected_output": {"uvw": 1, "xyz": 2}
+    },
+    {
+      "name": "object_mixed_values",
+      "category": "object",
+      "input": {"uvw": null, "xyz": true},
+      "expected_output": {"uvw": null, "xyz": true}
+    },
+    {
+      "name": "array_empty",
+      "category": "array",
+      "input": [],
+      "expected_output": []
+    },
+    {
+      "name": "array_integers",
+      "category": "array",
+      "input": [1, 2, 3],
+      "expected_output": [1, 2, 3]
+    },
+    {
+      "name": "array_mixed",
+      "category": "array",
+      "input": [null, true, false, 42, "hello"],
+      "expected_output": [null, true, false, 42, "hello"]
+    },
+    {
+      "name": "nested_object",
+      "category": "complex",
+      "input": {"uvw": {"xyz": 1}},
+      "expected_output": {"uvw": {"xyz": 1}}
+    },
+    {
+      "name": "nested_array_in_object",
+      "category": "complex",
+      "input": {"uvw": [1, 2, 3]},
+      "expected_output": {"uvw": [1, 2, 3]}
+    },
+    {
+      "name": "nested_object_in_array",
+      "category": "complex",
+      "input": [{"uvw": 1}, {"xyz": 2}],
+      "expected_output": [{"uvw": 1}, {"xyz": 2}]
+    },
+    {
+      "name": "deeply_nested",
+      "category": "complex",
+      "input": {"uvw": {"xyz": {"ghi": [1, 2, {"jkl": true}]}}},
+      "expected_output": {"uvw": {"xyz": {"ghi": [1, 2, {"jkl": true}]}}}
+    }
+  ]
+}
