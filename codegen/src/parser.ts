@@ -364,3 +364,140 @@ function getNamedTypeFromRef(typeRef: TypeRef): string {
       return getNamedTypeFromRef(typeRef.ofType!);
   }
 }
+
+/**
+ * Parse a supplementary GraphQL types file and merge its type definitions
+ * into the schema model. This is used for --json-types to define shapes
+ * for JSON scalar fields.
+ */
+export function mergeJsonTypes(
+  jsonTypesSource: string,
+  schemaModel: SchemaModel
+): void {
+  // Wrap in a minimal schema if needed to make it valid for buildSchema
+  const wrappedSource = `type Query { _: String }\n${jsonTypesSource}`;
+  const schema = buildSchema(wrappedSource);
+
+  const typeMap = schema.getTypeMap();
+  for (const [typeName, type] of Object.entries(typeMap)) {
+    if (typeName.startsWith("__")) continue;
+    if (["String", "Int", "Float", "Boolean", "ID", "Query"].includes(typeName))
+      continue;
+
+    if (isObjectType(type)) {
+      const fields: FieldDefinition[] = [];
+      const fieldMap = type.getFields();
+      for (const [fieldName, field] of Object.entries(fieldMap)) {
+        const fieldDef: FieldDefinition = {
+          name: fieldName,
+          type: graphqlTypeToTypeRef(field.type),
+        };
+        fields.push(fieldDef);
+      }
+      schemaModel.objectTypes.set(typeName, { name: typeName, fields });
+    } else if (isEnumType(type)) {
+      schemaModel.enumTypes.set(typeName, {
+        name: typeName,
+        values: type.getValues().map((v) => v.name),
+      });
+    }
+  }
+}
+
+/**
+ * Inject sub-selections for JSON scalar fields based on override mappings.
+ * This post-processes the parsed query's selection tree, replacing scalar
+ * JSON fields with typed sub-selections generated from the override type.
+ */
+export function injectJsonOverrides(
+  selections: QueryFieldSelection[],
+  overrides: Map<string, string>,
+  schemaModel: SchemaModel,
+  pathPrefix: string[] = []
+): void {
+  for (const selection of selections) {
+    const currentPath = [...pathPrefix, selection.name];
+
+    // Check if this field matches any override by suffix
+    for (const [overridePath, typeName] of overrides) {
+      if (pathSuffixMatches(currentPath, overridePath)) {
+        // Only inject if the field currently has no sub-selections (it's a scalar)
+        if (selection.selections.length === 0) {
+          const overrideType = schemaModel.objectTypes.get(typeName);
+          if (overrideType) {
+            selection.selections = generateSelectionsFromType(
+              overrideType,
+              schemaModel
+            );
+          }
+        }
+      }
+    }
+
+    // Recurse into existing sub-selections
+    if (selection.selections.length > 0) {
+      injectJsonOverrides(
+        selection.selections,
+        overrides,
+        schemaModel,
+        currentPath
+      );
+    }
+
+    // Recurse into inline fragments
+    if (selection.inlineFragments) {
+      for (const fragment of selection.inlineFragments) {
+        injectJsonOverrides(
+          fragment.selections,
+          overrides,
+          schemaModel,
+          currentPath
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Check if a path suffix-matches an override key.
+ * e.g., path ["metafield", "jsonValue"] matches override "jsonValue"
+ * and also matches "metafield.jsonValue"
+ */
+function pathSuffixMatches(path: string[], overrideKey: string): boolean {
+  const overrideParts = overrideKey.split(".");
+  if (overrideParts.length > path.length) return false;
+
+  for (let i = 0; i < overrideParts.length; i++) {
+    if (path[path.length - overrideParts.length + i] !== overrideParts[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Generate sub-selections for all fields of a type, recursively for nested objects.
+ */
+function generateSelectionsFromType(
+  type: ObjectType,
+  schemaModel: SchemaModel
+): QueryFieldSelection[] {
+  const selections: QueryFieldSelection[] = [];
+
+  for (const field of type.fields) {
+    const namedType = getNamedTypeFromRef(field.type);
+    const nestedObjectType = schemaModel.objectTypes.get(namedType);
+
+    const selection: QueryFieldSelection = {
+      name: field.name,
+      schemaType: field.type,
+      selections: nestedObjectType
+        ? generateSelectionsFromType(nestedObjectType, schemaModel)
+        : [],
+    };
+
+    selections.push(selection);
+  }
+
+  return selections;
+}

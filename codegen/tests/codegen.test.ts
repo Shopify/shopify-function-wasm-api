@@ -2,7 +2,12 @@ import { describe, it } from "node:test";
 import * as assert from "node:assert";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { parseSchema, parseQuery } from "../src/parser.js";
+import {
+  parseSchema,
+  parseQuery,
+  mergeJsonTypes,
+  injectJsonOverrides,
+} from "../src/parser.js";
 import { emitZig, camelToSnake } from "../src/emitters/zig.js";
 import { emitC } from "../src/emitters/c.js";
 import { emitGo } from "../src/emitters/go.js";
@@ -680,5 +685,171 @@ describe("Go emitter - union types", () => {
 
     // CustomProduct should have Title accessor
     assert.ok(output.includes("func (input Cart_validationInputCartLinesItemMerchandiseCustomProduct) Title()"));
+  });
+});
+
+// --- JSON override tests ---
+
+const jsonSchemaSource = fs.readFileSync(
+  path.join(fixturesDir, "json_schema.graphql"),
+  "utf-8"
+);
+const jsonQuerySource = fs.readFileSync(
+  path.join(fixturesDir, "json_query.graphql"),
+  "utf-8"
+);
+const jsonTypesSource = fs.readFileSync(
+  path.join(fixturesDir, "json_types.graphql"),
+  "utf-8"
+);
+
+function makeJsonTargets(overrideKey: string = "jsonValue") {
+  const schema = parseSchema(jsonSchemaSource);
+  mergeJsonTypes(jsonTypesSource, schema);
+  const query = parseQuery(jsonQuerySource, schema);
+  const overrides = new Map([[overrideKey, "Configuration"]]);
+  injectJsonOverrides(query.selections, overrides, schema);
+  return {
+    schema,
+    query,
+    targets: [
+      {
+        targetName: "handle_target",
+        graphqlTargetName: "handleTarget",
+        selections: query.selections,
+      },
+    ],
+  };
+}
+
+describe("mergeJsonTypes", () => {
+  it("should merge object types from json-types file into schema model", () => {
+    const schema = parseSchema(jsonSchemaSource);
+    mergeJsonTypes(jsonTypesSource, schema);
+    assert.ok(schema.objectTypes.has("Configuration"));
+    assert.ok(schema.objectTypes.has("ConfigItem"));
+
+    const config = schema.objectTypes.get("Configuration")!;
+    const fieldNames = config.fields.map((f) => f.name);
+    assert.deepStrictEqual(fieldNames, ["limit", "message", "items"]);
+  });
+});
+
+describe("injectJsonOverrides", () => {
+  it("should replace JSON scalar field with typed sub-selections", () => {
+    const { query } = makeJsonTargets();
+    const metafield = query.selections.find((s) => s.name === "metafield")!;
+    const jsonValue = metafield.selections.find((s) => s.name === "jsonValue")!;
+
+    // jsonValue should now have sub-selections from Configuration type
+    assert.ok(jsonValue.selections.length > 0);
+    const subFieldNames = jsonValue.selections.map((s) => s.name);
+    assert.deepStrictEqual(subFieldNames, ["limit", "message", "items"]);
+  });
+
+  it("should handle nested override types", () => {
+    const { query } = makeJsonTargets();
+    const metafield = query.selections.find((s) => s.name === "metafield")!;
+    const jsonValue = metafield.selections.find((s) => s.name === "jsonValue")!;
+
+    // items field should have sub-selections from ConfigItem type
+    const items = jsonValue.selections.find((s) => s.name === "items")!;
+    assert.ok(items.selections.length > 0);
+    const itemFieldNames = items.selections.map((s) => s.name);
+    assert.deepStrictEqual(itemFieldNames, ["name", "value"]);
+  });
+
+  it("should match by simple field name", () => {
+    const { query } = makeJsonTargets("jsonValue");
+    const metafield = query.selections.find((s) => s.name === "metafield")!;
+    const jsonValue = metafield.selections.find((s) => s.name === "jsonValue")!;
+    assert.ok(jsonValue.selections.length > 0);
+  });
+
+  it("should match by parent.field path", () => {
+    const { query } = makeJsonTargets("metafield.jsonValue");
+    const metafield = query.selections.find((s) => s.name === "metafield")!;
+    const jsonValue = metafield.selections.find((s) => s.name === "jsonValue")!;
+    assert.ok(jsonValue.selections.length > 0);
+  });
+
+  it("should not match when path suffix does not match", () => {
+    const schema = parseSchema(jsonSchemaSource);
+    mergeJsonTypes(jsonTypesSource, schema);
+    const query = parseQuery(jsonQuerySource, schema);
+    const overrides = new Map([["nonExistentField", "Configuration"]]);
+    injectJsonOverrides(query.selections, overrides, schema);
+
+    const metafield = query.selections.find((s) => s.name === "metafield")!;
+    const jsonValue = metafield.selections.find((s) => s.name === "jsonValue")!;
+    assert.strictEqual(jsonValue.selections.length, 0);
+  });
+
+  it("should not inject if field already has sub-selections", () => {
+    const schema = parseSchema(jsonSchemaSource);
+    mergeJsonTypes(jsonTypesSource, schema);
+    const query = parseQuery(jsonQuerySource, schema);
+
+    // metafield already has sub-selections (jsonValue, type, value)
+    const overrides = new Map([["metafield", "Configuration"]]);
+    injectJsonOverrides(query.selections, overrides, schema);
+
+    // metafield should keep its original sub-selections, not be replaced
+    const metafield = query.selections.find((s) => s.name === "metafield")!;
+    const fieldNames = metafield.selections.map((s) => s.name);
+    assert.deepStrictEqual(fieldNames, ["jsonValue", "type", "value"]);
+  });
+});
+
+describe("Zig emitter - JSON override", () => {
+  it("should generate nested struct type for overridden JSON field", () => {
+    const { schema, targets } = makeJsonTargets();
+    const output = emitZig(schema, targets, { enumsAsStr: [] });
+
+    // jsonValue should generate a nested struct type
+    assert.ok(output.includes("pub const jsonValue_T = struct {"));
+    assert.ok(output.includes("pub fn limit(self: jsonValue_T) i32 {"));
+    assert.ok(output.includes("pub fn message(self: jsonValue_T) []const u8 {"));
+
+    // items should be an array accessor with a nested item type
+    assert.ok(
+      output.includes("pub fn items(self: jsonValue_T) sf.ArrayAccessor(items_Item) {")
+    );
+    assert.ok(output.includes("pub const items_Item = struct {"));
+    assert.ok(output.includes("pub fn name(self: items_Item) []const u8 {"));
+  });
+});
+
+describe("C emitter - JSON override", () => {
+  it("should generate nested wrapper structs for overridden JSON field", () => {
+    const { schema, targets } = makeJsonTargets();
+    const { header } = emitC(schema, targets, { enumsAsStr: [] });
+
+    // Should have wrapper type for jsonValue
+    assert.ok(header.includes("handle_target_metafield_jsonValue"));
+
+    // Should have accessor for limit
+    assert.ok(
+      header.includes("handle_target_metafield_jsonValue_get_limit") ||
+        header.includes("handle_target_metafield_jsonValue_Item_get_limit")
+    );
+  });
+});
+
+describe("Go emitter - JSON override", () => {
+  it("should generate nested wrapper struct for overridden JSON field", () => {
+    const { schema, targets } = makeJsonTargets();
+    const output = emitGo(schema, targets, {
+      enumsAsStr: [],
+      modulePath: "github.com/Shopify/shopify-function-go",
+      packageName: "generated",
+    });
+
+    // Should have nested type for jsonValue
+    assert.ok(output.includes("Handle_targetInputMetafieldJsonValue"));
+
+    // Should have accessor for limit
+    assert.ok(output.includes("Limit()"));
+    assert.ok(output.includes("Message()"));
   });
 });

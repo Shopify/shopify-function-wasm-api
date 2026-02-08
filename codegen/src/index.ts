@@ -17,7 +17,12 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { parseSchema, parseQuery } from "./parser.js";
+import {
+  parseSchema,
+  parseQuery,
+  mergeJsonTypes,
+  injectJsonOverrides,
+} from "./parser.js";
 import { emitZig, camelToSnake } from "./emitters/zig.js";
 import { emitC } from "./emitters/c.js";
 import { emitGo } from "./emitters/go.js";
@@ -35,6 +40,8 @@ interface CliArgs {
   enumsAsStr: string[];
   goModulePath: string;
   goPackage: string;
+  jsonTypes: string;
+  jsonOverrides: Map<string, string>;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -46,6 +53,8 @@ function parseArgs(argv: string[]): CliArgs {
     enumsAsStr: ["LanguageCode", "CountryCode", "CurrencyCode"],
     goModulePath: "github.com/Shopify/shopify-function-go",
     goPackage: "generated",
+    jsonTypes: "",
+    jsonOverrides: new Map(),
   };
 
   let i = 0;
@@ -80,6 +89,21 @@ function parseArgs(argv: string[]): CliArgs {
       case "--go-package":
         args.goPackage = argv[++i];
         break;
+      case "--json-types":
+        args.jsonTypes = argv[++i];
+        break;
+      case "--json-override": {
+        const val = argv[++i];
+        const eqIndex = val.indexOf("=");
+        if (eqIndex === -1) {
+          console.error(
+            `Error: --json-override value must be in format "fieldPath=TypeName", got "${val}"`
+          );
+          process.exit(1);
+        }
+        args.jsonOverrides.set(val.slice(0, eqIndex), val.slice(eqIndex + 1));
+        break;
+      }
       default:
         console.error(`Unknown option: ${argv[i]}`);
         process.exit(1);
@@ -106,6 +130,12 @@ function main() {
   // Read and parse schema
   const schemaSource = fs.readFileSync(args.schema, "utf-8");
   const schemaModel = parseSchema(schemaSource);
+
+  // Merge supplementary JSON type definitions if provided
+  if (args.jsonTypes) {
+    const jsonTypesSource = fs.readFileSync(args.jsonTypes, "utf-8");
+    mergeJsonTypes(jsonTypesSource, schemaModel);
+  }
 
   // Determine target names from mutation targets in schema
   // Each query file maps to a target either by explicit --target flag,
@@ -156,6 +186,11 @@ function main() {
     const targetFilterName = targetName.replace(/_/g, ".");
 
     const parsedQuery = parseQuery(querySource, schemaModel, targetFilterName);
+
+    // Inject typed sub-selections for JSON override fields
+    if (args.jsonOverrides.size > 0) {
+      injectJsonOverrides(parsedQuery.selections, args.jsonOverrides, schemaModel);
+    }
 
     return {
       targetName,

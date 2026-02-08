@@ -1,0 +1,26 @@
+scalar JSON
+
+schema {
+  query: Input
+  mutation: MutationRoot
+}
+
+type Input {
+  metafield: Metafield
+}
+
+type Metafield {
+  jsonValue: JSON!
+  type: String!
+  value: String!
+}
+
+type MutationRoot {
+  handleTarget(result: FunctionTargetResult!): Void!
+}
+
+scalar Void
+
+input FunctionTargetResult {
+  status: String
+}

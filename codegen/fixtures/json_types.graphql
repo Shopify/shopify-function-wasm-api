@@ -1,0 +1,10 @@
+type Configuration {
+  limit: Int!
+  message: String!
+  items: [ConfigItem!]!
+}
+
+type ConfigItem {
+  name: String!
+  value: String!
+}
