@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Code generator for Shopify Function SDKs - generates typed code from GraphQL schemas and queries",
   "bin": {
-    "shopify-function-codegen": "./dist/index.js"
+    "shopify-function-codegen": "./dist/src/index.js"
   },
   "scripts": {
     "build": "tsc",

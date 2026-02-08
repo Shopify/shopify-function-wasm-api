@@ -22,9 +22,14 @@ import { emitZig, camelToSnake } from "./emitters/zig.js";
 import { emitC } from "./emitters/c.js";
 import { emitGo } from "./emitters/go.js";
 
+interface QueryArg {
+  path: string;
+  target?: string; // explicit mutation target name (camelCase)
+}
+
 interface CliArgs {
   schema: string;
-  queries: string[];
+  queries: QueryArg[];
   language: string;
   output: string;
   enumsAsStr: string[];
@@ -50,7 +55,15 @@ function parseArgs(argv: string[]): CliArgs {
         args.schema = argv[++i];
         break;
       case "--query":
-        args.queries.push(argv[++i]);
+        args.queries.push({ path: argv[++i] });
+        break;
+      case "--target":
+        // Pairs with the most recent --query to specify which mutation target it maps to
+        if (args.queries.length === 0) {
+          console.error("Error: --target must follow a --query");
+          process.exit(1);
+        }
+        args.queries[args.queries.length - 1].target = argv[++i];
         break;
       case "--language":
         args.language = argv[++i];
@@ -95,27 +108,52 @@ function main() {
   const schemaModel = parseSchema(schemaSource);
 
   // Determine target names from mutation targets in schema
-  // Each query file maps to a target based on order and mutation target names
-  const targets = args.queries.map((queryPath, index) => {
-    const querySource = fs.readFileSync(queryPath, "utf-8");
-    const queryFileName = path.basename(queryPath, ".graphql");
+  // Each query file maps to a target either by explicit --target flag,
+  // by matching query file name to mutation target name, or by index order
+  const targets = args.queries.map((queryArg, index) => {
+    const querySource = fs.readFileSync(queryArg.path, "utf-8");
+    const queryFileName = path.basename(queryArg.path, ".graphql");
 
-    // Match query file to a mutation target
-    const mutationTarget = schemaModel.mutationTargets[index];
+    let mutationTarget: (typeof schemaModel.mutationTargets)[number] | undefined;
+
+    if (queryArg.target) {
+      // Explicit --target flag: find mutation target by camelCase name
+      mutationTarget = schemaModel.mutationTargets.find(
+        (t) => t.name === queryArg.target
+      );
+      if (!mutationTarget) {
+        console.error(
+          `Error: mutation target "${queryArg.target}" not found in schema. Available: ${schemaModel.mutationTargets.map((t) => t.name).join(", ")}`
+        );
+        process.exit(1);
+      }
+    } else {
+      // Try to match query file name to a mutation target by name
+      // e.g., "cart_validations_generate_run" matches "cartValidationsGenerateRun"
+      mutationTarget = schemaModel.mutationTargets.find(
+        (t) => camelToSnake(t.name) === queryFileName
+      );
+
+      // Fall back to index-based matching
+      if (!mutationTarget) {
+        mutationTarget = schemaModel.mutationTargets[index];
+      }
+    }
+
     if (!mutationTarget) {
       console.error(
-        `Error: no mutation target found for query file ${queryPath} (index ${index})`
+        `Error: no mutation target found for query file ${queryArg.path}. Available: ${schemaModel.mutationTargets.map((t) => t.name).join(", ")}`
       );
       process.exit(1);
     }
 
-    // Build the target name from the mutation (e.g., "targetA" -> "target_a")
+    // Build the target name from the mutation (e.g., "cartValidationsGenerateRun" -> "cart_validations_generate_run")
     const targetName = camelToSnake(mutationTarget.name);
 
     // Determine the full target identifier for @restrictTarget filtering
-    // In the schema, @restrictTarget uses names like "test.target-b"
-    // We need to find which targets each field is restricted to
-    const targetFilterName = `test.${targetName.replace(/_/g, "-")}`;
+    // Convert snake_case target name to dot-separated format matching Shopify's convention
+    // e.g., "cart_validations_generate_run" -> "cart.validations.generate.run"
+    const targetFilterName = targetName.replace(/_/g, ".");
 
     const parsedQuery = parseQuery(querySource, schemaModel, targetFilterName);
 

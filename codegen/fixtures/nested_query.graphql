@@ -1,0 +1,23 @@
+query Input {
+  cart {
+    lines {
+      quantity
+      merchandise {
+        title
+        sku
+      }
+      attributes {
+        key
+        value
+      }
+    }
+    note
+  }
+  customer {
+    displayName
+    address {
+      city
+      country
+    }
+  }
+}
