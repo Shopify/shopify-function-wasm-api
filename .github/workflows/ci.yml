@@ -103,12 +103,12 @@ jobs:
       - name: Install Zig
         uses: mlugg/setup-zig@a45b4e23a4ef06db3a69e6e8deca72e57e2b8e31 # v2.0.1
         with:
-          version: 0.13.0
+          version: 0.15.2
 
       - name: Install TinyGo
         run: |
-          wget -q https://github.com/tinygo-org/tinygo/releases/download/v0.33.0/tinygo_0.33.0_amd64.deb
-          sudo dpkg -i tinygo_0.33.0_amd64.deb
+          wget -q https://github.com/tinygo-org/tinygo/releases/download/v0.40.1/tinygo_0.40.1_amd64.deb
+          sudo dpkg -i tinygo_0.40.1_amd64.deb
 
       - name: Build provider
         run: cargo build --release --target wasm32-unknown-unknown -p shopify_function_provider
