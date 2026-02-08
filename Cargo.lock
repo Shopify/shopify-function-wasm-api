@@ -3182,18 +3182,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "magnus"
-version = "0.6.4"
-source = "git+https://github.com/ianks/magnus?rev=15538225efe0da04f095ccb3d6febd93d69d3458#15538225efe0da04f095ccb3d6febd93d69d3458"
-
-[[patch.unused]]
-name = "magnus"
-version = "0.7.1"
-source = "git+https://github.com/ianks/magnus?rev=a809a6c4719e5837399d01d5691cf9b1420239af#a809a6c4719e5837399d01d5691cf9b1420239af"
-
-[[patch.unused]]
-name = "magnus"
-version = "0.8.2"
-source = "git+https://github.com/ianks/magnus?rev=97c478df6f2c84671d51b425f50b38ac59e39b8a#97c478df6f2c84671d51b425f50b38ac59e39b8a"
