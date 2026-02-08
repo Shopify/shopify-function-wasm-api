@@ -20,5 +20,9 @@ sdks/go/build/
 # Conformance test artifacts
 target/conformance_wasm/
 
+# Codegen build artifacts
+codegen/dist/
+codegen/node_modules/
+
 # macOS
 .DS_Store
