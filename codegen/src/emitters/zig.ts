@@ -13,7 +13,7 @@ import {
   isScalar,
   isBuiltinScalar,
 } from "../schema-model.js";
-import { QueryFieldSelection } from "../parser.js";
+import { QueryFieldSelection, InlineFragmentSelection } from "../parser.js";
 
 export interface ZigEmitterOptions {
   enumsAsStr: string[]; // Enum names to treat as plain strings
@@ -209,7 +209,7 @@ function emitTargetModule(
 
   for (const field of target.selections) {
     lines.push(
-      ...emitAccessor(field, schema, options, "        ")
+      ...emitFieldAccessor(field, "Input", schema, options, "        ")
     );
     lines.push("");
   }
@@ -220,9 +220,10 @@ function emitTargetModule(
   return lines;
 }
 
-/** Emit a single field accessor */
-function emitAccessor(
+/** Recursively emit a field accessor with its nested types */
+function emitFieldAccessor(
   field: QueryFieldSelection,
+  selfType: string,
   schema: SchemaModel,
   options: ZigEmitterOptions,
   indent: string
@@ -230,23 +231,25 @@ function emitAccessor(
   const lines: string[] = [];
   const nullable = isNullable(field.schemaType);
   const namedType = getNamedType(field.schemaType);
-
-  // Check if this field has sub-selections (is an object/complex type)
   const hasSubSelections = field.selections.length > 0;
-
-  // Determine if this is a list type
+  const hasInlineFragments = (field.inlineFragments?.length ?? 0) > 0;
   const isList = isListType(field.schemaType);
 
   // Determine return type
   let returnType: string;
   if (isList) {
-    const innerTypeRef = getListInnerType(field.schemaType);
     if (hasSubSelections) {
       returnType = `sf.ArrayAccessor(${field.name}_Item)`;
+    } else if (hasInlineFragments) {
+      returnType = `sf.ArrayAccessor(${field.name}_Item)`;
     } else {
+      const innerTypeRef = getListInnerType(field.schemaType);
       const innerZig = typeRefToZigForAccessor(innerTypeRef, schema, options);
       returnType = `sf.ArrayAccessor(${innerZig})`;
     }
+    if (nullable) returnType = `?${returnType}`;
+  } else if (hasInlineFragments) {
+    returnType = `${field.name}_T`;
     if (nullable) returnType = `?${returnType}`;
   } else if (hasSubSelections) {
     returnType = `${field.name}_T`;
@@ -256,7 +259,7 @@ function emitAccessor(
   }
 
   // Generate the accessor function
-  lines.push(`${indent}pub fn ${field.name}(self: Input) ${returnType} {`);
+  lines.push(`${indent}pub fn ${field.name}(self: ${selfType}) ${returnType} {`);
 
   // Interned string lookup
   lines.push(
@@ -272,37 +275,29 @@ function emitAccessor(
   if (isList) {
     if (nullable) {
       lines.push(`${indent}    if (val.isNull()) return null;`);
-      if (hasSubSelections) {
-        lines.push(
-          `${indent}    return sf.ArrayAccessor(${field.name}_Item).init(val);`
-        );
-      } else {
-        const innerTypeRef = getListInnerType(field.schemaType);
-        const innerZig = typeRefToZigForAccessor(innerTypeRef, schema, options);
-        lines.push(
-          `${indent}    return sf.ArrayAccessor(${innerZig}).init(val);`
-        );
-      }
-    } else {
-      if (hasSubSelections) {
-        lines.push(
-          `${indent}    return sf.ArrayAccessor(${field.name}_Item).init(val);`
-        );
-      } else {
-        const innerTypeRef = getListInnerType(field.schemaType);
-        const innerZig = typeRefToZigForAccessor(innerTypeRef, schema, options);
-        lines.push(
-          `${indent}    return sf.ArrayAccessor(${innerZig}).init(val);`
-        );
-      }
     }
+    if (hasSubSelections || hasInlineFragments) {
+      lines.push(
+        `${indent}    return sf.ArrayAccessor(${field.name}_Item).init(val);`
+      );
+    } else {
+      const innerTypeRef = getListInnerType(field.schemaType);
+      const innerZig = typeRefToZigForAccessor(innerTypeRef, schema, options);
+      lines.push(
+        `${indent}    return sf.ArrayAccessor(${innerZig}).init(val);`
+      );
+    }
+  } else if (hasInlineFragments) {
+    if (nullable) {
+      lines.push(`${indent}    if (val.isNull()) return null;`);
+    }
+    lines.push(`${indent}    return ${field.name}_T.fromValue(val);`);
   } else if (hasSubSelections) {
     if (nullable) {
       lines.push(`${indent}    if (val.isNull()) return null;`);
     }
     lines.push(`${indent}    return .{ .__value = val };`);
   } else {
-    // Scalar field accessor body
     lines.push(
       ...emitScalarAccessorBody(namedType, nullable, schema, options, indent)
     );
@@ -310,22 +305,28 @@ function emitAccessor(
 
   lines.push(`${indent}}`);
 
-  // If this field has sub-selections, emit a nested type
+  // If this field has inline fragments (union type), emit union(enum) and per-variant structs
+  if (hasInlineFragments && !isList) {
+    lines.push("");
+    lines.push(...emitUnionType(field.name, field.inlineFragments!, schema, options, indent));
+  }
+
+  // If this is a list with inline fragments (array of union), emit Item as union(enum)
+  if (hasInlineFragments && isList) {
+    lines.push("");
+    lines.push(...emitUnionItemType(field.name, field.inlineFragments!, schema, options, indent));
+  }
+
+  // If this field has sub-selections (not a list), emit a nested struct type
   if (hasSubSelections && !isList) {
     lines.push("");
     lines.push(`${indent}pub const ${field.name}_T = struct {`);
     lines.push(`${indent}    __value: sf.wasm.Value,`);
     lines.push("");
     for (const subField of field.selections) {
-      const nestedInput = `${indent}    `;
-      lines.push(`${nestedInput}pub fn ${subField.name}(self: ${field.name}_T) ${getAccessorReturnType(subField, schema, options)} {`);
-      lines.push(`${nestedInput}    const S = struct { var interned: ?sf.wasm.InternedStringId = null; };`);
-      lines.push(`${nestedInput}    if (S.interned == null) S.interned = sf.wasm.internString("${subField.name}");`);
-      lines.push(`${nestedInput}    const val = self.__value.getInternedObjProp(S.interned.?);`);
-      const subNullable = isNullable(subField.schemaType);
-      const subNamedType = getNamedType(subField.schemaType);
-      lines.push(...emitScalarAccessorBody(subNamedType, subNullable, schema, options, nestedInput));
-      lines.push(`${nestedInput}}`);
+      lines.push(
+        ...emitFieldAccessor(subField, `${field.name}_T`, schema, options, `${indent}    `)
+      );
       lines.push("");
     }
     lines.push(`${indent}};`);
@@ -337,21 +338,14 @@ function emitAccessor(
     lines.push(`${indent}pub const ${field.name}_Item = struct {`);
     lines.push(`${indent}    __value: sf.wasm.Value,`);
     lines.push("");
-    // ArrayAccessor uses fromValue to construct items
     lines.push(`${indent}    pub fn fromValue(val: sf.wasm.Value) ${field.name}_Item {`);
     lines.push(`${indent}        return .{ .__value = val };`);
     lines.push(`${indent}    }`);
     lines.push("");
     for (const subField of field.selections) {
-      const nestedInput = `${indent}    `;
-      lines.push(`${nestedInput}pub fn ${subField.name}(self: ${field.name}_Item) ${getAccessorReturnType(subField, schema, options)} {`);
-      lines.push(`${nestedInput}    const S = struct { var interned: ?sf.wasm.InternedStringId = null; };`);
-      lines.push(`${nestedInput}    if (S.interned == null) S.interned = sf.wasm.internString("${subField.name}");`);
-      lines.push(`${nestedInput}    const val = self.__value.getInternedObjProp(S.interned.?);`);
-      const subNullable = isNullable(subField.schemaType);
-      const subNamedType = getNamedType(subField.schemaType);
-      lines.push(...emitScalarAccessorBody(subNamedType, subNullable, schema, options, nestedInput));
-      lines.push(`${nestedInput}}`);
+      lines.push(
+        ...emitFieldAccessor(subField, `${field.name}_Item`, schema, options, `${indent}    `)
+      );
       lines.push("");
     }
     lines.push(`${indent}};`);
@@ -360,14 +354,117 @@ function emitAccessor(
   return lines;
 }
 
-function getAccessorReturnType(
-  field: QueryFieldSelection,
+/** Emit a union(enum) type for a union field (non-list) */
+function emitUnionType(
+  fieldName: string,
+  fragments: InlineFragmentSelection[],
   schema: SchemaModel,
-  options: ZigEmitterOptions
-): string {
-  const nullable = isNullable(field.schemaType);
-  const namedType = getNamedType(field.schemaType);
-  return scalarAccessorReturnType(namedType, nullable, schema, options);
+  options: ZigEmitterOptions,
+  indent: string
+): string[] {
+  const lines: string[] = [];
+  const typeName = `${fieldName}_T`;
+
+  lines.push(`${indent}pub const ${typeName} = union(enum) {`);
+
+  // Variant fields
+  for (const fragment of fragments) {
+    const variantStructName = `${fieldName}_${fragment.typeName}`;
+    lines.push(`${indent}    ${fragment.typeName}: ${variantStructName},`);
+  }
+  lines.push(`${indent}    Other,`);
+  lines.push("");
+
+  // fromValue function
+  lines.push(`${indent}    pub fn fromValue(val: sf.wasm.Value) ${typeName} {`);
+  lines.push(`${indent}        const TN = struct { var interned: ?sf.wasm.InternedStringId = null; };`);
+  lines.push(`${indent}        if (TN.interned == null) TN.interned = sf.wasm.internString("__typename");`);
+  lines.push(`${indent}        const tn_val = val.getInternedObjProp(TN.interned.?);`);
+  lines.push(`${indent}        const len = tn_val.stringLen();`);
+  lines.push(`${indent}        const buf = sf.buf(len);`);
+  lines.push(`${indent}        tn_val.readString(buf);`);
+  lines.push("");
+  for (const fragment of fragments) {
+    lines.push(`${indent}        if (sf.wasm.strEql(buf, "${fragment.typeName}")) return .{ .${fragment.typeName} = .{ .__value = val } };`);
+  }
+  lines.push(`${indent}        return .Other;`);
+  lines.push(`${indent}    }`);
+
+  lines.push(`${indent}};`);
+
+  // Per-variant structs
+  for (const fragment of fragments) {
+    const variantStructName = `${fieldName}_${fragment.typeName}`;
+    lines.push("");
+    lines.push(`${indent}pub const ${variantStructName} = struct {`);
+    lines.push(`${indent}    __value: sf.wasm.Value,`);
+    lines.push("");
+    for (const subField of fragment.selections) {
+      lines.push(
+        ...emitFieldAccessor(subField, variantStructName, schema, options, `${indent}    `)
+      );
+      lines.push("");
+    }
+    lines.push(`${indent}};`);
+  }
+
+  return lines;
+}
+
+/** Emit a union(enum) Item type for a list-of-union field */
+function emitUnionItemType(
+  fieldName: string,
+  fragments: InlineFragmentSelection[],
+  schema: SchemaModel,
+  options: ZigEmitterOptions,
+  indent: string
+): string[] {
+  const lines: string[] = [];
+  const itemTypeName = `${fieldName}_Item`;
+
+  lines.push(`${indent}pub const ${itemTypeName} = union(enum) {`);
+
+  for (const fragment of fragments) {
+    const variantStructName = `${fieldName}_${fragment.typeName}`;
+    lines.push(`${indent}    ${fragment.typeName}: ${variantStructName},`);
+  }
+  lines.push(`${indent}    Other,`);
+  lines.push("");
+
+  // fromValue function (used by ArrayAccessor)
+  lines.push(`${indent}    pub fn fromValue(val: sf.wasm.Value) ${itemTypeName} {`);
+  lines.push(`${indent}        const TN = struct { var interned: ?sf.wasm.InternedStringId = null; };`);
+  lines.push(`${indent}        if (TN.interned == null) TN.interned = sf.wasm.internString("__typename");`);
+  lines.push(`${indent}        const tn_val = val.getInternedObjProp(TN.interned.?);`);
+  lines.push(`${indent}        const len = tn_val.stringLen();`);
+  lines.push(`${indent}        const buf = sf.buf(len);`);
+  lines.push(`${indent}        tn_val.readString(buf);`);
+  lines.push("");
+  for (const fragment of fragments) {
+    lines.push(`${indent}        if (sf.wasm.strEql(buf, "${fragment.typeName}")) return .{ .${fragment.typeName} = .{ .__value = val } };`);
+  }
+  lines.push(`${indent}        return .Other;`);
+  lines.push(`${indent}    }`);
+
+  lines.push(`${indent}};`);
+
+  // Per-variant structs
+  for (const fragment of fragments) {
+    const variantStructName = `${fieldName}_${fragment.typeName}`;
+    lines.push("");
+    lines.push(`${indent}pub const ${variantStructName} = struct {`);
+    lines.push(`${indent}    __value: sf.wasm.Value,`);
+    lines.push("");
+    for (const subField of fragment.selections) {
+      lines.push(
+        ...emitFieldAccessor(subField, variantStructName, schema, options, `${indent}    `)
+      );
+      lines.push("");
+    }
+    lines.push(`${indent}};`);
+  }
+
+  return lines;
 }
 
 /** Determine return type for a scalar accessor */

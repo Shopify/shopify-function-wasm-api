@@ -19,7 +19,7 @@ import {
   isScalar,
   isBuiltinScalar,
 } from "../schema-model.js";
-import { QueryFieldSelection } from "../parser.js";
+import { QueryFieldSelection, InlineFragmentSelection } from "../parser.js";
 import { camelToSnake } from "./zig.js";
 
 export interface CEmitterOptions {
@@ -247,28 +247,20 @@ function emitCStructSerialize(
   const lines: string[] = [];
   lines.push(`void serialize_${inputType.name}(const ${inputType.name}* value) {`);
 
-  // Count non-null fields at runtime
-  lines.push("    size_t field_count = 0;");
-  for (const field of inputType.fields) {
-    const nullable = isNullable(field.type);
-    if (nullable && !isListType(field.type)) {
-      lines.push(`    if (value->has_${field.name}) field_count++;`);
-    } else {
-      lines.push("    field_count++;");
-    }
-  }
-  lines.push("    shopify_function_output_new_object(field_count);");
+  // All fields are always serialized (null optionals become null values)
+  lines.push(`    shopify_function_output_new_object(${inputType.fields.length});`);
 
   for (const field of inputType.fields) {
     const nullable = isNullable(field.type) && !isListType(field.type);
+    lines.push(`    shopify_function_output_new_utf8_str((const uint8_t*)"${field.name}", ${field.name.length});`);
     if (nullable) {
       lines.push(`    if (value->has_${field.name}) {`);
-    }
-    const indent = nullable ? "        " : "    ";
-    lines.push(`${indent}shopify_function_output_new_utf8_str((const uint8_t*)"${field.name}", ${field.name.length});`);
-    lines.push(...emitCFieldSerialize(field, schema, options, indent));
-    if (nullable) {
+      lines.push(...emitCFieldSerialize(field, schema, options, "        "));
+      lines.push("    } else {");
+      lines.push("        shopify_function_output_new_null();");
       lines.push("    }");
+    } else {
+      lines.push(...emitCFieldSerialize(field, schema, options, "    "));
     }
   }
   lines.push("    shopify_function_output_finish_object();");
@@ -410,26 +402,158 @@ function emitCEnumImpl(enumType: EnumType): string[] {
 
 // --- Input accessor emission ---
 
+/** Collect all nested wrapper type names needed (recursive) */
+function collectNestedTypes(
+  selections: QueryFieldSelection[],
+  prefix: string,
+  result: { typeName: string; field: QueryFieldSelection; parentPrefix: string }[]
+): void {
+  for (const field of selections) {
+    const hasSubSelections = field.selections.length > 0;
+    const hasInlineFragments = (field.inlineFragments?.length ?? 0) > 0;
+    const isList = isListType(field.schemaType);
+
+    if (hasInlineFragments) {
+      // Union type: collect variant types
+      const unionPrefix = `${prefix}_${field.name}`;
+      // Push the union field itself (for tag enum + wrapper generation)
+      result.push({ typeName: unionPrefix, field, parentPrefix: prefix });
+      // Collect nested types within each variant
+      for (const fragment of field.inlineFragments!) {
+        const variantPrefix = `${unionPrefix}_${fragment.typeName}`;
+        // Create a synthetic field for the variant
+        const variantField: QueryFieldSelection = {
+          name: fragment.typeName,
+          schemaType: field.schemaType,
+          selections: fragment.selections,
+        };
+        result.push({ typeName: variantPrefix, field: variantField, parentPrefix: unionPrefix });
+        collectNestedTypes(fragment.selections, variantPrefix, result);
+      }
+    } else if (hasSubSelections) {
+      if (isList) {
+        const itemTypeName = `${prefix}_${field.name}_Item`;
+        result.push({ typeName: itemTypeName, field, parentPrefix: prefix });
+        collectNestedTypes(field.selections, itemTypeName, result);
+      } else {
+        const nestedTypeName = `${prefix}_${field.name}`;
+        result.push({ typeName: nestedTypeName, field, parentPrefix: prefix });
+        collectNestedTypes(field.selections, nestedTypeName, result);
+      }
+    }
+  }
+}
+
 function emitCTargetInput(
   target: TargetQuery, schema: SchemaModel, options: CEmitterOptions
 ): string[] {
   const lines: string[] = [];
   const prefix = target.targetName;
+
+  // Root input type
   lines.push(`typedef struct ${prefix}_Input {`);
   lines.push("    Val __value;");
   lines.push(`} ${prefix}_Input;`);
   lines.push("");
 
-  for (const field of target.selections) {
-    const nullable = isNullable(field.schemaType);
-    const namedType = getNamedType(field.schemaType);
-    const cRetType = scalarToCType(namedType, schema, options);
-    if (nullable) {
-      lines.push(`int ${prefix}_input_has_${field.name}(${prefix}_Input input);`);
+  // Collect all nested wrapper types
+  const nestedTypes: { typeName: string; field: QueryFieldSelection; parentPrefix: string }[] = [];
+  collectNestedTypes(target.selections, prefix, nestedTypes);
+
+  // Emit nested type declarations
+  for (const { typeName, field } of nestedTypes) {
+    const hasInlineFragments = (field.inlineFragments?.length ?? 0) > 0;
+    if (hasInlineFragments) {
+      // Union type: emit tag enum + tagged wrapper
+      lines.push(`typedef enum ${typeName}_Tag {`);
+      for (const fragment of field.inlineFragments!) {
+        lines.push(`    ${typeName}_Tag_${fragment.typeName},`);
+      }
+      lines.push(`    ${typeName}_Tag_Other,`);
+      lines.push(`} ${typeName}_Tag;`);
+      lines.push("");
+      lines.push(`typedef struct ${typeName} {`);
+      lines.push(`    ${typeName}_Tag tag;`);
+      lines.push("    Val __value;");
+      lines.push(`} ${typeName};`);
+      lines.push("");
+    } else {
+      lines.push(`typedef struct ${typeName} {`);
+      lines.push("    Val __value;");
+      lines.push(`} ${typeName};`);
+      lines.push("");
     }
-    lines.push(`${cRetType} ${prefix}_input_get_${field.name}(${prefix}_Input input);`);
   }
+
+  // Emit accessor declarations for root fields
+  emitCAccessorDecls(target.selections, `${prefix}_Input`, prefix, schema, options, lines);
+
+  // Emit accessor declarations for nested types
+  for (const { typeName, field } of nestedTypes) {
+    const hasInlineFragments = (field.inlineFragments?.length ?? 0) > 0;
+    if (hasInlineFragments) {
+      // Union type: emit cast function declarations for each variant
+      for (const fragment of field.inlineFragments!) {
+        const variantTypeName = `${typeName}_${fragment.typeName}`;
+        lines.push(`${variantTypeName} ${typeName}_as_${fragment.typeName}(${typeName} u);`);
+      }
+    } else {
+      emitCAccessorDecls(field.selections, typeName, typeName, schema, options, lines);
+      if (isListType(field.schemaType)) {
+        lines.push(`uint32_t ${typeName}_len(${typeName.replace(/_Item$/, "")} parent);`);
+        lines.push(`${typeName} ${typeName}_get(${typeName.replace(/_Item$/, "")} parent, uint32_t index);`);
+      }
+    }
+  }
+
   return lines;
+}
+
+function emitCAccessorDecls(
+  selections: QueryFieldSelection[],
+  selfType: string,
+  prefix: string,
+  schema: SchemaModel,
+  options: CEmitterOptions,
+  lines: string[]
+): void {
+  for (const field of selections) {
+    const nullable = isNullable(field.schemaType);
+    const hasSubSelections = field.selections.length > 0;
+    const hasInlineFragments = (field.inlineFragments?.length ?? 0) > 0;
+    const isList = isListType(field.schemaType);
+
+    if (hasInlineFragments && !isList) {
+      // Union type accessor
+      const unionTypeName = `${prefix}_${field.name}`;
+      if (nullable) {
+        lines.push(`int ${prefix}_has_${field.name}(${selfType} input);`);
+      }
+      lines.push(`${unionTypeName} ${prefix}_get_${field.name}(${selfType} input);`);
+    } else if (isList && hasSubSelections) {
+      const itemTypeName = `${prefix}_${field.name}_Item`;
+      // For arrays with sub-selections, provide len + get functions
+      // The parent accessor returns a wrapper for the array value
+      const arrayType = `${prefix}_${field.name}`;
+      lines.push(`typedef struct ${arrayType} { Val __value; } ${arrayType};`);
+      lines.push(`${arrayType} ${prefix}_get_${field.name}(${selfType} input);`);
+      lines.push(`uint32_t ${arrayType}_len(${arrayType} arr);`);
+      lines.push(`${itemTypeName} ${arrayType}_get(${arrayType} arr, uint32_t index);`);
+    } else if (hasSubSelections) {
+      const nestedTypeName = `${prefix}_${field.name}`;
+      if (nullable) {
+        lines.push(`int ${prefix}_has_${field.name}(${selfType} input);`);
+      }
+      lines.push(`${nestedTypeName} ${prefix}_get_${field.name}(${selfType} input);`);
+    } else {
+      const namedType = getNamedType(field.schemaType);
+      const cRetType = scalarToCType(namedType, schema, options);
+      if (nullable) {
+        lines.push(`int ${prefix}_has_${field.name}(${selfType} input);`);
+      }
+      lines.push(`${cRetType} ${prefix}_get_${field.name}(${selfType} input);`);
+    }
+  }
 }
 
 function emitCTargetInputImpl(
@@ -438,34 +562,153 @@ function emitCTargetInputImpl(
   const lines: string[] = [];
   const prefix = target.targetName;
 
-  for (const field of target.selections) {
-    const nullable = isNullable(field.schemaType);
-    const namedType = getNamedType(field.schemaType);
-    const cRetType = scalarToCType(namedType, schema, options);
+  // Root field accessors
+  emitCFieldAccessorImpls(target.selections, `${prefix}_Input`, prefix, schema, options, lines);
 
-    // has_ function for nullable fields
-    if (nullable) {
-      lines.push(`int ${prefix}_input_has_${field.name}(${prefix}_Input input) {`);
+  // Nested type field accessors
+  const nestedTypes: { typeName: string; field: QueryFieldSelection; parentPrefix: string }[] = [];
+  collectNestedTypes(target.selections, prefix, nestedTypes);
+
+  for (const { typeName, field } of nestedTypes) {
+    emitCFieldAccessorImpls(field.selections, typeName, typeName, schema, options, lines);
+  }
+
+  return lines;
+}
+
+function emitCFieldAccessorImpls(
+  selections: QueryFieldSelection[],
+  selfType: string,
+  prefix: string,
+  schema: SchemaModel,
+  options: CEmitterOptions,
+  lines: string[]
+): void {
+  for (const field of selections) {
+    const nullable = isNullable(field.schemaType);
+    const hasSubSelections = field.selections.length > 0;
+    const hasInlineFragments = (field.inlineFragments?.length ?? 0) > 0;
+    const isList = isListType(field.schemaType);
+
+    if (hasInlineFragments && !isList) {
+      // Union type accessor: reads __typename and returns tagged wrapper
+      const unionTypeName = `${prefix}_${field.name}`;
+
+      if (nullable) {
+        lines.push(`int ${prefix}_has_${field.name}(${selfType} input) {`);
+        lines.push(`    static InternedStringId interned = 0;`);
+        lines.push(`    static int initialized = 0;`);
+        lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
+        lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+        lines.push(`    return !sf_value_is_null(val);`);
+        lines.push("}");
+        lines.push("");
+      }
+
+      lines.push(`${unionTypeName} ${prefix}_get_${field.name}(${selfType} input) {`);
       lines.push(`    static InternedStringId interned = 0;`);
       lines.push(`    static int initialized = 0;`);
       lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
       lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
-      lines.push(`    return !sf_value_is_null(val);`);
+      // Read __typename
+      lines.push(`    static InternedStringId tn_interned = 0;`);
+      lines.push(`    static int tn_initialized = 0;`);
+      lines.push(`    if (!tn_initialized) { tn_interned = shopify_function_intern_utf8_str((const uint8_t*)"__typename", 10); tn_initialized = 1; }`);
+      lines.push(`    Val tn_val = shopify_function_input_get_interned_obj_prop(val, tn_interned);`);
+      lines.push(`    size_t tn_len = sf_string_len(tn_val);`);
+      lines.push(`    uint8_t* tn_buf = sf_bump_alloc(tn_len);`);
+      lines.push(`    sf_read_string(tn_val, tn_buf, tn_len);`);
+      for (const fragment of field.inlineFragments!) {
+        lines.push(`    if (tn_len == ${fragment.typeName.length} && sf_str_eq((const char*)tn_buf, "${fragment.typeName}", ${fragment.typeName.length})) return (${unionTypeName}){ .tag = ${unionTypeName}_Tag_${fragment.typeName}, .__value = val };`);
+      }
+      lines.push(`    return (${unionTypeName}){ .tag = ${unionTypeName}_Tag_Other, .__value = val };`);
+      lines.push("}");
+      lines.push("");
+
+      // Cast functions for each variant
+      for (const fragment of field.inlineFragments!) {
+        const variantTypeName = `${unionTypeName}_${fragment.typeName}`;
+        lines.push(`${variantTypeName} ${unionTypeName}_as_${fragment.typeName}(${unionTypeName} u) {`);
+        lines.push(`    return (${variantTypeName}){ .__value = u.__value };`);
+        lines.push("}");
+        lines.push("");
+      }
+    } else if (isList && hasSubSelections) {
+      // Array accessor: returns array wrapper, plus len/get functions
+      const arrayType = `${prefix}_${field.name}`;
+      const itemTypeName = `${prefix}_${field.name}_Item`;
+
+      // get_<field> returns array wrapper
+      lines.push(`${arrayType} ${prefix}_get_${field.name}(${selfType} input) {`);
+      lines.push(`    static InternedStringId interned = 0;`);
+      lines.push(`    static int initialized = 0;`);
+      lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
+      lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+      lines.push(`    return (${arrayType}){ .__value = val };`);
+      lines.push("}");
+      lines.push("");
+
+      // _len returns array length
+      lines.push(`uint32_t ${arrayType}_len(${arrayType} arr) {`);
+      lines.push(`    return sf_array_len(arr.__value);`);
+      lines.push("}");
+      lines.push("");
+
+      // _get returns item at index
+      lines.push(`${itemTypeName} ${arrayType}_get(${arrayType} arr, uint32_t index) {`);
+      lines.push(`    Val val = shopify_function_input_get_at_index(arr.__value, index);`);
+      lines.push(`    return (${itemTypeName}){ .__value = val };`);
+      lines.push("}");
+      lines.push("");
+    } else if (hasSubSelections) {
+      // Object accessor: returns nested wrapper
+      const nestedTypeName = `${prefix}_${field.name}`;
+
+      if (nullable) {
+        lines.push(`int ${prefix}_has_${field.name}(${selfType} input) {`);
+        lines.push(`    static InternedStringId interned = 0;`);
+        lines.push(`    static int initialized = 0;`);
+        lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
+        lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+        lines.push(`    return !sf_value_is_null(val);`);
+        lines.push("}");
+        lines.push("");
+      }
+
+      lines.push(`${nestedTypeName} ${prefix}_get_${field.name}(${selfType} input) {`);
+      lines.push(`    static InternedStringId interned = 0;`);
+      lines.push(`    static int initialized = 0;`);
+      lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
+      lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+      lines.push(`    return (${nestedTypeName}){ .__value = val };`);
+      lines.push("}");
+      lines.push("");
+    } else {
+      // Scalar accessor
+      const namedType = getNamedType(field.schemaType);
+      const cRetType = scalarToCType(namedType, schema, options);
+
+      if (nullable) {
+        lines.push(`int ${prefix}_has_${field.name}(${selfType} input) {`);
+        lines.push(`    static InternedStringId interned = 0;`);
+        lines.push(`    static int initialized = 0;`);
+        lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
+        lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+        lines.push(`    return !sf_value_is_null(val);`);
+        lines.push("}");
+        lines.push("");
+      }
+
+      lines.push(`${cRetType} ${prefix}_get_${field.name}(${selfType} input) {`);
+      lines.push(`    static InternedStringId interned = 0;`);
+      lines.push(`    static int initialized = 0;`);
+      lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
+      lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+      lines.push(...emitCScalarAccessorBody(namedType, schema, options));
       lines.push("}");
       lines.push("");
     }
-
-    // get_ function
-    lines.push(`${cRetType} ${prefix}_input_get_${field.name}(${prefix}_Input input) {`);
-    lines.push(`    static InternedStringId interned = 0;`);
-    lines.push(`    static int initialized = 0;`);
-    lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
-    lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
-    lines.push(...emitCScalarAccessorBody(namedType, schema, options));
-    lines.push("}");
-    lines.push("");
   }
-  return lines;
 }
 
 function emitCScalarAccessorBody(

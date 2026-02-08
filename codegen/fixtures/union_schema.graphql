@@ -1,0 +1,55 @@
+"""
+Test schema with union types.
+Used to verify union type handling in code generation.
+"""
+
+schema {
+  query: Input
+  mutation: MutationRoot
+}
+
+scalar Void
+
+type Input {
+  cart: Cart!
+}
+
+type Cart {
+  lines: [CartLine!]!
+}
+
+type CartLine {
+  id: ID!
+  quantity: Int!
+  merchandise: Merchandise!
+}
+
+union Merchandise = ProductVariant | CustomProduct
+
+type ProductVariant {
+  id: ID!
+  product: Product!
+}
+
+type Product {
+  id: ID!
+}
+
+type CustomProduct {
+  title: String!
+}
+
+type MutationRoot {
+  cartValidation(
+    result: CartValidationResult!
+  ): Void!
+}
+
+input ValidationError {
+  message: String!
+  target: String!
+}
+
+input CartValidationResult {
+  errors: [ValidationError!]!
+}

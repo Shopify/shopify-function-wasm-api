@@ -32,6 +32,11 @@ export interface EnumType {
   values: string[];
 }
 
+export interface UnionType {
+  name: string;
+  memberTypes: string[]; // e.g., ["CustomProduct", "ProductVariant"]
+}
+
 export interface MutationTarget {
   name: string; // e.g., "targetA"
   resultTypeName: string; // e.g., "FunctionTargetAResult"
@@ -43,6 +48,7 @@ export interface SchemaModel {
   objectTypes: Map<string, ObjectType>;
   inputTypes: Map<string, InputObjectType>;
   enumTypes: Map<string, EnumType>;
+  unionTypes: Map<string, UnionType>;
   customScalars: Set<string>;
 }
 

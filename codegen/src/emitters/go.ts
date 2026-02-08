@@ -16,7 +16,7 @@ import {
   isScalar,
   isBuiltinScalar,
 } from "../schema-model.js";
-import { QueryFieldSelection } from "../parser.js";
+import { QueryFieldSelection, InlineFragmentSelection } from "../parser.js";
 
 export interface GoEmitterOptions {
   enumsAsStr: string[];
@@ -156,28 +156,19 @@ function emitGoOutputStruct(
   lines.push("}");
   lines.push("");
 
-  // Serialize method
+  // Serialize method — all fields always serialized (null optionals become null values)
   lines.push(`func (v *${inputType.name}) Serialize() {`);
-  // Count non-nil fields
-  lines.push("\tfieldCount := uint32(0)");
+  lines.push(`\tsf.OutputObject(${inputType.fields.length})`);
   for (const field of inputType.fields) {
     const nullable = isNullable(field.type);
-    if (nullable) {
-      lines.push(`\tif v.${goFieldName(field.name)} != nil { fieldCount++ }`);
-    } else {
-      lines.push("\tfieldCount++");
-    }
-  }
-  lines.push("\tsf.OutputObject(fieldCount)");
-  for (const field of inputType.fields) {
-    const nullable = isNullable(field.type);
+    lines.push(`\tsf.OutputString("${field.name}")`);
     if (nullable) {
       lines.push(`\tif v.${goFieldName(field.name)} != nil {`);
-      lines.push(`\t\tsf.OutputString("${field.name}")`);
       lines.push(...emitGoFieldSerialize(field, schema, options, true, "\t\t"));
+      lines.push("\t} else {");
+      lines.push("\t\tsf.OutputNull()");
       lines.push("\t}");
     } else {
-      lines.push(`\tsf.OutputString("${field.name}")`);
       lines.push(...emitGoFieldSerialize(field, schema, options, false, "\t"));
     }
   }
@@ -210,7 +201,8 @@ function emitGoFieldSerialize(
     lines.push(`${indent}}`);
     lines.push(`${indent}sf.OutputFinishArray()`);
   } else if (schema.inputTypes.has(namedType)) {
-    lines.push(`${indent}${expr}.Serialize()`);
+    // Use the raw field (not dereferenced) for Serialize() calls — Go auto-dereferences pointers for methods
+    lines.push(`${indent}${goField}.Serialize()`);
   } else {
     lines.push(...emitGoScalarSerialize(expr, namedType, schema, options, indent));
   }
@@ -343,31 +335,179 @@ function emitGoTargetInput(
   lines.push("}");
   lines.push("");
 
-  for (const field of target.selections) {
+  // Emit accessor methods for root fields, and collect nested types
+  emitGoFieldAccessors(target.selections, typeName, schema, options, lines);
+
+  return lines;
+}
+
+function emitGoFieldAccessors(
+  selections: QueryFieldSelection[],
+  selfType: string,
+  schema: SchemaModel,
+  options: GoEmitterOptions,
+  lines: string[]
+): void {
+  for (const field of selections) {
     const nullable = isNullable(field.schemaType);
-    const namedType = getNamedType(field.schemaType);
-    const goRetType = scalarToGoType(namedType, schema, options);
+    const hasSubSelections = field.selections.length > 0;
+    const hasInlineFragments = (field.inlineFragments?.length ?? 0) > 0;
+    const isList = isListType(field.schemaType);
     const methodName = goFieldName(field.name);
 
-    if (nullable) {
-      lines.push(`func (input ${typeName}) ${methodName}() (*${goRetType}, bool) {`);
+    if (hasInlineFragments && !isList) {
+      // Union type: generate interface + variant structs + accessor
+      const unionInterfaceName = `${selfType}${methodName}`;
+      emitGoUnionTypes(unionInterfaceName, field, selfType, schema, options, lines);
+    } else if (isList && hasSubSelections) {
+      // Array of objects: return a wrapper with Len/Get methods
+      const arrayType = `${selfType}${methodName}Array`;
+      const itemType = `${selfType}${methodName}Item`;
+
+      // Array wrapper type
+      lines.push(`type ${arrayType} struct {`);
+      lines.push("\tValue sf.Value");
+      lines.push("}");
+      lines.push("");
+
+      // Item type
+      lines.push(`type ${itemType} struct {`);
+      lines.push("\tValue sf.Value");
+      lines.push("}");
+      lines.push("");
+
+      // Accessor: returns array wrapper
+      lines.push(`func (input ${selfType}) ${methodName}() ${arrayType} {`);
+      lines.push(`\tval := input.Value.GetObjProp("${field.name}")`);
+      lines.push(`\treturn ${arrayType}{Value: val}`);
+      lines.push("}");
+      lines.push("");
+
+      // Len method
+      lines.push(`func (arr ${arrayType}) Len() uint32 {`);
+      lines.push("\treturn arr.Value.ArrayLen()");
+      lines.push("}");
+      lines.push("");
+
+      // Get method
+      lines.push(`func (arr ${arrayType}) Get(index uint32) ${itemType} {`);
+      lines.push("\tval := arr.Value.GetAtIndex(index)");
+      lines.push(`\treturn ${itemType}{Value: val}`);
+      lines.push("}");
+      lines.push("");
+
+      // Recursively emit accessors for the item type
+      emitGoFieldAccessors(field.selections, itemType, schema, options, lines);
+
+    } else if (hasSubSelections) {
+      // Nested object: return a wrapper type
+      const nestedType = `${selfType}${methodName}`;
+
+      lines.push(`type ${nestedType} struct {`);
+      lines.push("\tValue sf.Value");
+      lines.push("}");
+      lines.push("");
+
+      if (nullable) {
+        lines.push(`func (input ${selfType}) ${methodName}() (*${nestedType}, bool) {`);
+        lines.push(`\tval := input.Value.GetObjProp("${field.name}")`);
+        lines.push(`\tif val.IsNull() { return nil, false }`);
+        lines.push(`\tresult := ${nestedType}{Value: val}`);
+        lines.push("\treturn &result, true");
+      } else {
+        lines.push(`func (input ${selfType}) ${methodName}() ${nestedType} {`);
+        lines.push(`\tval := input.Value.GetObjProp("${field.name}")`);
+        lines.push(`\treturn ${nestedType}{Value: val}`);
+      }
+      lines.push("}");
+      lines.push("");
+
+      // Recursively emit accessors for the nested type
+      emitGoFieldAccessors(field.selections, nestedType, schema, options, lines);
+
     } else {
-      lines.push(`func (input ${typeName}) ${methodName}() ${goRetType} {`);
+      // Scalar field
+      const namedType = getNamedType(field.schemaType);
+      const goRetType = scalarToGoType(namedType, schema, options);
+
+      if (nullable) {
+        lines.push(`func (input ${selfType}) ${methodName}() (*${goRetType}, bool) {`);
+      } else {
+        lines.push(`func (input ${selfType}) ${methodName}() ${goRetType} {`);
+      }
+
+      lines.push(`\tval := input.Value.GetObjProp("${field.name}")`);
+
+      if (nullable) {
+        lines.push("\tif val.IsNull() { return nil, false }");
+      }
+
+      lines.push(...emitGoScalarAccessorBody(namedType, nullable, schema, options));
+      lines.push("}");
+      lines.push("");
     }
+  }
+}
 
-    // Interned string lookup - use package-level var
-    lines.push(`\tval := input.Value.GetObjProp("${field.name}")`);
+/** Emit Go union types: interface + variant structs + accessor */
+function emitGoUnionTypes(
+  unionName: string,
+  field: QueryFieldSelection,
+  selfType: string,
+  schema: SchemaModel,
+  options: GoEmitterOptions,
+  lines: string[]
+): void {
+  const nullable = isNullable(field.schemaType);
+  const methodName = goFieldName(field.name);
+  const fragments = field.inlineFragments!;
 
-    if (nullable) {
-      lines.push("\tif val.IsNull() { return nil, false }");
-    }
+  // Interface type
+  lines.push(`type ${unionName} interface {`);
+  lines.push(`\tis${unionName}()`);
+  lines.push("}");
+  lines.push("");
 
-    lines.push(...emitGoScalarAccessorBody(namedType, nullable, schema, options));
+  // Other variant
+  lines.push(`type ${unionName}Other struct{}`);
+  lines.push(`func (${unionName}Other) is${unionName}() {}`);
+  lines.push("");
+
+  // Per-variant structs
+  for (const fragment of fragments) {
+    const variantName = `${unionName}${fragment.typeName}`;
+    lines.push(`type ${variantName} struct {`);
+    lines.push("\tValue sf.Value");
     lines.push("}");
+    lines.push(`func (${variantName}) is${unionName}() {}`);
     lines.push("");
   }
 
-  return lines;
+  // Accessor method
+  if (nullable) {
+    lines.push(`func (input ${selfType}) ${methodName}() ${unionName} {`);
+    lines.push(`\tval := input.Value.GetObjProp("${field.name}")`);
+    lines.push(`\tif val.IsNull() { return nil }`);
+  } else {
+    lines.push(`func (input ${selfType}) ${methodName}() ${unionName} {`);
+    lines.push(`\tval := input.Value.GetObjProp("${field.name}")`);
+  }
+  lines.push(`\ttypename := val.GetObjProp("__typename").ReadStringAlloc()`);
+  lines.push("\tswitch typename {");
+  for (const fragment of fragments) {
+    const variantName = `${unionName}${fragment.typeName}`;
+    lines.push(`\tcase "${fragment.typeName}": return ${variantName}{Value: val}`);
+  }
+  lines.push(`\tdefault: return ${unionName}Other{}`);
+  lines.push("\t}");
+  lines.push("}");
+  lines.push("");
+
+  // Per-variant field accessors
+  for (const fragment of fragments) {
+    const variantName = `${unionName}${fragment.typeName}`;
+    emitGoFieldAccessors(fragment.selections, variantName, schema, options, lines);
+  }
 }
 
 function emitGoScalarAccessorBody(

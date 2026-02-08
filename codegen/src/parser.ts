@@ -16,16 +16,19 @@ import {
   GraphQLList,
   GraphQLNamedType,
   GraphQLScalarType,
+  GraphQLUnionType,
   isObjectType,
   isInputObjectType,
   isEnumType,
   isScalarType,
+  isUnionType,
   isNonNullType,
   isListType,
   parse,
   DocumentNode,
   SelectionSetNode,
   FieldNode,
+  InlineFragmentNode,
 } from "graphql";
 
 import {
@@ -33,6 +36,7 @@ import {
   ObjectType,
   InputObjectType,
   EnumType,
+  UnionType,
   MutationTarget,
   FieldDefinition,
   TypeRef,
@@ -53,6 +57,7 @@ export function parseSchema(schemaSource: string): SchemaModel {
     objectTypes: new Map(),
     inputTypes: new Map(),
     enumTypes: new Map(),
+    unionTypes: new Map(),
     customScalars: new Set(),
   };
 
@@ -98,6 +103,8 @@ export function parseSchema(schemaSource: string): SchemaModel {
       model.inputTypes.set(typeName, extractInputObjectType(type));
     } else if (isEnumType(type)) {
       model.enumTypes.set(typeName, extractEnumType(type));
+    } else if (isUnionType(type)) {
+      model.unionTypes.set(typeName, extractUnionType(type));
     } else if (isScalarType(type)) {
       if (!["String", "Int", "Float", "Boolean", "ID"].includes(typeName)) {
         model.customScalars.add(typeName);
@@ -178,6 +185,13 @@ function extractEnumType(type: GraphQLEnumType): EnumType {
   };
 }
 
+function extractUnionType(type: GraphQLUnionType): UnionType {
+  return {
+    name: type.name,
+    memberTypes: type.getTypes().map((t) => t.name),
+  };
+}
+
 function graphqlTypeToTypeRef(type: GraphQLType): TypeRef {
   if (isNonNullType(type)) {
     return nonNull(graphqlTypeToTypeRef(type.ofType));
@@ -199,12 +213,21 @@ function getNamedTypeName(type: GraphQLType): string {
 }
 
 /**
+ * Represents an inline fragment selection within a union field.
+ */
+export interface InlineFragmentSelection {
+  typeName: string; // e.g., "ProductVariant"
+  selections: QueryFieldSelection[];
+}
+
+/**
  * Represents a field selection from a query, with its resolved schema type.
  */
 export interface QueryFieldSelection {
-  name: string; // field name as it appears in the query
+  name: string; // field name as it appears in the query (alias if present)
   schemaType: TypeRef; // type from the schema
   selections: QueryFieldSelection[]; // sub-selections for object fields
+  inlineFragments?: InlineFragmentSelection[]; // for union type fields
 }
 
 /**
@@ -258,10 +281,16 @@ function resolveSelections(
     if (selection.kind !== "Field") continue;
 
     const fieldNode = selection as FieldNode;
-    const fieldName = fieldNode.name.value;
+    const schemaFieldName = fieldNode.name.value;
 
-    // Find field in parent type
-    const fieldDef = parentType.fields.find((f) => f.name === fieldName);
+    // Skip __typename — it's handled implicitly for union dispatch
+    if (schemaFieldName === "__typename") continue;
+
+    // Use alias as the accessor name if present (alias matches the key in input data)
+    const accessorName = fieldNode.alias?.value ?? schemaFieldName;
+
+    // Find field in parent type using the schema field name
+    const fieldDef = parentType.fields.find((f) => f.name === schemaFieldName);
     if (!fieldDef) continue;
 
     // Filter by @restrictTarget
@@ -272,7 +301,7 @@ function resolveSelections(
     }
 
     const queryField: QueryFieldSelection = {
-      name: fieldName,
+      name: accessorName,
       schemaType: fieldDef.type,
       selections: [],
     };
@@ -280,14 +309,43 @@ function resolveSelections(
     // Recursively resolve sub-selections
     if (fieldNode.selectionSet) {
       const innerTypeName = getNamedTypeFromRef(fieldDef.type);
-      const innerType = schemaModel.objectTypes.get(innerTypeName);
-      if (innerType) {
-        queryField.selections = resolveSelections(
-          fieldNode.selectionSet,
-          innerType,
-          schemaModel,
-          targetName
-        );
+
+      // Check if this field's type is a union type
+      const unionType = schemaModel.unionTypes.get(innerTypeName);
+      if (unionType) {
+        // Process inline fragments for union types
+        queryField.inlineFragments = [];
+        for (const subSelection of fieldNode.selectionSet.selections) {
+          if (subSelection.kind === "InlineFragment") {
+            const fragment = subSelection as InlineFragmentNode;
+            const fragmentTypeName = fragment.typeCondition?.name.value;
+            if (!fragmentTypeName || !fragment.selectionSet) continue;
+
+            const fragmentObjectType = schemaModel.objectTypes.get(fragmentTypeName);
+            if (!fragmentObjectType) continue;
+
+            queryField.inlineFragments.push({
+              typeName: fragmentTypeName,
+              selections: resolveSelections(
+                fragment.selectionSet,
+                fragmentObjectType,
+                schemaModel,
+                targetName
+              ),
+            });
+          }
+          // Skip Field selections within union fields (like __typename, already handled)
+        }
+      } else {
+        const innerType = schemaModel.objectTypes.get(innerTypeName);
+        if (innerType) {
+          queryField.selections = resolveSelections(
+            fieldNode.selectionSet,
+            innerType,
+            schemaModel,
+            targetName
+          );
+        }
       }
     }
 
