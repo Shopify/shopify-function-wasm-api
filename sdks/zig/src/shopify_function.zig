@@ -63,25 +63,25 @@ fn writeResultToError(result: WriteResult) WriteError!void {
 // --- Extern declarations ---
 
 const sf = struct {
-    extern "shopify_function_v2" fn shopify_function_input_get() callconv(.C) Val;
-    extern "shopify_function_v2" fn shopify_function_input_get_val_len(scope: Val) callconv(.C) u32;
-    extern "shopify_function_v2" fn shopify_function_input_read_utf8_str(src: u32, out: [*]u8, len: u32) callconv(.C) void;
-    extern "shopify_function_v2" fn shopify_function_input_get_obj_prop(scope: Val, ptr: [*]const u8, len: u32) callconv(.C) Val;
-    extern "shopify_function_v2" fn shopify_function_input_get_interned_obj_prop(scope: Val, id: InternedStringId) callconv(.C) Val;
-    extern "shopify_function_v2" fn shopify_function_input_get_at_index(scope: Val, index: u32) callconv(.C) Val;
-    extern "shopify_function_v2" fn shopify_function_input_get_obj_key_at_index(scope: Val, index: u32) callconv(.C) Val;
-    extern "shopify_function_v2" fn shopify_function_output_new_bool(value: u32) callconv(.C) WriteResult;
-    extern "shopify_function_v2" fn shopify_function_output_new_null() callconv(.C) WriteResult;
-    extern "shopify_function_v2" fn shopify_function_output_new_i32(value: i32) callconv(.C) WriteResult;
-    extern "shopify_function_v2" fn shopify_function_output_new_f64(value: f64) callconv(.C) WriteResult;
-    extern "shopify_function_v2" fn shopify_function_output_new_utf8_str(ptr: [*]const u8, len: u32) callconv(.C) WriteResult;
-    extern "shopify_function_v2" fn shopify_function_output_new_interned_utf8_str(id: InternedStringId) callconv(.C) WriteResult;
-    extern "shopify_function_v2" fn shopify_function_output_new_object(len: u32) callconv(.C) WriteResult;
-    extern "shopify_function_v2" fn shopify_function_output_finish_object() callconv(.C) WriteResult;
-    extern "shopify_function_v2" fn shopify_function_output_new_array(len: u32) callconv(.C) WriteResult;
-    extern "shopify_function_v2" fn shopify_function_output_finish_array() callconv(.C) WriteResult;
-    extern "shopify_function_v2" fn shopify_function_intern_utf8_str(ptr: [*]const u8, len: u32) callconv(.C) InternedStringId;
-    extern "shopify_function_v2" fn shopify_function_log_new_utf8_str(ptr: [*]const u8, len: u32) callconv(.C) void;
+    extern "shopify_function_v2" fn shopify_function_input_get() callconv(.c) Val;
+    extern "shopify_function_v2" fn shopify_function_input_get_val_len(scope: Val) callconv(.c) u32;
+    extern "shopify_function_v2" fn shopify_function_input_read_utf8_str(src: u32, out: [*]u8, len: u32) callconv(.c) void;
+    extern "shopify_function_v2" fn shopify_function_input_get_obj_prop(scope: Val, ptr: [*]const u8, len: u32) callconv(.c) Val;
+    extern "shopify_function_v2" fn shopify_function_input_get_interned_obj_prop(scope: Val, id: InternedStringId) callconv(.c) Val;
+    extern "shopify_function_v2" fn shopify_function_input_get_at_index(scope: Val, index: u32) callconv(.c) Val;
+    extern "shopify_function_v2" fn shopify_function_input_get_obj_key_at_index(scope: Val, index: u32) callconv(.c) Val;
+    extern "shopify_function_v2" fn shopify_function_output_new_bool(value: u32) callconv(.c) WriteResult;
+    extern "shopify_function_v2" fn shopify_function_output_new_null() callconv(.c) WriteResult;
+    extern "shopify_function_v2" fn shopify_function_output_new_i32(value: i32) callconv(.c) WriteResult;
+    extern "shopify_function_v2" fn shopify_function_output_new_f64(value: f64) callconv(.c) WriteResult;
+    extern "shopify_function_v2" fn shopify_function_output_new_utf8_str(ptr: [*]const u8, len: u32) callconv(.c) WriteResult;
+    extern "shopify_function_v2" fn shopify_function_output_new_interned_utf8_str(id: InternedStringId) callconv(.c) WriteResult;
+    extern "shopify_function_v2" fn shopify_function_output_new_object(len: u32) callconv(.c) WriteResult;
+    extern "shopify_function_v2" fn shopify_function_output_finish_object() callconv(.c) WriteResult;
+    extern "shopify_function_v2" fn shopify_function_output_new_array(len: u32) callconv(.c) WriteResult;
+    extern "shopify_function_v2" fn shopify_function_output_finish_array() callconv(.c) WriteResult;
+    extern "shopify_function_v2" fn shopify_function_intern_utf8_str(ptr: [*]const u8, len: u32) callconv(.c) InternedStringId;
+    extern "shopify_function_v2" fn shopify_function_log_new_utf8_str(ptr: [*]const u8, len: u32) callconv(.c) void;
 };
 
 // --- Value type ---
@@ -218,4 +218,12 @@ pub fn internString(data: []const u8) InternedStringId {
 
 pub fn log(data: []const u8) void {
     sf.shopify_function_log_new_utf8_str(data.ptr, @intCast(data.len));
+}
+
+pub fn strEql(a: []const u8, b: []const u8) bool {
+    if (a.len != b.len) return false;
+    for (a, b) |ac, bc| {
+        if (ac != bc) return false;
+    }
+    return true;
 }

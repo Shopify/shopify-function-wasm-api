@@ -8,7 +8,8 @@ pub fn build(b: *std.Build) void {
         .os_tag = .freestanding,
     });
 
-    const sf_module = b.createModule(.{
+    // Export the shopify_function_wasm_api module for dependents
+    const sf_module = b.addModule("shopify_function_wasm_api", .{
         .root_source_file = b.path("src/shopify_function.zig"),
         .target = target,
         .optimize = optimize,
@@ -37,12 +38,16 @@ fn addExample(
 ) *std.Build.Step.Compile {
     const exe = b.addExecutable(.{
         .name = name,
-        .root_source_file = b.path(source),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path(source),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "shopify_function", .module = sf_module },
+            },
+        }),
     });
 
-    exe.root_module.addImport("shopify_function", sf_module);
     exe.entry = .disabled;
     exe.rdynamic = true;
     exe.export_memory = true;
