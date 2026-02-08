@@ -11,6 +11,7 @@ struct TestCase {
     category: String,
     input: serde_json::Value,
     expected_output: serde_json::Value,
+    expected_logs: Option<String>,
 }
 
 static PROVIDER_BUILT: LazyLock<Result<()>> = LazyLock::new(build_provider);
@@ -131,12 +132,20 @@ fn conformance_tests() -> Result<()> {
             total_tests += 1;
             let result = run_wasm_module(wasm_path, &test_case.input);
             match result {
-                Ok((output, _logs)) => {
+                Ok((output, logs)) => {
                     if output != test_case.expected_output {
                         failures.push(format!(
                             "FAIL [{wasm_name}] {}/{}: expected {}, got {}",
                             test_case.category, test_case.name, test_case.expected_output, output
                         ));
+                    }
+                    if let Some(expected_logs) = &test_case.expected_logs {
+                        if logs != *expected_logs {
+                            failures.push(format!(
+                                "FAIL [{wasm_name}] {}/{}: expected logs {:?}, got {:?}",
+                                test_case.category, test_case.name, expected_logs, logs
+                            ));
+                        }
                     }
                 }
                 Err(e) => {
@@ -157,6 +166,66 @@ fn conformance_tests() -> Result<()> {
     eprintln!(
         "All conformance tests passed: {} module(s), {} test(s)",
         tested_modules, total_tests
+    );
+
+    Ok(())
+}
+
+/// Test that echo modules correctly handle strings exceeding the inline
+/// NaN-box length (>= 16383 bytes), which forces a call to `input_get_val_len`.
+#[test]
+fn large_string_echo() -> Result<()> {
+    PROVIDER_BUILT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to build provider: {}", e))?;
+
+    let wasm_files = discover_wasm_files();
+    let echo_files: Vec<_> = wasm_files
+        .iter()
+        .filter(|p| {
+            let name = p.file_name().unwrap().to_string_lossy();
+            example_type_from_filename(&name).as_deref() == Some("echo")
+        })
+        .collect();
+
+    if echo_files.is_empty() {
+        eprintln!("No echo WASM files found, skipping large string test");
+        return Ok(());
+    }
+
+    // 16384 bytes exceeds MAX_VALUE_LENGTH (16383), forcing input_get_val_len
+    let large_string: String = "a".repeat(16384);
+    let input = serde_json::Value::String(large_string.clone());
+
+    let mut failures = Vec::new();
+
+    for wasm_path in &echo_files {
+        let wasm_name = wasm_path.file_stem().unwrap().to_string_lossy().to_string();
+        match run_wasm_module(wasm_path, &input) {
+            Ok((output, _)) => {
+                if output != input {
+                    let out_len = output.as_str().map(|s| s.len()).unwrap_or(0);
+                    failures.push(format!(
+                        "FAIL [{wasm_name}] large_string: expected {} bytes, got {} bytes",
+                        large_string.len(),
+                        out_len
+                    ));
+                }
+            }
+            Err(e) => {
+                failures.push(format!("ERROR [{wasm_name}] large_string: {}", e));
+            }
+        }
+    }
+
+    if !failures.is_empty() {
+        let msg = failures.join("\n");
+        panic!("Large string test failures:\n{msg}");
+    }
+
+    eprintln!(
+        "Large string test passed for {} echo module(s)",
+        echo_files.len()
     );
 
     Ok(())

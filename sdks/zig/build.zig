@@ -21,6 +21,10 @@ pub fn build(b: *std.Build) void {
     // Build the cart-checkout-validation example
     const cart = addExample(b, "cart-checkout-validation", "examples/cart-checkout-validation.zig", target, optimize, sf_module);
     b.installArtifact(cart);
+
+    // Build the interned-echo example
+    const interned = addExample(b, "interned-echo", "examples/interned-echo.zig", target, optimize, sf_module);
+    b.installArtifact(interned);
 }
 
 fn addExample(

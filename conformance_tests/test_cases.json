@@ -183,5 +183,42 @@
       "input": {"cart": {"lines": [{"quantity": 1, "merchandise": {"id": "gid://shopify/ProductVariant/1", "title": "P1"}}, {"quantity": 1, "merchandise": {"id": "gid://shopify/ProductVariant/2", "title": "P2"}}]}},
       "expected_output": {"errors": []}
     }
+  ],
+  "interned-echo": [
+    {
+      "name": "interned_foo_bar",
+      "category": "interning",
+      "input": {"foo": 42, "bar": "hello"},
+      "expected_output": {"foo": 42, "bar": "hello"},
+      "expected_logs": "interned-echo"
+    },
+    {
+      "name": "interned_mixed_keys",
+      "category": "interning",
+      "input": {"foo": true, "other": null, "bar": [1, 2]},
+      "expected_output": {"foo": true, "other": null, "bar": [1, 2]},
+      "expected_logs": "interned-echo"
+    },
+    {
+      "name": "interned_nested",
+      "category": "interning",
+      "input": {"foo": {"bar": 99}},
+      "expected_output": {"foo": {"bar": 99}},
+      "expected_logs": "interned-echo"
+    },
+    {
+      "name": "interned_no_matching_keys",
+      "category": "interning",
+      "input": {"uvw": 1, "xyz": 2},
+      "expected_output": {"uvw": 1, "xyz": 2},
+      "expected_logs": "interned-echo"
+    },
+    {
+      "name": "interned_scalar_passthrough",
+      "category": "interning",
+      "input": 42,
+      "expected_output": 42,
+      "expected_logs": "interned-echo"
+    }
   ]
 }

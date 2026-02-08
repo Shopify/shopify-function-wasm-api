@@ -131,6 +131,9 @@ jobs:
           cp sdks/zig/zig-out/bin/cart-checkout-validation.wasm target/conformance_wasm/zig-cart-checkout-validation.wasm
           cp sdks/go/build/echo.wasm target/conformance_wasm/go-echo.wasm
           cp sdks/go/build/cart-checkout-validation.wasm target/conformance_wasm/go-cart-checkout-validation.wasm
+          cp sdks/c/build/interned-echo.wasm target/conformance_wasm/c-interned-echo.wasm
+          cp sdks/zig/zig-out/bin/interned-echo.wasm target/conformance_wasm/zig-interned-echo.wasm
+          cp sdks/go/build/interned-echo.wasm target/conformance_wasm/go-interned-echo.wasm
 
       - name: Run conformance tests
         run: cargo test -p conformance_tests
