@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import * as assert from "node:assert";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   parseSchema,
   parseQuery,
@@ -12,7 +13,8 @@ import { emitZig, camelToSnake } from "../src/emitters/zig.js";
 import { emitC } from "../src/emitters/c.js";
 import { emitGo } from "../src/emitters/go.js";
 
-// __dirname points to dist/tests/ after compilation, fixtures are at the project root
+// __dirname equivalent for ESM — points to dist/tests/ after compilation, fixtures are at the project root
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.join(__dirname, "..", "..", "fixtures");
 
 const schemaSource = fs.readFileSync(

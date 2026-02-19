@@ -6,6 +6,9 @@
  * Generates typed code for Shopify Function SDKs from GraphQL schemas and queries.
  *
  * Usage:
+ *   shopify-function-codegen --language zig
+ *
+ * With explicit paths:
  *   shopify-function-codegen \
  *     --schema ./schema.graphql \
  *     --query ./a.graphql \
@@ -13,6 +16,10 @@
  *     --language zig \
  *     --output ./generated/ \
  *     --enums-as-str CountryCode,LanguageCode,CurrencyCode
+ *
+ * When --schema is omitted, defaults to "schema.graphql" in the current directory.
+ * When --query is omitted, auto-discovers *.graphql files in the current directory
+ * (excluding the schema file and any --json-types file).
  */
 
 import * as fs from "node:fs";
@@ -111,14 +118,40 @@ function parseArgs(argv: string[]): CliArgs {
     i++;
   }
 
+  // Default schema to schema.graphql in the current directory
   if (!args.schema) {
-    console.error("Error: --schema is required");
-    process.exit(1);
+    const defaultSchema = "schema.graphql";
+    if (fs.existsSync(defaultSchema)) {
+      args.schema = defaultSchema;
+    } else {
+      console.error(
+        "Error: --schema is required (no schema.graphql found in current directory)"
+      );
+      process.exit(1);
+    }
   }
 
+  // Auto-discover query files if none were explicitly provided
   if (args.queries.length === 0) {
-    console.error("Error: at least one --query is required");
-    process.exit(1);
+    const schemaBasename = path.basename(args.schema);
+    const jsonTypesBasename = args.jsonTypes
+      ? path.basename(args.jsonTypes)
+      : "";
+    const excluded = new Set([schemaBasename, jsonTypesBasename].filter(Boolean));
+
+    const discovered = fs
+      .readdirSync(".")
+      .filter((f) => f.endsWith(".graphql") && !excluded.has(f))
+      .sort();
+
+    if (discovered.length === 0) {
+      console.error(
+        "Error: at least one --query is required (no .graphql query files found in current directory)"
+      );
+      process.exit(1);
+    }
+
+    args.queries = discovered.map((f) => ({ path: f }));
   }
 
   return args;

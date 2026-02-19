@@ -19,7 +19,7 @@ export interface ZigEmitterOptions {
   enumsAsStr: string[]; // Enum names to treat as plain strings
 }
 
-interface TargetQuery {
+export interface TargetQuery {
   targetName: string; // e.g., "target_a" (snake_case)
   graphqlTargetName: string; // e.g., "targetA" (camelCase)
   selections: QueryFieldSelection[];

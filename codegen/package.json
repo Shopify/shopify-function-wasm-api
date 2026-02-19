@@ -2,9 +2,19 @@
   "name": "shopify-function-codegen",
   "version": "0.1.0",
   "description": "Code generator for Shopify Function SDKs - generates typed code from GraphQL schemas and queries",
+  "type": "module",
   "bin": {
     "shopify-function-codegen": "./dist/src/index.js"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/src/lib.d.ts",
+      "import": "./dist/src/lib.js"
+    },
+    "./cli": "./dist/src/index.js"
+  },
+  "main": "./dist/src/lib.js",
+  "types": "./dist/src/lib.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "node --test dist/tests/*.test.js",
