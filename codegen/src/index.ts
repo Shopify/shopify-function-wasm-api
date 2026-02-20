@@ -67,6 +67,23 @@ function parseArgs(argv: string[]): CliArgs {
   let i = 0;
   while (i < argv.length) {
     switch (argv[i]) {
+      case "--help":
+      case "-h":
+        console.log(`Usage: shopify-function-codegen --language <lang> [options]
+
+Options:
+  --language <lang>          Target language: zig, c, or go (default: zig)
+  --schema <file>            GraphQL schema file (default: schema.graphql)
+  --query <file>             Query file (repeatable; auto-discovered from . and src/ if omitted)
+  --target <name>            Mutation target for the preceding --query (camelCase)
+  --output <dir>             Output directory (default: ./generated/)
+  --enums-as-str <list>      Comma-separated enum types to emit as strings
+  --json-types <file>        Supplementary GraphQL type definitions for JSON fields
+  --json-override <k=v>      Map a JSON field path to a typed name (repeatable)
+  --go-package <name>        Go package name (default: generated)
+  --go-module-path <path>    Go module path (default: github.com/Shopify/shopify-function-go)
+  -h, --help                 Show this help message`);
+        process.exit(0);
       case "--schema":
         args.schema = argv[++i];
         break;
