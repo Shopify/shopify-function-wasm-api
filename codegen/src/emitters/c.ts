@@ -6,7 +6,7 @@
  * - Output structs with explicit serialize functions per type
  * - @oneOf unions as struct { enum tag; union data; }
  * - Per-query Input types with accessor functions
- * - All string interning is static variables in accessor functions
+ * - Property access uses direct string-based lookup
  */
 
 import {
@@ -596,25 +596,16 @@ function emitCFieldAccessorImpls(
 
       if (nullable) {
         lines.push(`int ${prefix}_has_${field.name}(${selfType} input) {`);
-        lines.push(`    static InternedStringId interned = 0;`);
-        lines.push(`    static int initialized = 0;`);
-        lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
-        lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+        lines.push(`    Val val = shopify_function_input_get_obj_prop(input.__value, (const uint8_t*)"${field.name}", ${field.name.length});`);
         lines.push(`    return !sf_value_is_null(val);`);
         lines.push("}");
         lines.push("");
       }
 
       lines.push(`${unionTypeName} ${prefix}_get_${field.name}(${selfType} input) {`);
-      lines.push(`    static InternedStringId interned = 0;`);
-      lines.push(`    static int initialized = 0;`);
-      lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
-      lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+      lines.push(`    Val val = shopify_function_input_get_obj_prop(input.__value, (const uint8_t*)"${field.name}", ${field.name.length});`);
       // Read __typename
-      lines.push(`    static InternedStringId tn_interned = 0;`);
-      lines.push(`    static int tn_initialized = 0;`);
-      lines.push(`    if (!tn_initialized) { tn_interned = shopify_function_intern_utf8_str((const uint8_t*)"__typename", 10); tn_initialized = 1; }`);
-      lines.push(`    Val tn_val = shopify_function_input_get_interned_obj_prop(val, tn_interned);`);
+      lines.push(`    Val tn_val = shopify_function_input_get_obj_prop(val, (const uint8_t*)"__typename", 10);`);
       lines.push(`    size_t tn_len = sf_string_len(tn_val);`);
       lines.push(`    uint8_t* tn_buf = sf_bump_alloc(tn_len);`);
       lines.push(`    sf_read_string(tn_val, tn_buf, tn_len);`);
@@ -640,10 +631,7 @@ function emitCFieldAccessorImpls(
 
       // get_<field> returns array wrapper
       lines.push(`${arrayType} ${prefix}_get_${field.name}(${selfType} input) {`);
-      lines.push(`    static InternedStringId interned = 0;`);
-      lines.push(`    static int initialized = 0;`);
-      lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
-      lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+      lines.push(`    Val val = shopify_function_input_get_obj_prop(input.__value, (const uint8_t*)"${field.name}", ${field.name.length});`);
       lines.push(`    return (${arrayType}){ .__value = val };`);
       lines.push("}");
       lines.push("");
@@ -666,20 +654,14 @@ function emitCFieldAccessorImpls(
 
       if (nullable) {
         lines.push(`int ${prefix}_has_${field.name}(${selfType} input) {`);
-        lines.push(`    static InternedStringId interned = 0;`);
-        lines.push(`    static int initialized = 0;`);
-        lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
-        lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+        lines.push(`    Val val = shopify_function_input_get_obj_prop(input.__value, (const uint8_t*)"${field.name}", ${field.name.length});`);
         lines.push(`    return !sf_value_is_null(val);`);
         lines.push("}");
         lines.push("");
       }
 
       lines.push(`${nestedTypeName} ${prefix}_get_${field.name}(${selfType} input) {`);
-      lines.push(`    static InternedStringId interned = 0;`);
-      lines.push(`    static int initialized = 0;`);
-      lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
-      lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+      lines.push(`    Val val = shopify_function_input_get_obj_prop(input.__value, (const uint8_t*)"${field.name}", ${field.name.length});`);
       lines.push(`    return (${nestedTypeName}){ .__value = val };`);
       lines.push("}");
       lines.push("");
@@ -690,20 +672,14 @@ function emitCFieldAccessorImpls(
 
       if (nullable) {
         lines.push(`int ${prefix}_has_${field.name}(${selfType} input) {`);
-        lines.push(`    static InternedStringId interned = 0;`);
-        lines.push(`    static int initialized = 0;`);
-        lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
-        lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+        lines.push(`    Val val = shopify_function_input_get_obj_prop(input.__value, (const uint8_t*)"${field.name}", ${field.name.length});`);
         lines.push(`    return !sf_value_is_null(val);`);
         lines.push("}");
         lines.push("");
       }
 
       lines.push(`${cRetType} ${prefix}_get_${field.name}(${selfType} input) {`);
-      lines.push(`    static InternedStringId interned = 0;`);
-      lines.push(`    static int initialized = 0;`);
-      lines.push(`    if (!initialized) { interned = shopify_function_intern_utf8_str((const uint8_t*)"${field.name}", ${field.name.length}); initialized = 1; }`);
-      lines.push(`    Val val = shopify_function_input_get_interned_obj_prop(input.__value, interned);`);
+      lines.push(`    Val val = shopify_function_input_get_obj_prop(input.__value, (const uint8_t*)"${field.name}", ${field.name.length});`);
       lines.push(...emitCScalarAccessorBody(namedType, schema, options));
       lines.push("}");
       lines.push("");

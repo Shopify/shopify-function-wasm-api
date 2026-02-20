@@ -203,9 +203,9 @@ describe("Zig emitter", () => {
     assert.ok(output.includes("pub const target_b = struct {"));
     assert.ok(output.includes("pub fn targetAResult(self: Input) ?i32 {"));
 
-    // Check interned string usage
-    assert.ok(output.includes('sf.wasm.internString("id")'));
-    assert.ok(output.includes("getInternedObjProp(S.interned.?)"));
+    // Check direct property access
+    assert.ok(output.includes('self.__value.getObjProp("id")'));
+    assert.ok(output.includes('self.__value.getObjProp("num")'));
   });
 
   it("should use correct accessor bodies for different types", () => {
@@ -398,10 +398,9 @@ describe("C emitter - nested types", () => {
     // Should have scalar accessor on item
     assert.ok(header.includes("int32_t cart_validation_cart_lines_Item_get_quantity(cart_validation_cart_lines_Item input)"));
 
-    // Implementation should have interned string lookups
-    assert.ok(source.includes('shopify_function_intern_utf8_str((const uint8_t*)"cart"'));
-    assert.ok(source.includes('shopify_function_intern_utf8_str((const uint8_t*)"lines"'));
-    assert.ok(source.includes('shopify_function_intern_utf8_str((const uint8_t*)"quantity"'));
+    // Implementation should have direct property lookups
+    assert.ok(source.includes('shopify_function_input_get_obj_prop(input.__value, (const uint8_t*)"cart"'));
+    assert.ok(source.includes('shopify_function_input_get_obj_prop(input.__value, (const uint8_t*)"quantity"'));
   });
 
   it("should generate nested object accessors within array items", () => {
@@ -572,7 +571,7 @@ describe("Zig emitter - union types", () => {
 
     // Should have fromValue that reads __typename
     assert.ok(output.includes("pub fn fromValue(val: sf.wasm.Value) merchandise_T {"));
-    assert.ok(output.includes('sf.wasm.internString("__typename")'));
+    assert.ok(output.includes('val.getObjProp("__typename")'));
     assert.ok(output.includes('sf.wasm.strEql(buf, "ProductVariant")'));
     assert.ok(output.includes('sf.wasm.strEql(buf, "CustomProduct")'));
   });

@@ -261,15 +261,8 @@ function emitFieldAccessor(
   // Generate the accessor function
   lines.push(`${indent}pub fn ${field.name}(self: ${selfType}) ${returnType} {`);
 
-  // Interned string lookup
   lines.push(
-    `${indent}    const S = struct { var interned: ?sf.wasm.InternedStringId = null; };`
-  );
-  lines.push(
-    `${indent}    if (S.interned == null) S.interned = sf.wasm.internString("${field.name}");`
-  );
-  lines.push(
-    `${indent}    const val = self.__value.getInternedObjProp(S.interned.?);`
+    `${indent}    const val = self.__value.getObjProp("${field.name}");`
   );
 
   if (isList) {
@@ -377,9 +370,7 @@ function emitUnionType(
 
   // fromValue function
   lines.push(`${indent}    pub fn fromValue(val: sf.wasm.Value) ${typeName} {`);
-  lines.push(`${indent}        const TN = struct { var interned: ?sf.wasm.InternedStringId = null; };`);
-  lines.push(`${indent}        if (TN.interned == null) TN.interned = sf.wasm.internString("__typename");`);
-  lines.push(`${indent}        const tn_val = val.getInternedObjProp(TN.interned.?);`);
+  lines.push(`${indent}        const tn_val = val.getObjProp("__typename");`);
   lines.push(`${indent}        const len = tn_val.stringLen();`);
   lines.push(`${indent}        const buf = sf.buf(len);`);
   lines.push(`${indent}        tn_val.readString(buf);`);
@@ -433,9 +424,7 @@ function emitUnionItemType(
 
   // fromValue function (used by ArrayAccessor)
   lines.push(`${indent}    pub fn fromValue(val: sf.wasm.Value) ${itemTypeName} {`);
-  lines.push(`${indent}        const TN = struct { var interned: ?sf.wasm.InternedStringId = null; };`);
-  lines.push(`${indent}        if (TN.interned == null) TN.interned = sf.wasm.internString("__typename");`);
-  lines.push(`${indent}        const tn_val = val.getInternedObjProp(TN.interned.?);`);
+  lines.push(`${indent}        const tn_val = val.getObjProp("__typename");`);
   lines.push(`${indent}        const len = tn_val.stringLen();`);
   lines.push(`${indent}        const buf = sf.buf(len);`);
   lines.push(`${indent}        tn_val.readString(buf);`);
