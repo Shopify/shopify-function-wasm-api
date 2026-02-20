@@ -139,14 +139,24 @@ function parseArgs(argv: string[]): CliArgs {
       : "";
     const excluded = new Set([schemaBasename, jsonTypesBasename].filter(Boolean));
 
-    const discovered = fs
-      .readdirSync(".")
-      .filter((f) => f.endsWith(".graphql") && !excluded.has(f))
-      .sort();
+    const searchDirs = ["."];
+    if (fs.existsSync("src") && fs.statSync("src").isDirectory()) {
+      searchDirs.push("src");
+    }
+
+    const discovered: string[] = [];
+    for (const dir of searchDirs) {
+      for (const f of fs.readdirSync(dir)) {
+        if (f.endsWith(".graphql") && !excluded.has(f)) {
+          discovered.push(dir === "." ? f : path.join(dir, f));
+        }
+      }
+    }
+    discovered.sort();
 
     if (discovered.length === 0) {
       console.error(
-        "Error: at least one --query is required (no .graphql query files found in current directory)"
+        "Error: at least one --query is required (no .graphql query files found in current directory or src/)"
       );
       process.exit(1);
     }
