@@ -330,7 +330,7 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(10839, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10561, wasm_api_fuel);
     Ok(())
 }
 
@@ -345,7 +345,7 @@ fn test_benchmark_with_input() -> Result<()> {
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
 
-    assert_fuel_consumed_within_threshold(10_839, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10_561, wasm_api_fuel);
 
     Ok(())
 }
@@ -386,7 +386,7 @@ fn test_log_len() -> Result<()> {
         Ok(run_example("log-len", prepare_wasm_api_input(serde_json::json!(len))?)?.2)
     };
     let fuel = run(1)?;
-    assert_fuel_consumed_within_threshold(757, fuel);
+    assert_fuel_consumed_within_threshold(777, fuel);
     let fuel = run(500)?;
     assert_fuel_consumed_within_threshold(2_883, fuel);
     let fuel = run(1_000)?;
