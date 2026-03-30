@@ -18,5 +18,5 @@ uuid = { version = "1.23.0", features = ["v4"] }
 assert_cmd = "2.2.0"
 predicates = "3.1.4"
 wat = "1.245.1"
-wasmprinter = "0.244.0"
+wasmprinter = "0.245.1"
 insta = { version = "1.47", features = ["glob"] }
