@@ -1851,7 +1851,7 @@ dependencies = [
  "uuid",
  "walrus",
  "wasmparser 0.244.0",
- "wasmprinter 0.244.0",
+ "wasmprinter 0.245.1",
  "wat",
 ]
 
@@ -2459,13 +2459,13 @@ dependencies = [
 
 [[package]]
 name = "wasmprinter"
-version = "0.244.0"
+version = "0.245.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09390d7b2bd7b938e563e4bff10aa345ef2e27a3bc99135697514ef54495e68f"
+checksum = "5f41517a3716fbb8ccf46daa9c1325f760fcbff5168e75c7392288e410b91ac8"
 dependencies = [
  "anyhow",
  "termcolor",
- "wasmparser 0.244.0",
+ "wasmparser 0.245.1",
 ]
 
 [[package]]
