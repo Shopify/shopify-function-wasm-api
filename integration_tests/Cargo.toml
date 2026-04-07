@@ -13,7 +13,7 @@ shopify_function_trampoline = { path = "../trampoline" }
 shopify_function_provider = { path = "../provider" }
 
 [dev-dependencies]
-walrus = "0.26.0"
+walrus = "0.26.1"
 anyhow = "1.0"
-wat = "1.245.1"
+wat = "1.246.2"
 insta = "1"
