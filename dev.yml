@@ -2,6 +2,8 @@ name: shopify-function-wasm-api
 
 type: rust
 
+nix: true
+
 up:
   - rust
   - custom:
