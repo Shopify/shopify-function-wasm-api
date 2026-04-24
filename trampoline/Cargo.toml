@@ -8,15 +8,15 @@ homepage = "https://github.com/Shopify/shopify-function-wasm-api"
 description = "Tool for augmenting Wasm modules to be compatible with the Shopify Function Wasm API"
 
 [dependencies]
-walrus = "0.26.0"
+walrus = "0.26.1"
 anyhow = "1.0"
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { version = "4.6.1", features = ["derive"] }
 wasmparser = "0.246.2"
 
 [dev-dependencies]
-uuid = { version = "1.23.0", features = ["v4"] }
-assert_cmd = "2.2.0"
+uuid = { version = "1.23.1", features = ["v4"] }
+assert_cmd = "2.2.1"
 predicates = "3.1.4"
-wat = "1.245.1"
+wat = "1.246.2"
 wasmprinter = "0.246.2"
 insta = { version = "1.47", features = ["glob"] }
