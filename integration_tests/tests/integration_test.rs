@@ -330,7 +330,7 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(10561, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(9637, wasm_api_fuel);
     Ok(())
 }
 
@@ -345,7 +345,7 @@ fn test_benchmark_with_input() -> Result<()> {
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
 
-    assert_fuel_consumed_within_threshold(10_561, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(9_637, wasm_api_fuel);
 
     Ok(())
 }
@@ -361,7 +361,7 @@ fn test_benchmark_with_input_early_exit() -> Result<()> {
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
 
-    assert_fuel_consumed_within_threshold(9_738, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(9_017, wasm_api_fuel);
 
     Ok(())
 }
@@ -386,17 +386,17 @@ fn test_log_len() -> Result<()> {
         Ok(run_example("log-len", prepare_wasm_api_input(serde_json::json!(len))?)?.2)
     };
     let fuel = run(1)?;
-    assert_fuel_consumed_within_threshold(777, fuel);
+    assert_fuel_consumed_within_threshold(744, fuel);
     let fuel = run(500)?;
-    assert_fuel_consumed_within_threshold(2_883, fuel);
+    assert_fuel_consumed_within_threshold(2_750, fuel);
     let fuel = run(1_000)?;
-    assert_fuel_consumed_within_threshold(4_608, fuel);
+    assert_fuel_consumed_within_threshold(4_375, fuel);
     let fuel = run(5_000)?;
-    assert_fuel_consumed_within_threshold(18_444, fuel);
+    assert_fuel_consumed_within_threshold(17_411, fuel);
     let fuel = run(10_000)?;
-    assert_fuel_consumed_within_threshold(35_739, fuel);
+    assert_fuel_consumed_within_threshold(33_706, fuel);
     let fuel = run(100_000)?;
-    assert_fuel_consumed_within_threshold(352_498, fuel);
+    assert_fuel_consumed_within_threshold(327_055, fuel);
     Ok(())
 }
 
@@ -407,7 +407,7 @@ fn test_log_past_capacity() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
     let (_, logs, fuel) = run_example("log-past-capacity", vec![])?;
     assert_eq!(logs, format!("{}{}", "a".repeat(991), "b".repeat(10)));
-    assert_fuel_consumed_within_threshold(964, fuel);
+    assert_fuel_consumed_within_threshold(928, fuel);
     Ok(())
 }
 
