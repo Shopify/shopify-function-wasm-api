@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ startsWith(inputs.tag_name || github.event.release.tag_name, 'shopify_function_provider/v') }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown
@@ -95,7 +95,7 @@ jobs:
             target: aarch64-pc-windows-msvc
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Extract asset name
         id: asset_name
