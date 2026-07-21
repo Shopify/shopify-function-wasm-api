@@ -1,396 +1,59 @@
 use crate::read::{ErrorCode, NanBox};
 use bumpalo::{collections::Vec, Bump};
-use rmp::Marker;
 
 pub(crate) type LazyValueRefPtr<'a> = *mut LazyValueRef<'a>;
 
-struct Cursor<'a> {
-    bytes: &'a [u8],
-    position: usize,
-    length: usize, // Cache the length to avoid recalculating it
-}
-
-impl<'a> Cursor<'a> {
-    fn new(bytes: &'a [u8], position: usize) -> Self {
-        Self {
-            bytes,
-            position,
-            length: bytes.len(),
-        }
-    }
-
-    fn read_marker(&mut self) -> Result<Marker, ErrorCode> {
-        if self.position >= self.length {
-            return Err(ErrorCode::ReadError);
-        }
-        let marker = Marker::from_u8(self.bytes[self.position]);
-        self.position += 1;
-        Ok(marker)
-    }
-
-    fn read_f32(&mut self) -> Result<f32, ErrorCode> {
-        if self.position + 4 > self.length {
-            return Err(ErrorCode::ReadError);
-        }
-
-        let bytes = &self.bytes[self.position..];
-        let value = f32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-        self.position += 4;
-        Ok(value)
-    }
-
-    fn read_f64(&mut self) -> Result<f64, ErrorCode> {
-        if self.position + 8 > self.length {
-            return Err(ErrorCode::ReadError);
-        }
-
-        let bytes = &self.bytes[self.position..];
-        let value = f64::from_be_bytes([
-            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-        ]);
-        self.position += 8;
-        Ok(value)
-    }
-
-    fn read_i8(&mut self) -> Result<i8, ErrorCode> {
-        if self.position + 1 > self.length {
-            return Err(ErrorCode::ReadError);
-        }
-
-        let value = self.bytes[self.position] as i8;
-        self.position += 1;
-        Ok(value)
-    }
-
-    fn read_u8(&mut self) -> Result<u8, ErrorCode> {
-        if self.position + 1 > self.length {
-            return Err(ErrorCode::ReadError);
-        }
-
-        let value = self.bytes[self.position];
-        self.position += 1;
-        Ok(value)
-    }
-
-    fn read_i16(&mut self) -> Result<i16, ErrorCode> {
-        if self.position + 2 > self.length {
-            return Err(ErrorCode::ReadError);
-        }
-
-        let bytes = &self.bytes[self.position..];
-        let value = i16::from_be_bytes([bytes[0], bytes[1]]);
-        self.position += 2;
-        Ok(value)
-    }
-
-    fn read_u16(&mut self) -> Result<u16, ErrorCode> {
-        if self.position + 2 > self.length {
-            return Err(ErrorCode::ReadError);
-        }
-
-        let bytes = &self.bytes[self.position..];
-        let value = u16::from_be_bytes([bytes[0], bytes[1]]);
-        self.position += 2;
-        Ok(value)
-    }
-
-    fn read_i32(&mut self) -> Result<i32, ErrorCode> {
-        if self.position + 4 > self.length {
-            return Err(ErrorCode::ReadError);
-        }
-
-        let bytes = &self.bytes[self.position..];
-        let value = i32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-        self.position += 4;
-        Ok(value)
-    }
-
-    fn read_u32(&mut self) -> Result<u32, ErrorCode> {
-        if self.position + 4 > self.length {
-            return Err(ErrorCode::ReadError);
-        }
-
-        let bytes = &self.bytes[self.position..];
-        let value = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-        self.position += 4;
-        Ok(value)
-    }
-
-    fn read_i64(&mut self) -> Result<i64, ErrorCode> {
-        if self.position + 8 > self.length {
-            return Err(ErrorCode::ReadError);
-        }
-
-        let bytes = &self.bytes[self.position..];
-        let value = i64::from_be_bytes([
-            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-        ]);
-        self.position += 8;
-        Ok(value)
-    }
-
-    fn read_u64(&mut self) -> Result<u64, ErrorCode> {
-        if self.position + 8 > self.length {
-            return Err(ErrorCode::ReadError);
-        }
-
-        let bytes = &self.bytes[self.position..];
-        let value = u64::from_be_bytes([
-            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-        ]);
-        self.position += 8;
-        Ok(value)
-    }
-}
-
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub(crate) struct StringRef {
-    ptr: usize,
+    /// Offset into the payload bytes where the UTF-8 string data begins.
+    offset: usize,
     len: usize,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct ShapeRef<'a> {
+    keys: &'a [StringRef],
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct Tables<'a> {
+    strings: &'a [StringRef],
+    shapes: &'a [ShapeRef<'a>],
+}
+
+#[derive(PartialEq, Debug)]
+pub(crate) struct ArrayRef<'a> {
+    len: usize,
+    processed_elements: Vec<'a, LazyValueRef<'a>>,
+    next_position: usize,
+    payload_end: usize,
+    tables: Tables<'a>,
 }
 
 #[derive(PartialEq, Debug)]
 pub(crate) struct ObjectRef<'a> {
     len: usize,
-    /// The key will always be a `StringRef`, but we type it as a `LazyValueRef` so that we can
-    /// return it as a `NanBox`.
-    processed_elements: Vec<'a, (LazyValueRef<'a>, LazyValueRef<'a>)>,
-    end_position_of_last_processed_element: usize,
+    kind: ObjectKind<'a>,
 }
 
-impl<'a> ObjectRef<'a> {
-    fn get_at_index(
-        &mut self,
-        index: usize,
-        bytes: &[u8],
-        bump: &'a Bump,
-    ) -> Result<&(LazyValueRef<'a>, LazyValueRef<'a>), ErrorCode> {
-        if index >= self.len {
-            return Err(ErrorCode::IndexOutOfBounds);
-        }
-
-        // Fast path: element already processed
-        if index < self.processed_elements.len() {
-            return Ok(&self.processed_elements[index]);
-        }
-
-        // We need to process more elements
-        let count = index + 1 - self.processed_elements.len();
-
-        // Process elements one by one until we reach the desired index
-        for _ in 0..count {
-            if let Some((_, last)) = self.processed_elements.last_mut() {
-                if let Some(end_position) = last.finish_processing(bytes, bump)? {
-                    self.end_position_of_last_processed_element = end_position;
-                }
-            }
-
-            let (key_string_ref, Some(key_end_position)) =
-                LazyValueRef::new(bytes, self.end_position_of_last_processed_element, bump)?
-            else {
-                return Err(ErrorCode::ReadError);
-            };
-
-            if !matches!(key_string_ref, LazyValueRef::String(_)) {
-                return Err(ErrorCode::ReadError);
-            }
-
-            let (lazy_value, end_position) = LazyValueRef::new(bytes, key_end_position, bump)?;
-
-            self.end_position_of_last_processed_element = end_position.unwrap_or(key_end_position);
-
-            self.processed_elements.push((key_string_ref, lazy_value));
-        }
-
-        Ok(self.processed_elements.last().unwrap())
-    }
-
-    fn get_property(
-        &mut self,
-        key: &[u8],
-        bytes: &[u8],
-        bump: &'a Bump,
-    ) -> Result<Option<&LazyValueRef<'a>>, ErrorCode> {
-        let index_of_value_in_existing =
-            self.processed_elements.iter().position(|(key_value, _)| {
-                matches!(key_value, LazyValueRef::String(StringRef { ptr, len }) if {
-                    let key_bytes = &bytes[*ptr..*ptr + *len];
-                    key_bytes == key
-                })
-            });
-
-        let index_of_value = match index_of_value_in_existing {
-            Some(index) => Some(index),
-            None => {
-                let count = self.len - self.processed_elements.len();
-                let mut matched = false;
-
-                for _ in 0..count {
-                    if let Some((_, last)) = self.processed_elements.last_mut() {
-                        if let Some(end_position) = last.finish_processing(bytes, bump)? {
-                            self.end_position_of_last_processed_element = end_position;
-                        }
-                    }
-
-                    let (key_ref, Some(key_end_position)) = LazyValueRef::new(
-                        bytes,
-                        self.end_position_of_last_processed_element,
-                        bump,
-                    )?
-                    else {
-                        return Err(ErrorCode::ReadError);
-                    };
-
-                    let LazyValueRef::String(key_string_ref) = &key_ref else {
-                        return Err(ErrorCode::ReadError);
-                    };
-
-                    matched =
-                        &bytes[key_string_ref.ptr..key_string_ref.ptr + key_string_ref.len] == key;
-
-                    let (lazy_value, value_end_position) =
-                        LazyValueRef::new(bytes, key_end_position, bump)?;
-
-                    self.end_position_of_last_processed_element =
-                        value_end_position.unwrap_or(key_end_position);
-
-                    self.processed_elements.push((key_ref, lazy_value));
-
-                    if matched {
-                        break;
-                    }
-                }
-
-                matched.then(|| self.processed_elements.len() - 1)
-            }
-        };
-
-        Ok(index_of_value.map(|i| &self.processed_elements[i].1))
-    }
-
-    fn finish_processing(
-        &mut self,
-        bytes: &[u8],
-        bump: &'a Bump,
-    ) -> Result<Option<usize>, ErrorCode> {
-        if let Some((_, last)) = self.processed_elements.last_mut() {
-            if let Some(end_position) = last.finish_processing(bytes, bump)? {
-                self.end_position_of_last_processed_element = end_position;
-            }
-        }
-
-        let count = self.len - self.processed_elements.len();
-
-        for _ in 0..count {
-            let (key, Some(end_position)) =
-                LazyValueRef::new(bytes, self.end_position_of_last_processed_element, bump)?
-            else {
-                return Err(ErrorCode::ReadError);
-            };
-
-            if !matches!(key, LazyValueRef::String(_)) {
-                return Err(ErrorCode::ReadError);
-            }
-
-            let (mut lazy_value, end_position) = LazyValueRef::new(bytes, end_position, bump)?;
-
-            self.end_position_of_last_processed_element = lazy_value
-                .finish_processing(bytes, bump)?
-                .or(end_position)
-                .expect("`new` or `finish_processing` must return a valid end position`");
-
-            self.processed_elements.push((key, lazy_value));
-        }
-
-        Ok(Some(self.end_position_of_last_processed_element))
-    }
+#[derive(PartialEq, Debug)]
+enum ObjectKind<'a> {
+    Map {
+        processed_elements: Vec<'a, (LazyValueRef<'a>, LazyValueRef<'a>)>,
+        next_position: usize,
+        payload_end: usize,
+        tables: Tables<'a>,
+    },
+    Shape {
+        keys: &'a [StringRef],
+        processed_values: Vec<'a, LazyValueRef<'a>>,
+        next_position: usize,
+        payload_end: usize,
+        tables: Tables<'a>,
+    },
 }
 
-#[derive(Debug, PartialEq)]
-pub(crate) struct ArrayRef<'a> {
-    len: usize,
-    processed_elements: Vec<'a, LazyValueRef<'a>>,
-    end_position_of_last_processed_element: usize,
-}
-
-impl<'a> ArrayRef<'a> {
-    fn get_at_index(
-        &mut self,
-        index: usize,
-        bytes: &[u8],
-        bump: &'a Bump,
-    ) -> Result<&LazyValueRef<'a>, ErrorCode> {
-        if index >= self.len {
-            return Err(ErrorCode::IndexOutOfBounds);
-        }
-
-        // Fast path: element already processed
-        if index < self.processed_elements.len() {
-            return Ok(&self.processed_elements[index]);
-        }
-
-        // We need to process more elements
-        let count = index + 1 - self.processed_elements.len();
-
-        // Process elements one by one until we reach the desired index
-        for _ in 0..count {
-            if let Some(last) = self.processed_elements.last_mut() {
-                if let Some(end_position) = last.finish_processing(bytes, bump)? {
-                    self.end_position_of_last_processed_element = end_position;
-                }
-            }
-
-            let (lazy_value, end_position) =
-                LazyValueRef::new(bytes, self.end_position_of_last_processed_element, bump)?;
-
-            if let Some(end_position) = end_position {
-                self.end_position_of_last_processed_element = end_position;
-            }
-
-            self.processed_elements.push(lazy_value);
-        }
-
-        Ok(self.processed_elements.last().unwrap())
-    }
-
-    fn finish_processing(
-        &mut self,
-        bytes: &[u8],
-        bump: &'a Bump,
-    ) -> Result<Option<usize>, ErrorCode> {
-        if let Some(last) = self.processed_elements.last_mut() {
-            if let Some(end_position) = last.finish_processing(bytes, bump)? {
-                self.end_position_of_last_processed_element = end_position;
-            }
-        }
-
-        let count = self.len - self.processed_elements.len();
-
-        for _ in 0..count {
-            let (mut lazy_value, end_position) =
-                LazyValueRef::new(bytes, self.end_position_of_last_processed_element, bump)?;
-
-            self.end_position_of_last_processed_element = lazy_value
-                .finish_processing(bytes, bump)?
-                .or(end_position)
-                .expect("`new` or `finish_processing` must return a valid end position`");
-
-            self.processed_elements.push(lazy_value);
-        }
-
-        Ok(Some(self.end_position_of_last_processed_element))
-    }
-}
-
-/// A lazy value reference.
-///
-/// This is a reference to a value that may not be fully processed.
-///
-/// For example, an array may not have all of its elements processed yet.
-///
-/// This is used to avoid unnecessary allocations and copying of data.
-///
-/// The value is processed when it is first accessed.
+/// A lazy value reference backed by an FBF payload.
 #[derive(Debug, PartialEq)]
 pub(crate) enum LazyValueRef<'a> {
     Null,
@@ -399,6 +62,103 @@ pub(crate) enum LazyValueRef<'a> {
     String(StringRef),
     Array(ArrayRef<'a>),
     Object(ObjectRef<'a>),
+}
+
+struct Cursor<'a> {
+    bytes: &'a [u8],
+    position: usize,
+}
+
+impl<'a> Cursor<'a> {
+    fn new(bytes: &'a [u8], position: usize) -> Self {
+        Self { bytes, position }
+    }
+
+    fn read_u8(&mut self, end: usize) -> Result<u8, ErrorCode> {
+        if self.position >= end {
+            return Err(ErrorCode::ReadError);
+        }
+        let value = self.bytes[self.position];
+        self.position += 1;
+        Ok(value)
+    }
+
+    fn read_varint(&mut self, end: usize) -> Result<u64, ErrorCode> {
+        let mut result = 0_u64;
+        for shift in (0..70).step_by(7) {
+            let byte = self.read_u8(end)?;
+            if shift == 63 && byte > 1 {
+                return Err(ErrorCode::ReadError);
+            }
+            result |= u64::from(byte & 0x7f) << shift;
+            if byte & 0x80 == 0 {
+                return Ok(result);
+            }
+        }
+        Err(ErrorCode::ReadError)
+    }
+}
+
+fn checked_end(position: usize, size: usize, limit: usize) -> Result<usize, ErrorCode> {
+    let end = position.checked_add(size).ok_or(ErrorCode::ReadError)?;
+    if end > limit {
+        return Err(ErrorCode::ReadError);
+    }
+    Ok(end)
+}
+
+fn read_len(bytes: &[u8], position: usize, width: usize, limit: usize) -> Result<usize, ErrorCode> {
+    let end = checked_end(position, width, limit)?;
+    let value = match width {
+        1 => bytes[position] as usize,
+        2 => u16::from_le_bytes(bytes[position..end].try_into().unwrap()) as usize,
+        4 => u32::from_le_bytes(bytes[position..end].try_into().unwrap()) as usize,
+        _ => return Err(ErrorCode::ReadError),
+    };
+    Ok(value)
+}
+
+fn length_width(tag: u8) -> Option<usize> {
+    match tag {
+        0x8d | 0x93 | 0x96 | 0x9c => Some(1),
+        0x8e | 0x94 | 0x97 | 0x9d => Some(2),
+        0x8f | 0x95 | 0x98 | 0x9e => Some(4),
+        0xd1..=0xd7 | 0xd9..=0xdf => Some(1),
+        _ => None,
+    }
+}
+
+fn payload_range(
+    bytes: &[u8],
+    position: usize,
+    tag: u8,
+    limit: usize,
+) -> Result<(usize, usize), ErrorCode> {
+    let width = length_width(tag).ok_or(ErrorCode::ReadError)?;
+    let length_position = checked_end(position, 1, limit)?;
+    let payload_start = checked_end(length_position, width, limit)?;
+    let len = read_len(bytes, length_position, width, limit)?;
+    let payload_end = checked_end(payload_start, len, limit)?;
+    Ok((payload_start, payload_end))
+}
+
+fn string_eq(candidate: StringRef, key: &[u8], bytes: &[u8]) -> bool {
+    if candidate.len != key.len() {
+        return false;
+    }
+    bytes
+        .get(candidate.offset..candidate.offset + candidate.len)
+        .is_some_and(|candidate| candidate == key)
+}
+
+impl<'a> Tables<'a> {
+    fn get_string(&self, id: usize) -> Result<StringRef, ErrorCode> {
+        self.strings.get(id).copied().ok_or(ErrorCode::ReadError)
+    }
+
+    fn get_shape(&self, id: usize) -> Result<ShapeRef<'a>, ErrorCode> {
+        self.shapes.get(id).copied().ok_or(ErrorCode::ReadError)
+    }
 }
 
 impl<'a> LazyValueRef<'a> {
@@ -428,178 +188,218 @@ impl<'a> LazyValueRef<'a> {
         if raw.is_null() {
             return Err(ErrorCode::ReadError);
         }
-        // Safety: we've verified the pointer is not null
+        // Safety: the API only stores pointers to `LazyValueRef`s allocated in the context bump arena.
         Ok(unsafe { &mut *raw })
     }
 
-    /// Create a new lazy value reference from a byte slice and a position.
-    ///
-    /// The 2-tuple in the Ok variant contains the lazy value reference as well
-    /// as the position of the end of the value, if it was a non-composite type
-    /// and therefore processed immediately.
+    /// Create a new lazy value reference from a complete FBF payload.
     pub(crate) fn new(
         bytes: &[u8],
         position: usize,
         bump: &'a Bump,
     ) -> Result<(Self, Option<usize>), ErrorCode> {
-        let mut cursor = Cursor::new(bytes, position);
-        let marker = cursor.read_marker()?;
+        if position != 0 || bytes.len() < 5 || &bytes[0..3] != b"FBF" || bytes[3] != 1 {
+            return Err(ErrorCode::ReadError);
+        }
+        let flags = bytes[4];
+        if flags & 0xfc != 0 {
+            return Err(ErrorCode::ReadError);
+        }
 
-        match marker {
-            // Simple values - process immediately
-            Marker::Null => Ok((Self::Null, Some(cursor.position))),
-            Marker::False => Ok((Self::Bool(false), Some(cursor.position))),
-            Marker::True => Ok((Self::Bool(true), Some(cursor.position))),
+        let mut cursor = Cursor::new(bytes, 5);
+        let strings: &[StringRef] = if flags & 0x01 != 0 {
+            let count = usize::try_from(cursor.read_varint(bytes.len())?)
+                .map_err(|_| ErrorCode::ReadError)?;
+            let mut strings = std::vec::Vec::with_capacity(count);
+            for _ in 0..count {
+                let len = usize::try_from(cursor.read_varint(bytes.len())?)
+                    .map_err(|_| ErrorCode::ReadError)?;
+                let end = checked_end(cursor.position, len, bytes.len())?;
+                strings.push(StringRef {
+                    offset: cursor.position,
+                    len,
+                });
+                cursor.position = end;
+            }
+            bump.alloc_slice_copy(&strings)
+        } else {
+            &[]
+        };
+        let mut tables = Tables {
+            strings,
+            shapes: &[],
+        };
 
-            // Fixed positive and negative integers - no additional reads needed
-            Marker::FixPos(n) => Ok((Self::Number(n as f64), Some(cursor.position))),
-            Marker::FixNeg(n) => Ok((Self::Number(n as f64), Some(cursor.position))),
+        let shapes: &[ShapeRef] = if flags & 0x02 != 0 {
+            let count = usize::try_from(cursor.read_varint(bytes.len())?)
+                .map_err(|_| ErrorCode::ReadError)?;
+            let mut shapes = std::vec::Vec::with_capacity(count);
+            for _ in 0..count {
+                let key_count = usize::try_from(cursor.read_varint(bytes.len())?)
+                    .map_err(|_| ErrorCode::ReadError)?;
+                let mut keys = std::vec::Vec::with_capacity(key_count);
+                for _ in 0..key_count {
+                    let (key, end) = parse_string_ref(bytes, cursor.position, bytes.len(), tables)?;
+                    keys.push(key);
+                    cursor.position = end;
+                }
+                shapes.push(ShapeRef {
+                    keys: bump.alloc_slice_copy(&keys),
+                });
+            }
+            bump.alloc_slice_copy(&shapes)
+        } else {
+            &[]
+        };
+        tables.shapes = shapes;
 
-            // Numbers requiring additional reads
-            Marker::I8 => cursor
-                .read_i8()
-                .map(|n| (Self::Number(n as f64), Some(cursor.position))),
-            Marker::U8 => cursor
-                .read_u8()
-                .map(|n| (Self::Number(n as f64), Some(cursor.position))),
-            Marker::U16 => cursor
-                .read_u16()
-                .map(|n| (Self::Number(n as f64), Some(cursor.position))),
-            Marker::U32 => cursor
-                .read_u32()
-                .map(|n| (Self::Number(n as f64), Some(cursor.position))),
-            Marker::U64 => cursor
-                .read_u64()
-                .map(|n| (Self::Number(n as f64), Some(cursor.position))),
-            Marker::I16 => cursor
-                .read_i16()
-                .map(|n| (Self::Number(n as f64), Some(cursor.position))),
-            Marker::I32 => cursor
-                .read_i32()
-                .map(|n| (Self::Number(n as f64), Some(cursor.position))),
-            Marker::I64 => cursor
-                .read_i64()
-                .map(|n| (Self::Number(n as f64), Some(cursor.position))),
-            Marker::F32 => cursor
-                .read_f32()
-                .map(|n| (Self::Number(n as f64), Some(cursor.position))),
-            Marker::F64 => cursor
-                .read_f64()
-                .map(|n| (Self::Number(n), Some(cursor.position))),
+        let (value, end) = Self::new_at(bytes, cursor.position, bytes.len(), bump, tables)?;
+        Ok((value, Some(end)))
+    }
 
-            // String types
-            Marker::FixStr(len) => {
-                let len = len as usize;
-                Ok((
-                    Self::String(StringRef {
-                        ptr: cursor.position,
-                        len,
-                    }),
-                    Some(cursor.position + len),
-                ))
+    fn new_at(
+        bytes: &[u8],
+        position: usize,
+        limit: usize,
+        bump: &'a Bump,
+        tables: Tables<'a>,
+    ) -> Result<(Self, usize), ErrorCode> {
+        if position >= limit {
+            return Err(ErrorCode::ReadError);
+        }
+        let tag = bytes[position];
+        let payload = position + 1;
+        match tag {
+            0x00..=0x7f => Ok((Self::Number(f64::from(tag)), payload)),
+            0xe0..=0xff => Ok((Self::Number(f64::from(tag as i8)), payload)),
+            0x80 => Ok((Self::Null, payload)),
+            0x81 => Ok((Self::Bool(false), payload)),
+            0x82 => Ok((Self::Bool(true), payload)),
+            0x83 => {
+                let end = checked_end(payload, 1, limit)?;
+                Ok((Self::Number(f64::from(bytes[payload] as i8)), end))
             }
-            Marker::Str8 => {
-                let len = cursor.read_u8().map(|n| n as usize)?;
-                Ok((
-                    Self::String(StringRef {
-                        ptr: cursor.position,
-                        len,
-                    }),
-                    Some(cursor.position + len),
-                ))
+            0x84 => {
+                let end = checked_end(payload, 2, limit)?;
+                let value = i16::from_le_bytes(bytes[payload..end].try_into().unwrap());
+                Ok((Self::Number(f64::from(value)), end))
             }
-            Marker::Str16 => {
-                let len = cursor.read_u16().map(|n| n as usize)?;
-                Ok((
-                    Self::String(StringRef {
-                        ptr: cursor.position,
-                        len,
-                    }),
-                    Some(cursor.position + len),
-                ))
+            0x85 => {
+                let end = checked_end(payload, 4, limit)?;
+                let value = i32::from_le_bytes(bytes[payload..end].try_into().unwrap());
+                Ok((Self::Number(f64::from(value)), end))
             }
-            Marker::Str32 => {
-                let len = cursor.read_u32().map(|n| n as usize)?;
-                Ok((
-                    Self::String(StringRef {
-                        ptr: cursor.position,
-                        len,
-                    }),
-                    Some(cursor.position + len),
-                ))
+            0x86 => {
+                let end = checked_end(payload, 8, limit)?;
+                let value = i64::from_le_bytes(bytes[payload..end].try_into().unwrap());
+                Ok((Self::Number(value as f64), end))
             }
-
-            // Map types
-            Marker::FixMap(len) => {
-                let len = len as usize;
-                Ok((
-                    Self::Object(ObjectRef {
-                        len,
-                        processed_elements: Vec::with_capacity_in(len, bump),
-                        end_position_of_last_processed_element: cursor.position,
-                    }),
-                    None,
-                ))
+            0x87 => {
+                let end = checked_end(payload, 1, limit)?;
+                Ok((Self::Number(f64::from(bytes[payload])), end))
             }
-            Marker::Map16 => {
-                let len = cursor.read_u16().map(|n| n as usize)?;
-                Ok((
-                    Self::Object(ObjectRef {
-                        len,
-                        processed_elements: Vec::with_capacity_in(len, bump),
-                        end_position_of_last_processed_element: cursor.position,
-                    }),
-                    None,
-                ))
+            0x88 => {
+                let end = checked_end(payload, 2, limit)?;
+                let value = u16::from_le_bytes(bytes[payload..end].try_into().unwrap());
+                Ok((Self::Number(f64::from(value)), end))
             }
-            Marker::Map32 => {
-                let len = cursor.read_u32().map(|n| n as usize)?;
-                Ok((
-                    Self::Object(ObjectRef {
-                        len,
-                        processed_elements: Vec::with_capacity_in(len, bump),
-                        end_position_of_last_processed_element: cursor.position,
-                    }),
-                    None,
-                ))
+            0x89 => {
+                let end = checked_end(payload, 4, limit)?;
+                let value = u32::from_le_bytes(bytes[payload..end].try_into().unwrap());
+                Ok((Self::Number(f64::from(value)), end))
             }
-
-            // Array types
-            Marker::FixArray(len) => {
-                let len = len as usize;
+            0x8a => {
+                let end = checked_end(payload, 8, limit)?;
+                let value = u64::from_le_bytes(bytes[payload..end].try_into().unwrap());
+                Ok((Self::Number(value as f64), end))
+            }
+            0x8b => {
+                let end = checked_end(payload, 4, limit)?;
+                let value = f32::from_le_bytes(bytes[payload..end].try_into().unwrap());
+                Ok((Self::Number(f64::from(value)), end))
+            }
+            0x8c => {
+                let end = checked_end(payload, 8, limit)?;
+                let value = f64::from_le_bytes(bytes[payload..end].try_into().unwrap());
+                Ok((Self::Number(value), end))
+            }
+            0x8d..=0x8f | 0xa2..=0xc1 | 0x99..=0x9b => {
+                let (string, end) = parse_string_ref(bytes, position, limit, tables)?;
+                Ok((Self::String(string), end))
+            }
+            0xd0 => Ok((
+                Self::Array(ArrayRef {
+                    len: 0,
+                    processed_elements: Vec::new_in(bump),
+                    next_position: payload,
+                    payload_end: payload,
+                    tables,
+                }),
+                payload,
+            )),
+            0xd1..=0xd7 | 0x93..=0x95 => {
+                let (count, next_position, payload_end, end) =
+                    parse_array_header(bytes, position, limit)?;
                 Ok((
                     Self::Array(ArrayRef {
-                        len,
-                        processed_elements: Vec::with_capacity_in(len, bump),
-                        end_position_of_last_processed_element: cursor.position,
+                        len: count,
+                        processed_elements: Vec::with_capacity_in(count, bump),
+                        next_position,
+                        payload_end,
+                        tables,
                     }),
-                    None,
+                    end,
                 ))
             }
-            Marker::Array16 => {
-                let len = cursor.read_u16().map(|n| n as usize)?;
+            0xd8 => Ok((
+                Self::Object(ObjectRef {
+                    len: 0,
+                    kind: ObjectKind::Map {
+                        processed_elements: Vec::new_in(bump),
+                        next_position: payload,
+                        payload_end: payload,
+                        tables,
+                    },
+                }),
+                payload,
+            )),
+            0xd9..=0xdf | 0x96..=0x98 => {
+                let (count, next_position, payload_end, end) =
+                    parse_map_header(bytes, position, limit)?;
                 Ok((
-                    Self::Array(ArrayRef {
-                        len,
-                        processed_elements: Vec::with_capacity_in(len, bump),
-                        end_position_of_last_processed_element: cursor.position,
+                    Self::Object(ObjectRef {
+                        len: count,
+                        kind: ObjectKind::Map {
+                            processed_elements: Vec::with_capacity_in(count, bump),
+                            next_position,
+                            payload_end,
+                            tables,
+                        },
                     }),
-                    None,
+                    end,
                 ))
             }
-            Marker::Array32 => {
-                let len = cursor.read_u32().map(|n| n as usize)?;
+            0x9c..=0x9e => {
+                let (payload_start, payload_end) = payload_range(bytes, position, tag, limit)?;
+                let mut cursor = Cursor::new(bytes, payload_start);
+                let shape_id = usize::try_from(cursor.read_varint(payload_end)?)
+                    .map_err(|_| ErrorCode::ReadError)?;
+                let shape = tables.get_shape(shape_id)?;
+                let count = shape.keys.len();
                 Ok((
-                    Self::Array(ArrayRef {
-                        len,
-                        processed_elements: Vec::with_capacity_in(len, bump),
-                        end_position_of_last_processed_element: cursor.position,
+                    Self::Object(ObjectRef {
+                        len: count,
+                        kind: ObjectKind::Shape {
+                            keys: shape.keys,
+                            processed_values: Vec::with_capacity_in(count, bump),
+                            next_position: cursor.position,
+                            payload_end,
+                            tables,
+                        },
                     }),
-                    None,
+                    payload_end,
                 ))
             }
-
-            // Unknown or unsupported marker
             _ => Err(ErrorCode::ReadError),
         }
     }
@@ -615,7 +415,7 @@ impl<'a> LazyValueRef<'a> {
 
     pub(crate) fn get_utf8_str_addr(&self, bytes: &[u8]) -> usize {
         match self {
-            Self::String(StringRef { ptr, .. }) => bytes[*ptr..].as_ptr() as usize,
+            Self::String(StringRef { offset, .. }) => bytes[*offset..].as_ptr() as usize,
             _ => 0,
         }
     }
@@ -628,7 +428,7 @@ impl<'a> LazyValueRef<'a> {
     ) -> Result<&LazyValueRef<'_>, ErrorCode> {
         match self {
             Self::Array(array_ref) => array_ref.get_at_index(index, bytes, bump),
-            Self::Object(obj_ref) => obj_ref.get_at_index(index, bytes, bump).map(|v| &v.1),
+            Self::Object(obj_ref) => obj_ref.get_at_index(index, bytes, bump),
             _ => Err(ErrorCode::NotIndexable),
         }
     }
@@ -640,7 +440,7 @@ impl<'a> LazyValueRef<'a> {
         bump: &'a Bump,
     ) -> Result<&LazyValueRef<'_>, ErrorCode> {
         match self {
-            Self::Object(obj_ref) => obj_ref.get_at_index(index, bytes, bump).map(|v| &v.0),
+            Self::Object(obj_ref) => obj_ref.get_key_at_index(index, bytes, bump),
             _ => Err(ErrorCode::NotAnObject),
         }
     }
@@ -656,20 +456,277 @@ impl<'a> LazyValueRef<'a> {
             _ => Err(ErrorCode::NotAnObject),
         }
     }
+}
 
-    /// Returns the end position of the value, if it was a composite type and
-    /// therefore was finished during this call. If it was not a composite type,
-    /// the end position is not known and None is returned, but the end position
-    /// would have been returned in the `new` call to create the value.
-    fn finish_processing(
+fn parse_string_ref(
+    bytes: &[u8],
+    position: usize,
+    limit: usize,
+    tables: Tables<'_>,
+) -> Result<(StringRef, usize), ErrorCode> {
+    if position >= limit {
+        return Err(ErrorCode::ReadError);
+    }
+    let tag = bytes[position];
+    let payload = position + 1;
+    match tag {
+        0xa2..=0xc1 => {
+            let len = (tag - 0xa2) as usize;
+            let end = checked_end(payload, len, limit)?;
+            Ok((
+                StringRef {
+                    offset: payload,
+                    len,
+                },
+                end,
+            ))
+        }
+        0x8d..=0x8f => {
+            let (payload_start, payload_end) = payload_range(bytes, position, tag, limit)?;
+            Ok((
+                StringRef {
+                    offset: payload_start,
+                    len: payload_end - payload_start,
+                },
+                payload_end,
+            ))
+        }
+        0x99 => {
+            let end = checked_end(payload, 1, limit)?;
+            Ok((tables.get_string(bytes[payload] as usize)?, end))
+        }
+        0x9a => {
+            let end = checked_end(payload, 2, limit)?;
+            let id = u16::from_le_bytes(bytes[payload..end].try_into().unwrap()) as usize;
+            Ok((tables.get_string(id)?, end))
+        }
+        0x9b => {
+            let end = checked_end(payload, 4, limit)?;
+            let id = u32::from_le_bytes(bytes[payload..end].try_into().unwrap()) as usize;
+            Ok((tables.get_string(id)?, end))
+        }
+        _ => Err(ErrorCode::ReadError),
+    }
+}
+
+fn parse_array_header(
+    bytes: &[u8],
+    position: usize,
+    limit: usize,
+) -> Result<(usize, usize, usize, usize), ErrorCode> {
+    let tag = bytes[position];
+    let (payload_start, payload_end) = payload_range(bytes, position, tag, limit)?;
+    if (0xd1..=0xd7).contains(&tag) {
+        Ok((
+            (tag - 0xd0) as usize,
+            payload_start,
+            payload_end,
+            payload_end,
+        ))
+    } else {
+        let mut cursor = Cursor::new(bytes, payload_start);
+        let count =
+            usize::try_from(cursor.read_varint(payload_end)?).map_err(|_| ErrorCode::ReadError)?;
+        Ok((count, cursor.position, payload_end, payload_end))
+    }
+}
+
+fn parse_map_header(
+    bytes: &[u8],
+    position: usize,
+    limit: usize,
+) -> Result<(usize, usize, usize, usize), ErrorCode> {
+    let tag = bytes[position];
+    let (payload_start, payload_end) = payload_range(bytes, position, tag, limit)?;
+    if (0xd9..=0xdf).contains(&tag) {
+        Ok((
+            (tag - 0xd8) as usize,
+            payload_start,
+            payload_end,
+            payload_end,
+        ))
+    } else {
+        let mut cursor = Cursor::new(bytes, payload_start);
+        let count =
+            usize::try_from(cursor.read_varint(payload_end)?).map_err(|_| ErrorCode::ReadError)?;
+        Ok((count, cursor.position, payload_end, payload_end))
+    }
+}
+
+impl<'a> ArrayRef<'a> {
+    fn get_at_index(
         &mut self,
+        index: usize,
         bytes: &[u8],
         bump: &'a Bump,
-    ) -> Result<Option<usize>, ErrorCode> {
-        match self {
-            Self::Array(array_ref) => array_ref.finish_processing(bytes, bump),
-            Self::Null | Self::Bool(_) | Self::Number(_) | Self::String { .. } => Ok(None),
-            Self::Object(obj_ref) => obj_ref.finish_processing(bytes, bump),
+    ) -> Result<&LazyValueRef<'_>, ErrorCode> {
+        if index >= self.len {
+            return Err(ErrorCode::IndexOutOfBounds);
+        }
+        while self.processed_elements.len() <= index {
+            let (value, end) = LazyValueRef::new_at(
+                bytes,
+                self.next_position,
+                self.payload_end,
+                bump,
+                self.tables,
+            )?;
+            self.next_position = end;
+            self.processed_elements.push(value);
+        }
+        self.processed_elements
+            .get(index)
+            .ok_or(ErrorCode::IndexOutOfBounds)
+    }
+}
+
+impl<'a> ObjectRef<'a> {
+    fn processed_len(&self) -> usize {
+        match &self.kind {
+            ObjectKind::Map {
+                processed_elements, ..
+            } => processed_elements.len(),
+            ObjectKind::Shape {
+                processed_values, ..
+            } => processed_values.len(),
+        }
+    }
+
+    fn process_next(&mut self, bytes: &[u8], bump: &'a Bump) -> Result<(), ErrorCode> {
+        match &mut self.kind {
+            ObjectKind::Map {
+                processed_elements,
+                next_position,
+                payload_end,
+                tables,
+            } => {
+                let (key, value_start) =
+                    LazyValueRef::new_at(bytes, *next_position, *payload_end, bump, *tables)?;
+                let (value, end) =
+                    LazyValueRef::new_at(bytes, value_start, *payload_end, bump, *tables)?;
+                *next_position = end;
+                processed_elements.push((key, value));
+            }
+            ObjectKind::Shape {
+                processed_values,
+                next_position,
+                payload_end,
+                tables,
+                ..
+            } => {
+                let (value, end) =
+                    LazyValueRef::new_at(bytes, *next_position, *payload_end, bump, *tables)?;
+                *next_position = end;
+                processed_values.push(value);
+            }
+        }
+        Ok(())
+    }
+
+    fn get_at_index(
+        &mut self,
+        index: usize,
+        bytes: &[u8],
+        bump: &'a Bump,
+    ) -> Result<&LazyValueRef<'_>, ErrorCode> {
+        if index >= self.len {
+            return Err(ErrorCode::IndexOutOfBounds);
+        }
+        while self.processed_len() <= index {
+            self.process_next(bytes, bump)?;
+        }
+        match &self.kind {
+            ObjectKind::Map {
+                processed_elements, ..
+            } => processed_elements
+                .get(index)
+                .map(|(_, value)| value)
+                .ok_or(ErrorCode::IndexOutOfBounds),
+            ObjectKind::Shape {
+                processed_values, ..
+            } => processed_values
+                .get(index)
+                .ok_or(ErrorCode::IndexOutOfBounds),
+        }
+    }
+
+    fn get_key_at_index(
+        &mut self,
+        index: usize,
+        bytes: &[u8],
+        bump: &'a Bump,
+    ) -> Result<&LazyValueRef<'_>, ErrorCode> {
+        if index >= self.len {
+            return Err(ErrorCode::IndexOutOfBounds);
+        }
+        match &self.kind {
+            ObjectKind::Shape { keys, .. } => Ok(bump.alloc(LazyValueRef::String(keys[index]))),
+            ObjectKind::Map { .. } => {
+                while self.processed_len() <= index {
+                    self.process_next(bytes, bump)?;
+                }
+                match &self.kind {
+                    ObjectKind::Map {
+                        processed_elements, ..
+                    } => processed_elements
+                        .get(index)
+                        .map(|(key, _)| key)
+                        .ok_or(ErrorCode::IndexOutOfBounds),
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    fn get_property<'b>(
+        &'b mut self,
+        key: &[u8],
+        bytes: &[u8],
+        bump: &'a Bump,
+    ) -> Result<Option<&'b LazyValueRef<'a>>, ErrorCode> {
+        match &self.kind {
+            ObjectKind::Shape { keys, .. } => {
+                let Some(index) = keys
+                    .iter()
+                    .position(|candidate| string_eq(*candidate, key, bytes))
+                else {
+                    return Ok(None);
+                };
+                while self.processed_len() <= index {
+                    self.process_next(bytes, bump)?;
+                }
+                match &self.kind {
+                    ObjectKind::Shape {
+                        processed_values, ..
+                    } => Ok(processed_values.get(index)),
+                    _ => unreachable!(),
+                }
+            }
+            ObjectKind::Map { .. } => {
+                for index in 0..self.len {
+                    while self.processed_len() <= index {
+                        self.process_next(bytes, bump)?;
+                    }
+                    let found = match &self.kind {
+                        ObjectKind::Map {
+                            processed_elements, ..
+                        } => match &processed_elements[index].0 {
+                            LazyValueRef::String(candidate) => string_eq(*candidate, key, bytes),
+                            _ => false,
+                        },
+                        _ => unreachable!(),
+                    };
+                    if found {
+                        return match &self.kind {
+                            ObjectKind::Map {
+                                processed_elements, ..
+                            } => Ok(Some(&processed_elements[index].1)),
+                            _ => unreachable!(),
+                        };
+                    }
+                }
+                Ok(None)
+            }
         }
     }
 }
@@ -677,400 +734,78 @@ impl<'a> LazyValueRef<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmp::encode::{self, ByteBuf};
-    use std::vec::Vec;
+    use fbf::Value as FbfValue;
 
-    fn build_msgpack<E, F: FnOnce(&mut ByteBuf) -> Result<(), E>>(
-        writer_fn: F,
-    ) -> Result<Vec<u8>, E> {
-        let mut buf = ByteBuf::new();
-        writer_fn(&mut buf)?;
-        Ok(buf.into_vec())
-    }
-
-    fn create_lazy_value<'a>(bytes: &'a [u8], bump: &'a Bump) -> LazyValueRef<'a> {
-        let (value, _) = LazyValueRef::new(bytes, 0, bump).unwrap();
-        value
+    fn encode(value: &FbfValue) -> std::vec::Vec<u8> {
+        fbf::to_vec(value).unwrap()
     }
 
     #[test]
-    fn test_instantiate_bool_value() {
-        [true, false].iter().for_each(|&b| {
-            let bytes = build_msgpack(|w| encode::write_bool(w, b)).unwrap();
-            let bump = Bump::new();
-            let value = create_lazy_value(&bytes, &bump);
-            assert_eq!(value, LazyValueRef::Bool(b));
-        });
-    }
-
-    #[test]
-    fn test_encode_bool_value() {
-        [true, false].iter().for_each(|&b| {
-            let value = LazyValueRef::Bool(b);
-            let nanbox = value.encode();
-            assert_eq!(nanbox, NanBox::bool(b));
-        });
-    }
-
-    #[test]
-    fn test_instantiate_null_value() {
-        let bytes = build_msgpack(encode::write_nil).unwrap();
+    fn test_instantiate_scalars() {
         let bump = Bump::new();
-        let value = create_lazy_value(&bytes, &bump);
-        assert_eq!(value, LazyValueRef::Null);
+        for (value, expected) in [
+            (FbfValue::Nil, LazyValueRef::Null),
+            (FbfValue::Bool(true), LazyValueRef::Bool(true)),
+            (FbfValue::Int(42), LazyValueRef::Number(42.0)),
+        ] {
+            let bytes = encode(&value);
+            let (parsed, _) = LazyValueRef::new(&bytes, 0, &bump).unwrap();
+            assert_eq!(parsed, expected);
+        }
     }
 
     #[test]
-    fn test_encode_null_value() {
-        let value = LazyValueRef::Null;
-        let nanbox = value.encode();
-        assert_eq!(nanbox, NanBox::null());
-    }
-
-    macro_rules! test_instantiate_number_type {
-        ($type:ty, $encode_type:ident, $values:tt) => {
-            paste::paste! {
-                #[test]
-                fn [<test_instantiate_ $encode_type _value>]() {
-                    $values.iter().for_each(|&n| {
-                        let bytes = build_msgpack(|w| encode::[<write_ $encode_type>](w, n)).unwrap();
-                        let bump = Bump::new();
-                        let value = create_lazy_value(&bytes, &bump);
-                        assert_eq!(value, LazyValueRef::Number(n as f64));
-                    });
-                }
-            }
-        };
-        ($type:ty, $encode_type:ident) => {
-            test_instantiate_number_type!($type, $encode_type, [$type::MIN, 0 as $type, $type::MAX]);
-        };
-        ($type:ty) => {
-            paste::paste! {
-                test_instantiate_number_type!($type, [<$type>]);
-            }
-        };
-    }
-
-    test_instantiate_number_type!(u8, pfix, [0, 1, 127]);
-    test_instantiate_number_type!(u8);
-    test_instantiate_number_type!(i8);
-    test_instantiate_number_type!(i8, nfix, [-32, -1]);
-    test_instantiate_number_type!(u16);
-    test_instantiate_number_type!(i16);
-    test_instantiate_number_type!(u32);
-    test_instantiate_number_type!(i32);
-    test_instantiate_number_type!(u64);
-    test_instantiate_number_type!(i64);
-    test_instantiate_number_type!(f32);
-    test_instantiate_number_type!(f64);
-
-    #[test]
-    fn test_encode_number_value() {
-        let value = LazyValueRef::Number(1.0);
-        let nanbox = value.encode();
-        assert_eq!(nanbox, NanBox::number(1.0));
-    }
-
-    macro_rules! test_instantiate_and_encode_str {
-        ($len:expr, $encode_type:ident, $offset:expr) => {
-            paste::paste! {
-                #[test]
-                fn [<test_instantiate_ $encode_type _value>]() {
-                    let bytes = build_msgpack(|w| encode::write_str(w, "a".repeat($len).as_str())).unwrap();
-                    let bump = Bump::new();
-                    let value = create_lazy_value(&bytes, &bump);
-                    assert_eq!(value, LazyValueRef::String(StringRef { len: $len, ptr: $offset }));
-                }
-
-                #[test]
-                fn [<test_encode_ $encode_type _value>]() {
-                    let value = LazyValueRef::String(StringRef { len: $len, ptr: $offset });
-                    let nanbox = value.encode();
-                    let ptr = &value as *const _ as usize;
-                    // The length is limited by the max value that can be stored in the length portion of the NanBox
-                    let expected_length = ($len).min(NanBox::MAX_VALUE_LENGTH as usize);
-                    assert_eq!(nanbox, NanBox::string(ptr, expected_length));
-                }
-            }
-        };
-    }
-
-    test_instantiate_and_encode_str!(31, fixstr, 1);
-    test_instantiate_and_encode_str!(u8::MAX as usize, str8, 2);
-    test_instantiate_and_encode_str!(u16::MAX as usize, str16, 3);
-    test_instantiate_and_encode_str!(u16::MAX as usize + 1, str32, 5);
-
-    #[test]
-    fn test_instantiate_and_traverse_array_value() {
-        let bytes = build_msgpack(|w| {
-            encode::write_array_len(w, 3)?;
-            encode::write_i32(w, 1)?;
-            encode::write_i32(w, 2)?;
-            encode::write_i32(w, 3)
-        })
-        .unwrap();
-
+    fn test_string() {
         let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-        // fixarray so the length and marker are in the same byte
-        assert_eq!(
-            value,
-            LazyValueRef::Array(ArrayRef {
-                len: 3,
-                processed_elements: bumpalo::collections::Vec::new_in(&bump),
-                end_position_of_last_processed_element: 1
-            })
-        );
-
-        [1.0, 2.0, 3.0].iter().enumerate().for_each(|(i, n)| {
-            let element = value.get_at_index(i, &bytes, &bump).unwrap();
-            assert_eq!(element, &LazyValueRef::Number(*n));
-            match &value {
-                LazyValueRef::Array(array_ref) => {
-                    assert_eq!(array_ref.processed_elements.len(), i + 1);
-                }
-                _ => panic!("Expected array, got {value:?}"),
-            }
-        });
-
-        let end_position = value.finish_processing(&bytes, &bump).unwrap();
-        assert_eq!(end_position, Some(bytes.len()));
-    }
-
-    #[test]
-    fn test_encode_array_value() {
-        let bump = Bump::new();
-        let len = 3;
-        let value = LazyValueRef::Array(ArrayRef {
-            len,
-            processed_elements: bumpalo::collections::Vec::new_in(&bump),
-            end_position_of_last_processed_element: 0,
-        });
-        let nanbox = value.encode();
-        let ptr = &value as *const _ as usize;
-        assert_eq!(nanbox, NanBox::array(ptr, len));
+        let bytes = encode(&FbfValue::Str("hello".to_string()));
+        let (value, _) = LazyValueRef::new(&bytes, 0, &bump).unwrap();
+        assert_eq!(value.get_value_length(), 5);
+        let ptr = value.get_utf8_str_addr(&bytes);
+        let str_bytes = unsafe { std::slice::from_raw_parts(ptr as *const u8, 5) };
+        assert_eq!(str_bytes, b"hello");
     }
 
     #[test]
     fn test_get_at_index_array() {
-        let bytes = build_msgpack(|w| {
-            encode::write_array_len(w, 3)?;
-            encode::write_i32(w, 1)?;
-            encode::write_i32(w, 2)?;
-            encode::write_i32(w, 3)
-        })
-        .unwrap();
-
         let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-
-        let element = value.get_at_index(0, &bytes, &bump).unwrap();
-        assert_eq!(element, &LazyValueRef::Number(1.0));
-
-        let element = value.get_at_index(1, &bytes, &bump).unwrap();
-        assert_eq!(element, &LazyValueRef::Number(2.0));
-
-        let element = value.get_at_index(2, &bytes, &bump).unwrap();
-        assert_eq!(element, &LazyValueRef::Number(3.0));
-    }
-
-    #[test]
-    fn test_get_at_index_array_out_of_bounds() {
-        let bytes = build_msgpack(|w| encode::write_array_len(w, 0).map(|_| ())).unwrap();
-        let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-        let error = value.get_at_index(0, &bytes, &bump).unwrap_err();
-        assert_eq!(error, ErrorCode::IndexOutOfBounds);
-    }
-
-    #[test]
-    fn get_at_index_object() {
-        let bytes = build_msgpack(|w| {
-            encode::write_map_len(w, 2)?;
-            encode::write_str(w, "a")?;
-            encode::write_i32(w, 1)?;
-            encode::write_str(w, "b")?;
-            encode::write_i32(w, 2)
-        })
-        .unwrap();
-
-        let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-
-        let element = value.get_at_index(0, &bytes, &bump).unwrap();
-        assert_eq!(element, &LazyValueRef::Number(1.0));
-
-        let element = value.get_at_index(1, &bytes, &bump).unwrap();
-        assert_eq!(element, &LazyValueRef::Number(2.0));
-    }
-
-    #[test]
-    fn test_get_at_index_object_out_of_bounds() {
-        let bytes = build_msgpack(|w| encode::write_map_len(w, 0).map(|_| ())).unwrap();
-        let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-        let error = value.get_at_index(0, &bytes, &bump).unwrap_err();
-        assert_eq!(error, ErrorCode::IndexOutOfBounds);
-    }
-
-    #[test]
-    fn test_get_at_index_not_indexable() {
-        let bytes = build_msgpack(|w| encode::write_str(w, "")).unwrap();
-        let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-        let error = value.get_at_index(0, &bytes, &bump).unwrap_err();
-        assert_eq!(error, ErrorCode::NotIndexable);
-    }
-
-    #[test]
-    fn test_instantiate_and_traverse_object_value() {
-        let bytes = build_msgpack(|w| {
-            encode::write_map_len(w, 2)?;
-            encode::write_str(w, "a")?;
-            encode::write_i32(w, 1)?;
-            encode::write_str(w, "b")?;
-            encode::write_i32(w, 2)
-        })
-        .unwrap();
-
-        let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-        // fixmap so the length and marker are in the same byte
+        let bytes = encode(&FbfValue::Array(vec![
+            FbfValue::Int(1),
+            FbfValue::Bool(false),
+        ]));
+        let (mut value, _) = LazyValueRef::new(&bytes, 0, &bump).unwrap();
+        assert_eq!(value.get_value_length(), 2);
         assert_eq!(
-            value,
-            LazyValueRef::Object(ObjectRef {
-                len: 2,
-                processed_elements: bumpalo::collections::Vec::new_in(&bump),
-                end_position_of_last_processed_element: 1
-            })
+            value.get_at_index(0, &bytes, &bump).unwrap(),
+            &LazyValueRef::Number(1.0)
         );
-
-        [("a", 1), ("b", 2)]
-            .iter()
-            .enumerate()
-            .for_each(|(i, (k, v))| {
-                let property = value
-                    .get_object_property(k.as_bytes(), &bytes, &bump)
-                    .unwrap()
-                    .unwrap();
-                assert_eq!(property, &LazyValueRef::Number(*v as f64));
-                match &value {
-                    LazyValueRef::Object(obj_ref) => {
-                        assert_eq!(obj_ref.processed_elements.len(), i + 1);
-                    }
-                    _ => panic!("Expected object, got {value:?}"),
-                }
-            });
-
-        let end_position = value.finish_processing(&bytes, &bump).unwrap();
-        assert_eq!(end_position, Some(bytes.len()));
+        assert_eq!(
+            value.get_at_index(1, &bytes, &bump).unwrap(),
+            &LazyValueRef::Bool(false)
+        );
+        assert_eq!(
+            value.get_at_index(2, &bytes, &bump).unwrap_err(),
+            ErrorCode::IndexOutOfBounds
+        );
     }
 
     #[test]
-    fn test_encode_object_value() {
+    fn test_object_lookup_and_keys() {
         let bump = Bump::new();
-        let len = 2;
-        let value = LazyValueRef::Object(ObjectRef {
-            len,
-            processed_elements: bumpalo::collections::Vec::new_in(&bump),
-            end_position_of_last_processed_element: 0,
-        });
-        let nanbox = value.encode();
-        let ptr = &value as *const _ as usize;
-        assert_eq!(nanbox, NanBox::obj(ptr, len));
-    }
-
-    #[test]
-    fn test_get_object_property() {
-        let bytes = build_msgpack(|w| {
-            encode::write_map_len(w, 2)?;
-            encode::write_str(w, "a")?;
-            encode::write_i32(w, 1)?;
-            encode::write_str(w, "b")?;
-            encode::write_i32(w, 2)
-        })
-        .unwrap();
-
-        let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-
-        let property = value
-            .get_object_property(b"a", &bytes, &bump)
-            .unwrap()
-            .unwrap();
-        assert_eq!(property, &LazyValueRef::Number(1.0));
-
-        let property = value
-            .get_object_property(b"b", &bytes, &bump)
-            .unwrap()
-            .unwrap();
-        assert_eq!(property.encode(), NanBox::number(2.0));
-    }
-
-    #[test]
-    fn test_get_object_property_not_found() {
-        let bytes = build_msgpack(|w| {
-            encode::write_map_len(w, 1)?;
-            encode::write_str(w, "a")?;
-            encode::write_i32(w, 1)
-        })
-        .unwrap();
-
-        let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-
-        let result = value.get_object_property(b"b", &bytes, &bump).unwrap();
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_get_object_property_not_an_object() {
-        let bytes = build_msgpack(|w| encode::write_array_len(w, 0).map(|_| ())).unwrap();
-        let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-        let error = value.get_object_property(b"a", &bytes, &bump).unwrap_err();
-        assert_eq!(error, ErrorCode::NotAnObject);
-    }
-
-    #[test]
-    fn test_get_key_at_index() {
-        let bytes = build_msgpack(|w| {
-            encode::write_map_len(w, 2)?;
-            encode::write_str(w, "a")?;
-            encode::write_sint(w, 1)?;
-            encode::write_str(w, "b")?;
-            encode::write_sint(w, 2).map(|_| ())
-        })
-        .unwrap();
-
-        let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-
+        let bytes = encode(&FbfValue::Map(vec![
+            (FbfValue::Str("a".to_string()), FbfValue::Int(1)),
+            (FbfValue::Str("b".to_string()), FbfValue::Bool(true)),
+        ]));
+        let (mut value, _) = LazyValueRef::new(&bytes, 0, &bump).unwrap();
+        assert_eq!(value.get_value_length(), 2);
+        assert_eq!(
+            value.get_at_index(1, &bytes, &bump).unwrap(),
+            &LazyValueRef::Bool(true)
+        );
+        assert_eq!(
+            value.get_object_property(b"a", &bytes, &bump).unwrap(),
+            Some(&LazyValueRef::Number(1.0))
+        );
         let key = value.get_key_at_index(0, &bytes, &bump).unwrap();
-        // 1 byte for the map marker, 1 byte for the fixstr marker/length, so the key is at offset 2
-        assert_eq!(key, &LazyValueRef::String(StringRef { len: 1, ptr: 2 }));
-
-        let key = value.get_key_at_index(1, &bytes, &bump).unwrap();
-        // from the start of the previous key (2), we have 1 byte for the contents of the previous key,
-        // 1 byte for the fixnum marker/length, and 1 byte for the fixstr marker/length, so the key is at offset 5
-        assert_eq!(key, &LazyValueRef::String(StringRef { len: 1, ptr: 5 }));
-    }
-
-    #[test]
-    fn test_get_key_at_index_out_of_bounds() {
-        let bytes = build_msgpack(|w| encode::write_map_len(w, 0).map(|_| ())).unwrap();
-        let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-        let error = value.get_key_at_index(0, &bytes, &bump).unwrap_err();
-        assert_eq!(error, ErrorCode::IndexOutOfBounds);
-    }
-
-    #[test]
-    fn test_get_key_at_index_not_an_object() {
-        let bytes = build_msgpack(|w| encode::write_array_len(w, 0).map(|_| ())).unwrap();
-        let bump = Bump::new();
-        let mut value = create_lazy_value(&bytes, &bump);
-        let error = value.get_key_at_index(0, &bytes, &bump).unwrap_err();
-        assert_eq!(error, ErrorCode::NotAnObject);
+        assert_eq!(key.get_value_length(), 1);
     }
 }

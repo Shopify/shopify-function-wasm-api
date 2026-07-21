@@ -429,8 +429,8 @@ impl Context {
     /// This is only available when compiled to a non-Wasm target, for usage in unit tests.
     #[cfg(not(target_family = "wasm"))]
     pub fn new_with_input(input: serde_json::Value) -> Self {
-        let bytes = rmp_serde::to_vec(&input).unwrap();
-        shopify_function_provider::initialize_from_msgpack_bytes(bytes);
+        let bytes = fbf::to_vec(&input).unwrap();
+        shopify_function_provider::initialize_from_fbf_bytes(bytes);
         Self
     }
 

@@ -5,10 +5,9 @@ mod string_interner;
 pub mod write;
 
 use bumpalo::Bump;
-use rmp::encode::ByteBuf;
 use std::cell::RefCell;
 use string_interner::StringInterner;
-use write::State;
+use write::{OutputContainer, State};
 
 pub const PROVIDER_MODULE_NAME: &str =
     concat!("shopify_function_v", env!("CARGO_PKG_VERSION_MAJOR"));
@@ -21,10 +20,11 @@ type DoubleUsize = u64;
 struct Context {
     bump_allocator: bumpalo::Bump,
     input_bytes: Vec<u8>,
-    output_bytes: ByteBuf,
+    output_bytes: Vec<u8>,
     logs: Logs,
     write_state: State,
     write_parent_state_stack: Vec<State>,
+    output_container_stack: Vec<OutputContainer>,
     string_interner: StringInterner,
 }
 
@@ -42,10 +42,11 @@ impl Default for Context {
         Self {
             bump_allocator: Bump::new(),
             input_bytes: Vec::new(),
-            output_bytes: ByteBuf::with_capacity(1024),
+            output_bytes: write::new_output_buffer(),
             logs: Logs::default(),
             write_state: State::Start,
             write_parent_state_stack: Vec::new(),
+            output_container_stack: Vec::new(),
             string_interner: StringInterner::new(),
         }
     }
@@ -108,7 +109,7 @@ extern "C" fn initialize(input_len: usize) -> *const u8 {
 }
 
 #[cfg(not(target_family = "wasm"))]
-pub fn initialize_from_msgpack_bytes(bytes: Vec<u8>) {
+pub fn initialize_from_fbf_bytes(bytes: Vec<u8>) {
     CONTEXT.with_borrow_mut(|context| {
         use std::mem;
 
@@ -121,9 +122,10 @@ pub fn initialize_from_msgpack_bytes(bytes: Vec<u8>) {
 #[cfg(target_family = "wasm")]
 #[export_name = "finalize"]
 extern "C" fn finalize() -> *const usize {
-    Context::with(|context| {
+    Context::with_mut(|context| {
+        let _ = context.finalize_output_bytes();
         OUTPUT_AND_LOG_PTRS.with_borrow_mut(|output_and_log_ptrs| {
-            let output = context.output_bytes.as_vec();
+            let output = &context.output_bytes;
             output_and_log_ptrs[0] = output.as_ptr() as usize;
             output_and_log_ptrs[1] = output.len();
             let (log_offset1, log_len1, log_offset2, log_len2) = context.logs.read_ptrs();

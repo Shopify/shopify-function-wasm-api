@@ -112,18 +112,18 @@ fn run_example(example: &str, input_bytes: Vec<u8>) -> Result<(Vec<u8>, String, 
     Ok((output, logs, instructions))
 }
 
-fn decode_msgpack_output(output: Vec<u8>) -> Result<serde_json::Value> {
-    Ok(rmp_serde::from_slice(&output)?)
+fn decode_fbf_output(output: Vec<u8>) -> Result<serde_json::Value> {
+    Ok(fbf::from_slice(&output)?)
 }
 
 fn prepare_wasm_api_input(input: serde_json::Value) -> Result<Vec<u8>> {
-    Ok(rmp_serde::to_vec(&input)?)
+    Ok(fbf::to_vec(&input)?)
 }
 
 fn run_wasm_api_example(example: &str, input: serde_json::Value) -> Result<serde_json::Value> {
     let input_bytes = prepare_wasm_api_input(input)?;
     let (output, _logs, _fuel) = run_example(example, input_bytes)?;
-    decode_msgpack_output(output)
+    decode_fbf_output(output)
 }
 
 #[derive(Debug)]
@@ -330,7 +330,7 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(9637, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10_457, wasm_api_fuel);
     Ok(())
 }
 
@@ -345,7 +345,7 @@ fn test_benchmark_with_input() -> Result<()> {
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
 
-    assert_fuel_consumed_within_threshold(9_637, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10_457, wasm_api_fuel);
 
     Ok(())
 }
@@ -361,7 +361,7 @@ fn test_benchmark_with_input_early_exit() -> Result<()> {
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
 
-    assert_fuel_consumed_within_threshold(9_017, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10_258, wasm_api_fuel);
 
     Ok(())
 }
@@ -386,17 +386,17 @@ fn test_log_len() -> Result<()> {
         Ok(run_example("log-len", prepare_wasm_api_input(serde_json::json!(len))?)?.2)
     };
     let fuel = run(1)?;
-    assert_fuel_consumed_within_threshold(744, fuel);
+    assert_fuel_consumed_within_threshold(830, fuel);
     let fuel = run(500)?;
-    assert_fuel_consumed_within_threshold(2_750, fuel);
+    assert_fuel_consumed_within_threshold(2_771, fuel);
     let fuel = run(1_000)?;
-    assert_fuel_consumed_within_threshold(4_375, fuel);
+    assert_fuel_consumed_within_threshold(4_396, fuel);
     let fuel = run(5_000)?;
-    assert_fuel_consumed_within_threshold(17_411, fuel);
+    assert_fuel_consumed_within_threshold(17_432, fuel);
     let fuel = run(10_000)?;
-    assert_fuel_consumed_within_threshold(33_706, fuel);
+    assert_fuel_consumed_within_threshold(33_727, fuel);
     let fuel = run(100_000)?;
-    assert_fuel_consumed_within_threshold(327_055, fuel);
+    assert_fuel_consumed_within_threshold(327_985, fuel);
     Ok(())
 }
 

@@ -117,9 +117,11 @@ impl Context {
     /// Finalize the output and return the serialized value as a `serde_json::Value`.
     /// This is only available in non-Wasm targets, and therefore only recommended for use in tests.
     pub fn finalize_output_and_return(self) -> Result<serde_json::Value, Error> {
-        let (result, bytes) = shopify_function_provider::write::shopify_function_output_finalize_and_return_msgpack_bytes();
+        let (result, bytes) =
+            shopify_function_provider::write::shopify_function_output_finalize_and_return_fbf_bytes(
+            );
         map_result(result as usize)
-            .and_then(|_| rmp_serde::from_slice(&bytes).map_err(|_| Error::IoError))
+            .and_then(|_| fbf::from_slice(&bytes).map_err(|_| Error::IoError))
     }
 }
 
