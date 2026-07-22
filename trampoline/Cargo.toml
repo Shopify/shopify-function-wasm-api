@@ -19,4 +19,4 @@ assert_cmd = "2.2.0"
 predicates = "3.1.4"
 wat = "1.245.1"
 wasmprinter = "0.246.2"
-insta = { version = "1.47", features = ["glob"] }
+insta = { version = "1.47", features = ["filters", "glob"] }
