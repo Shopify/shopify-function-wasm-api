@@ -341,10 +341,9 @@ pub(crate) fn parse_input(bytes: &[u8]) -> Result<InputState> {
 }
 
 pub(crate) fn parse_input_reusing(bytes: &[u8], mut state: InputState) -> Result<InputState> {
-    state.root = 0;
-    state.strings.clear();
-    state.shape_keys.clear();
-    state.shapes.clear();
+    debug_assert!(state.strings.is_empty());
+    debug_assert!(state.shape_keys.is_empty());
+    debug_assert!(state.shapes.is_empty());
     let input_len = u32::try_from(bytes.len()).map_err(|_| ErrorCode::ReadError)?;
     if bytes.len() < 5
         || bytes[..3] != format::MAGIC
