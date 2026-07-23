@@ -391,7 +391,7 @@ fn parse_shapes(bytes: &[u8], input_len: u32, pos: &mut u32, state: &mut InputSt
     Ok(())
 }
 
-#[inline]
+#[inline(always)]
 fn framed_payload(bytes: &[u8], pos: u32, width: u8, limit: u32) -> Result<(u32, u32)> {
     let len_pos = checked_add(pos, 1)?;
     let len = read_le(bytes, len_pos, width, limit)?;
