@@ -6,6 +6,7 @@ pub(crate) enum State {
     Start,
     Object(ObjectState),
     Array(ArrayState),
+    Shape(ShapeState),
     End,
 }
 
@@ -15,12 +16,13 @@ impl State {
         length: usize,
         parent_state_stack: &mut Vec<State>,
     ) -> WriteResult {
+        let new_state = Self::Object(ObjectState {
+            length,
+            num_inserted: 0,
+        });
         match self {
             State::Start => {
-                *self = State::Object(ObjectState {
-                    length,
-                    num_inserted: 0,
-                });
+                *self = new_state;
                 WriteResult::Ok
             }
             State::Object(object_state) => {
@@ -28,13 +30,7 @@ impl State {
                 if result != WriteResult::Ok {
                     return result;
                 }
-                self.swap_and_push(
-                    Self::Object(ObjectState {
-                        length,
-                        num_inserted: 0,
-                    }),
-                    parent_state_stack,
-                );
+                self.swap_and_push(new_state, parent_state_stack);
                 WriteResult::Ok
             }
             State::Array(array_state) => {
@@ -42,13 +38,15 @@ impl State {
                 if result != WriteResult::Ok {
                     return result;
                 }
-                self.swap_and_push(
-                    Self::Object(ObjectState {
-                        length,
-                        num_inserted: 0,
-                    }),
-                    parent_state_stack,
-                );
+                self.swap_and_push(new_state, parent_state_stack);
+                WriteResult::Ok
+            }
+            State::Shape(shape_state) => {
+                let result = shape_state.write_value();
+                if result != WriteResult::Ok {
+                    return result;
+                }
+                self.swap_and_push(new_state, parent_state_stack);
                 WriteResult::Ok
             }
             State::End => WriteResult::ValueAlreadyWritten,
@@ -63,6 +61,7 @@ impl State {
             }
             State::Object(object_state) => object_state.write_string(),
             State::Array(array_state) => array_state.write_value(),
+            State::Shape(shape_state) => shape_state.write_value(),
             State::End => WriteResult::ValueAlreadyWritten,
         }
     }
@@ -75,6 +74,7 @@ impl State {
             }
             State::Object(object_state) => object_state.write_non_string_value(),
             State::Array(array_state) => array_state.write_value(),
+            State::Shape(shape_state) => shape_state.write_value(),
             State::End => WriteResult::ValueAlreadyWritten,
         }
     }
@@ -97,12 +97,13 @@ impl State {
         length: usize,
         parent_state_stack: &mut Vec<State>,
     ) -> WriteResult {
+        let new_state = Self::Array(ArrayState {
+            length,
+            num_inserted: 0,
+        });
         match self {
             State::Start => {
-                *self = State::Array(ArrayState {
-                    length,
-                    num_inserted: 0,
-                });
+                *self = new_state;
                 WriteResult::Ok
             }
             State::Object(object_state) => {
@@ -110,13 +111,7 @@ impl State {
                 if result != WriteResult::Ok {
                     return result;
                 }
-                self.swap_and_push(
-                    Self::Array(ArrayState {
-                        length,
-                        num_inserted: 0,
-                    }),
-                    parent_state_stack,
-                );
+                self.swap_and_push(new_state, parent_state_stack);
                 WriteResult::Ok
             }
             State::Array(array_state) => {
@@ -124,13 +119,15 @@ impl State {
                 if result != WriteResult::Ok {
                     return result;
                 }
-                self.swap_and_push(
-                    Self::Array(ArrayState {
-                        length,
-                        num_inserted: 0,
-                    }),
-                    parent_state_stack,
-                );
+                self.swap_and_push(new_state, parent_state_stack);
+                WriteResult::Ok
+            }
+            State::Shape(shape_state) => {
+                let result = shape_state.write_value();
+                if result != WriteResult::Ok {
+                    return result;
+                }
+                self.swap_and_push(new_state, parent_state_stack);
                 WriteResult::Ok
             }
             State::End => WriteResult::ValueAlreadyWritten,
@@ -147,6 +144,61 @@ impl State {
                 WriteResult::Ok
             }
             _ => WriteResult::NotAnArray,
+        }
+    }
+
+    pub fn start_shape(
+        &mut self,
+        key_count: usize,
+        parent_state_stack: &mut Vec<State>,
+    ) -> WriteResult {
+        let new_state = Self::Shape(ShapeState {
+            key_count,
+            num_inserted: 0,
+        });
+        match self {
+            State::Start => {
+                *self = new_state;
+                WriteResult::Ok
+            }
+            State::Object(object_state) => {
+                let result = object_state.write_non_string_value();
+                if result != WriteResult::Ok {
+                    return result;
+                }
+                self.swap_and_push(new_state, parent_state_stack);
+                WriteResult::Ok
+            }
+            State::Array(array_state) => {
+                let result = array_state.write_value();
+                if result != WriteResult::Ok {
+                    return result;
+                }
+                self.swap_and_push(new_state, parent_state_stack);
+                WriteResult::Ok
+            }
+            State::Shape(shape_state) => {
+                let result = shape_state.write_value();
+                if result != WriteResult::Ok {
+                    return result;
+                }
+                self.swap_and_push(new_state, parent_state_stack);
+                WriteResult::Ok
+            }
+            State::End => WriteResult::ValueAlreadyWritten,
+        }
+    }
+
+    pub fn finish_shape(&mut self, parent_state_stack: &mut Vec<State>) -> WriteResult {
+        match self {
+            State::Shape(shape_state) => {
+                if shape_state.num_inserted != shape_state.key_count {
+                    return WriteResult::ShapeLengthError;
+                }
+                *self = parent_state_stack.pop().unwrap_or(State::End);
+                WriteResult::Ok
+            }
+            _ => WriteResult::NotAShape,
         }
     }
 
@@ -194,6 +246,22 @@ impl ArrayState {
     fn write_value(&mut self) -> WriteResult {
         if self.num_inserted >= self.length {
             return WriteResult::ArrayLengthError;
+        }
+        self.num_inserted += 1;
+        WriteResult::Ok
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ShapeState {
+    pub(crate) key_count: usize,
+    pub(crate) num_inserted: usize,
+}
+
+impl ShapeState {
+    fn write_value(&mut self) -> WriteResult {
+        if self.num_inserted >= self.key_count {
+            return WriteResult::ShapeLengthError;
         }
         self.num_inserted += 1;
         WriteResult::Ok
@@ -295,5 +363,95 @@ mod tests {
             WriteResult::ValueAlreadyWritten
         );
         assert_eq!(parent_state_stack, vec![]);
+    }
+
+    #[test]
+    fn test_shape_counts_scalars_and_nested_values() {
+        let mut state = State::Start;
+        let mut parent_state_stack = Vec::new();
+        assert_eq!(
+            state.start_shape(4, &mut parent_state_stack),
+            WriteResult::Ok
+        );
+        assert_eq!(state.write_string(), WriteResult::Ok);
+
+        assert_eq!(
+            state.start_object(0, &mut parent_state_stack),
+            WriteResult::Ok
+        );
+        assert_eq!(
+            state.finish_object(&mut parent_state_stack),
+            WriteResult::Ok
+        );
+
+        assert_eq!(
+            state.start_array(0, &mut parent_state_stack),
+            WriteResult::Ok
+        );
+        assert_eq!(state.finish_array(&mut parent_state_stack), WriteResult::Ok);
+
+        assert_eq!(
+            state.start_shape(0, &mut parent_state_stack),
+            WriteResult::Ok
+        );
+        assert_eq!(state.finish_shape(&mut parent_state_stack), WriteResult::Ok);
+        assert_eq!(
+            state.write_non_string_scalar(),
+            WriteResult::ShapeLengthError
+        );
+        assert_eq!(state.finish_shape(&mut parent_state_stack), WriteResult::Ok);
+        assert_eq!(state, State::End);
+        assert_eq!(
+            state.finish_shape(&mut parent_state_stack),
+            WriteResult::NotAShape
+        );
+    }
+
+    #[test]
+    fn test_shape_length_error_leaves_shape_open() {
+        let mut state = State::Start;
+        let mut parent_state_stack = Vec::new();
+        assert_eq!(
+            state.start_shape(1, &mut parent_state_stack),
+            WriteResult::Ok
+        );
+        assert_eq!(
+            state.finish_shape(&mut parent_state_stack),
+            WriteResult::ShapeLengthError
+        );
+        assert_eq!(state.write_non_string_scalar(), WriteResult::Ok);
+        assert_eq!(state.finish_shape(&mut parent_state_stack), WriteResult::Ok);
+    }
+
+    #[test]
+    fn test_shape_can_be_nested_in_objects_and_arrays() {
+        let mut state = State::Start;
+        let mut parent_state_stack = Vec::new();
+        assert_eq!(
+            state.start_object(1, &mut parent_state_stack),
+            WriteResult::Ok
+        );
+        assert_eq!(state.write_string(), WriteResult::Ok);
+        assert_eq!(
+            state.start_shape(0, &mut parent_state_stack),
+            WriteResult::Ok
+        );
+        assert_eq!(state.finish_shape(&mut parent_state_stack), WriteResult::Ok);
+        assert_eq!(
+            state.finish_object(&mut parent_state_stack),
+            WriteResult::Ok
+        );
+
+        let mut state = State::Start;
+        assert_eq!(
+            state.start_array(1, &mut parent_state_stack),
+            WriteResult::Ok
+        );
+        assert_eq!(
+            state.start_shape(0, &mut parent_state_stack),
+            WriteResult::Ok
+        );
+        assert_eq!(state.finish_shape(&mut parent_state_stack), WriteResult::Ok);
+        assert_eq!(state.finish_array(&mut parent_state_stack), WriteResult::Ok);
     }
 }

@@ -1,7 +1,6 @@
 use core::ffi::c_void;
 use shopify_function_wasm_api_core::InternedStringId;
 
-#[derive(Default)]
 pub(crate) struct StringInterner {
     buf: Vec<u8>,
     spans: Vec<(usize, usize)>,
@@ -10,8 +9,8 @@ pub(crate) struct StringInterner {
 impl StringInterner {
     pub fn new() -> Self {
         Self {
-            buf: Default::default(),
-            spans: Default::default(),
+            buf: Vec::with_capacity(128),
+            spans: Vec::with_capacity(8),
         }
     }
 
@@ -26,6 +25,12 @@ impl StringInterner {
     pub fn get(&self, id: InternedStringId) -> &[u8] {
         let (offset, len) = self.spans[id];
         &self.buf[offset..offset + len]
+    }
+}
+
+impl Default for StringInterner {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

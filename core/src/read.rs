@@ -82,52 +82,62 @@ impl NanBox {
     const POINTER_MASK: Val = (1 << Self::VALUE_ENCODING_SIZE as Val) - 1;
 
     /// Retrieves the inner representation of the value.
+    #[inline]
     pub fn to_bits(&self) -> Val {
         self.0
     }
 
     /// Creates a NaN-boxed value from a raw `Val`.
+    #[inline]
     pub fn from_bits(val: Val) -> Self {
         Self(val)
     }
 
     /// Create a new NaN-boxed boolean.
+    #[inline]
     pub fn bool(val: bool) -> Self {
         let val = if val { 1 } else { 0 };
         Self::encode(val as _, 0, Tag::Bool)
     }
 
     /// Create the null representation of `null`.
+    #[inline]
     pub fn null() -> Self {
         Self::encode(0, 0, Tag::Null)
     }
 
     /// Create a new NaN-boxed number.
+    #[inline]
     pub fn number(val: f64) -> Self {
         assert!(!val.is_nan());
         Self((val.to_bits() as Val) << Self::F64_OFFSET)
     }
 
     /// Create a new NaN-boxed string.
+    #[inline]
     pub fn string(ptr: usize, len: usize) -> Self {
         Self::encode(ptr as _, len, Tag::String)
     }
 
     /// Create a new NaN-boxed object.
+    #[inline]
     pub fn obj(ptr: usize, len: usize) -> Self {
         Self::encode(ptr as _, len, Tag::Object)
     }
 
     /// Create a new NaN-boxed error.
+    #[inline]
     pub fn error(code: ErrorCode) -> Self {
         Self::encode(code as _, 0, Tag::Error)
     }
 
     /// Create a new NaN-boxed array.
+    #[inline]
     pub fn array(ptr: usize, len: usize) -> Self {
         Self::encode(ptr as _, len, Tag::Array)
     }
 
+    #[inline]
     pub fn try_decode(&self) -> Result<ValueRef, Box<dyn Error>> {
         if self.0 & Self::NAN_MASK != Self::NAN_MASK {
             #[cfg(target_pointer_width = "32")]
@@ -159,11 +169,13 @@ impl NanBox {
         }
     }
 
+    #[inline]
     fn tag(&self) -> Result<Tag, Box<dyn Error>> {
         let tag = (self.0 & Self::PAYLOAD_MASK) >> Self::VALUE_SIZE;
         Tag::from_val(tag)
     }
 
+    #[inline]
     fn encode(ptr: usize, len: usize, tag: Tag) -> Self {
         let trimmed_len = len.min(Self::MAX_VALUE_LENGTH) as Val;
         let val = (trimmed_len << Self::VALUE_ENCODING_SIZE) | (ptr as Val & Self::POINTER_MASK);
@@ -203,10 +215,12 @@ enum Tag {
 }
 
 impl Tag {
+    #[inline]
     fn as_val(&self) -> Val {
         *self as Val
     }
 
+    #[inline]
     fn from_val(v: Val) -> Result<Self, Box<dyn Error>> {
         match u8::try_from(v) {
             Ok(v) => Self::from_repr(v).ok_or_else(|| format!("Unknown tag: {v}").into()),

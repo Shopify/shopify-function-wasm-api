@@ -8,6 +8,14 @@ use crate::Context;
 use crate::InternedStringId;
 use shopify_function_wasm_api_core::write::WriteResult;
 
+/// An identifier for a shape defined with [`Context::define_shape`] or
+/// [`Context::define_shape_from_interned`].
+///
+/// A shape declares the ordered keys used by one or more shaped objects written in the same
+/// context.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct ShapeId(usize);
+
 /// An error that can occur when writing a value.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -38,6 +46,19 @@ pub enum Error {
     /// The value is not an array, but was expected to be one based on the current context.
     #[error("Not an array")]
     NotAnArray,
+    /// The value is not a shaped object, but was expected to be one based on the current context.
+    #[error("Not a shaped object")]
+    NotAShape,
+    /// The shaped object length was not honoured. This occurs when the number of values written
+    /// does not match the number of keys in the shape.
+    #[error("Shaped object length error")]
+    ShapeLengthError,
+    /// The shape ID does not refer to a shape defined in the current context.
+    #[error("Invalid shape ID")]
+    InvalidShapeId,
+    /// The shape definition operation was invalid.
+    #[error("Shape definition error")]
+    ShapeDefinitionError,
     /// An unknown error occurred. This occurs when a new error code is added that this version of the API does not know about.
     #[error("Unknown error")]
     Unknown,
@@ -54,6 +75,10 @@ fn map_result(result: usize) -> Result<(), Error> {
         Some(WriteResult::ValueNotFinished) => Err(Error::ValueNotFinished),
         Some(WriteResult::ArrayLengthError) => Err(Error::ArrayLengthError),
         Some(WriteResult::NotAnArray) => Err(Error::NotAnArray),
+        Some(WriteResult::NotAShape) => Err(Error::NotAShape),
+        Some(WriteResult::ShapeLengthError) => Err(Error::ShapeLengthError),
+        Some(WriteResult::InvalidShapeId) => Err(Error::InvalidShapeId),
+        Some(WriteResult::ShapeDefinitionError) => Err(Error::ShapeDefinitionError),
         None => Err(Error::Unknown),
     }
 }
@@ -91,6 +116,42 @@ impl Context {
         map_result(unsafe { crate::shopify_function_output_new_interned_utf8_str(id.as_usize()) })
     }
 
+    /// Define a shape from UTF-8 keys.
+    ///
+    /// The returned shape can be reused to write multiple objects with the same keys. Values in a
+    /// shaped object must be written in the same order as the keys passed here.
+    pub fn define_shape(&mut self, keys: &[&str]) -> Result<ShapeId, Error> {
+        map_result(unsafe { crate::shopify_function_output_shape_define_new(keys.len()) })?;
+        for key in keys {
+            let id = self.intern_utf8_str(key);
+            map_result(unsafe { crate::shopify_function_output_shape_define_key(id.as_usize()) })?;
+        }
+        self.finish_shape_definition()
+    }
+
+    /// Define a shape from previously interned UTF-8 string IDs.
+    ///
+    /// The returned shape can be reused to write multiple objects with the same keys. Values in a
+    /// shaped object must be written in the same order as the keys passed here.
+    pub fn define_shape_from_interned(
+        &mut self,
+        keys: &[InternedStringId],
+    ) -> Result<ShapeId, Error> {
+        map_result(unsafe { crate::shopify_function_output_shape_define_new(keys.len()) })?;
+        for id in keys {
+            map_result(unsafe { crate::shopify_function_output_shape_define_key(id.as_usize()) })?;
+        }
+        self.finish_shape_definition()
+    }
+
+    fn finish_shape_definition(&mut self) -> Result<ShapeId, Error> {
+        let packed = unsafe { crate::shopify_function_output_shape_define_finish() };
+        let result = (packed >> usize::BITS) as usize;
+        let shape_id = packed as usize;
+        map_result(result)?;
+        Ok(ShapeId(shape_id))
+    }
+
     /// Write an object. You must provide the exact number of key-value pairs you will write.
     pub fn write_object<F: FnOnce(&mut Self) -> Result<(), Error>>(
         &mut self,
@@ -113,13 +174,41 @@ impl Context {
         map_result(unsafe { crate::shopify_function_output_finish_array() })
     }
 
+    /// Write a shaped object using values in the order declared by its shape.
+    ///
+    /// Exactly one value must be written for each key in the shape. A shape can be reused to write
+    /// multiple objects.
+    ///
+    /// # Example
+    /// ```rust
+    /// use shopify_function_wasm_api::Context;
+    ///
+    /// let mut context = Context::new_with_input(serde_json::json!({}));
+    /// let shape = context.define_shape(&["value"]).unwrap();
+    /// context
+    ///     .write_shaped_object(shape, |ctx| ctx.write_i32(1))
+    ///     .unwrap();
+    /// let output = context.finalize_output_and_return().unwrap();
+    /// assert_eq!(output, serde_json::json!({ "value": 1 }));
+    /// ```
+    pub fn write_shaped_object<F: FnOnce(&mut Self) -> Result<(), Error>>(
+        &mut self,
+        shape: ShapeId,
+        f: F,
+    ) -> Result<(), Error> {
+        map_result(unsafe { crate::shopify_function_output_new_shaped_object(shape.0) })?;
+        f(self)?;
+        map_result(unsafe { crate::shopify_function_output_finish_shaped_object() })
+    }
+
     #[cfg(not(target_family = "wasm"))]
     /// Finalize the output and return the serialized value as a `serde_json::Value`.
     /// This is only available in non-Wasm targets, and therefore only recommended for use in tests.
     pub fn finalize_output_and_return(self) -> Result<serde_json::Value, Error> {
-        let (result, bytes) = shopify_function_provider::write::shopify_function_output_finalize_and_return_msgpack_bytes();
+        let (result, bytes) =
+            shopify_function_provider::write::shopify_function_output_finalize_and_return_bytes();
         map_result(result as usize)
-            .and_then(|_| rmp_serde::from_slice(&bytes).map_err(|_| Error::IoError))
+            .and_then(|_| fbf::from_slice::<serde_json::Value>(&bytes).map_err(|_| Error::IoError))
     }
 }
 
@@ -314,5 +403,106 @@ mod tests {
             let result = serialize_and_return(&option);
             assert_eq!(result, serde_json::json!(option));
         });
+    }
+
+    #[test]
+    fn test_shaped_objects_nested_in_arrays_and_objects() {
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        let shape = context.define_shape(&["x", "y"]).unwrap();
+
+        context
+            .write_object(
+                |ctx| {
+                    ctx.write_utf8_str("items")?;
+                    ctx.write_array(
+                        |ctx| {
+                            ctx.write_shaped_object(shape, |ctx| {
+                                ctx.write_i32(1)?;
+                                ctx.write_i32(2)
+                            })
+                        },
+                        1,
+                    )?;
+                    ctx.write_utf8_str("point")?;
+                    ctx.write_shaped_object(shape, |ctx| {
+                        ctx.write_i32(3)?;
+                        ctx.write_i32(4)
+                    })
+                },
+                2,
+            )
+            .unwrap();
+
+        assert_eq!(
+            context.finalize_output_and_return().unwrap(),
+            serde_json::json!({
+                "items": [{ "x": 1, "y": 2 }],
+                "point": { "x": 3, "y": 4 }
+            })
+        );
+    }
+
+    #[test]
+    fn test_reuse_shape_for_multiple_objects() {
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        let x = context.intern_utf8_str("x");
+        let y = context.intern_utf8_str("y");
+        let shape = context.define_shape_from_interned(&[x, y]).unwrap();
+
+        context
+            .write_array(
+                |ctx| {
+                    ctx.write_shaped_object(shape, |ctx| {
+                        ctx.write_i32(1)?;
+                        ctx.write_i32(2)
+                    })?;
+                    ctx.write_shaped_object(shape, |ctx| {
+                        ctx.write_i32(3)?;
+                        ctx.write_i32(4)
+                    })
+                },
+                2,
+            )
+            .unwrap();
+
+        assert_eq!(
+            context.finalize_output_and_return().unwrap(),
+            serde_json::json!([{ "x": 1, "y": 2 }, { "x": 3, "y": 4 }])
+        );
+    }
+
+    #[test]
+    fn test_shaped_object_wrong_value_count() {
+        let mut context = Context::new_with_input(serde_json::json!({}));
+        let shape = context.define_shape(&["value"]).unwrap();
+
+        let result = context.write_shaped_object(shape, |_| Ok(()));
+
+        assert!(matches!(result, Err(Error::ShapeLengthError)));
+    }
+
+    #[test]
+    fn test_shaped_object_with_undefined_shape() {
+        let shape = {
+            let mut context = Context::new_with_input(serde_json::json!({}));
+            context.define_shape(&["value"]).unwrap()
+        };
+        let mut context = Context::new_with_input(serde_json::json!({}));
+
+        let result = context.write_shaped_object(shape, |_| Ok(()));
+
+        assert!(matches!(result, Err(Error::InvalidShapeId)));
+    }
+
+    #[test]
+    fn test_shape_write_results_map_to_distinct_errors() {
+        assert!(matches!(
+            map_result(WriteResult::NotAShape as usize),
+            Err(Error::NotAShape)
+        ));
+        assert!(matches!(
+            map_result(WriteResult::ShapeDefinitionError as usize),
+            Err(Error::ShapeDefinitionError)
+        ));
     }
 }

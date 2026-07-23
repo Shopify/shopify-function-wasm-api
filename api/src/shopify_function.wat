@@ -211,6 +211,53 @@
     (func (result i32))
   )
 
+  ;; Starts defining a reusable shaped object key set.
+  ;; Must be followed by one shopify_function_output_shape_define_key call per key,
+  ;; then shopify_function_output_shape_define_finish.
+  ;; Parameters:
+  ;;   - key_count: i32 number of keys in the shape.
+  ;; Returns:
+  ;;   - i32 status code indicating success or failure.
+  (import "shopify_function_v2" "shopify_function_output_shape_define_new"
+    (func (param $key_count i32) (result i32))
+  )
+
+  ;; Adds an interned string key to the shape currently being defined.
+  ;; Keys are ordered and shaped object values must be written in the same order.
+  ;; Parameters:
+  ;;   - id: i32 ID of an interned string.
+  ;; Returns:
+  ;;   - i32 status code indicating success or failure.
+  (import "shopify_function_v2" "shopify_function_output_shape_define_key"
+    (func (param $id i32) (result i32))
+  )
+
+  ;; Finishes the current shape definition.
+  ;; Returns:
+  ;;   - i64 containing the status code in the high 32 bits and shape ID in the low 32 bits.
+  (import "shopify_function_v2" "shopify_function_output_shape_define_finish"
+    (func (result i64))
+  )
+
+  ;; Initializes a shaped object using a previously defined shape.
+  ;; Values are added sequentially in the shape's key order and the object must be
+  ;; finalized with shopify_function_output_finish_shaped_object.
+  ;; Parameters:
+  ;;   - shape_id: i32 ID returned by shopify_function_output_shape_define_finish.
+  ;; Returns:
+  ;;   - i32 status code indicating success or failure.
+  (import "shopify_function_v2" "shopify_function_output_new_shaped_object"
+    (func (param $shape_id i32) (result i32))
+  )
+
+  ;; Finalizes a shaped object output value.
+  ;; Validates that one value was written for every key in the shape.
+  ;; Returns:
+  ;;   - i32 status code indicating success or failure.
+  (import "shopify_function_v2" "shopify_function_output_finish_shaped_object"
+    (func (result i32))
+  )
+
   ;; Other Functions
 
   ;; Interns a UTF-8 string for reuse.

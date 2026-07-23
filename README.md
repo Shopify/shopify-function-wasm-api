@@ -8,8 +8,8 @@ The Wasm API consists of these main components:
 
 1. **Provider (`provider/`)**
     - Implements low-level Wasm operations for:
-        - Reading function input
-        - Serializing the function output
+        - Reading function input from FBF (Functions Binary Format)
+        - Serializing function output as FBF
 
 2. **Core (`core/`)**
     - Defines common types used by the `providers` and `api`
@@ -44,6 +44,10 @@ fn main(context: &mut Context) -> Result<()> {
     Ok(())
 }
 ```
+
+Function inputs and outputs use [FBF (Functions Binary Format)](https://github.com/Shopify/functions-binary-format), including its string and shape tables and length-framed containers.
+
+When writing many objects with the same keys, define the key order once with `Context::define_shape` and reuse the returned shape with `Context::write_shaped_object`. This avoids writing the keys for every object. See the [shapes example](./api/examples/shapes.rs) for a complete function.
 
 To build a function example, create a new example and build it targeting `wasm32-unknown-unknown`:
 

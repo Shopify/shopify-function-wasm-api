@@ -4,9 +4,10 @@ pub mod read;
 mod string_interner;
 pub mod write;
 
-use bumpalo::Bump;
-use rmp::encode::ByteBuf;
-use std::cell::RefCell;
+use fbf::format::{
+    FLAG_SHAPE_TABLE, FLAG_STRING_TABLE, MAGIC, STRREF16, STRREF32, STRREF8, VERSION,
+};
+use std::{cell::RefCell, ops::Range};
 use string_interner::StringInterner;
 use write::State;
 
@@ -19,13 +20,37 @@ type DoubleUsize = u128;
 type DoubleUsize = u64;
 
 struct Context {
-    bump_allocator: bumpalo::Bump,
     input_bytes: Vec<u8>,
-    output_bytes: ByteBuf,
+    /// Parsed input definition tables and the offset of the root value.
+    /// Populated lazily by the first input read.
+    input_root: Option<(fbf::read::Tables, usize)>,
+    /// Scratch space used by the trampoline to copy property names from guest
+    /// memory without allocating on every lookup.
+    input_obj_prop_buffer: Vec<u8>,
+    /// Lengths for strings whose size does not fit in a NanBox.
+    long_string_lens: read::nav::LongStringLens,
+    /// 4-slot cache for container cursor positions
+    cursor_memo: read::nav::CursorMemo,
+    /// The encoded root value, without the FBF header or definition prelude.
+    output_bytes: Vec<u8>,
+    /// The fully assembled output. This remains owned by the context so Wasm
+    /// `finalize` can return a stable pointer into it.
+    #[cfg(target_family = "wasm")]
+    assembled_output_bytes: Vec<u8>,
     logs: Logs,
     write_state: State,
     write_parent_state_stack: Vec<State>,
     string_interner: StringInterner,
+    /// Interned string IDs in output string-table order.
+    string_table: Vec<shopify_function_wasm_api_core::InternedStringId>,
+    /// Output string-table ID by interned string ID.
+    interned_string_table_ids: Vec<Option<u32>>,
+    /// Flat output shape keys, stored as string-table IDs.
+    shape_keys: Vec<u32>,
+    /// Ranges into `shape_keys`, in output shape-table order.
+    shapes: Vec<Range<usize>>,
+    /// The expected key count and starting offset of the active definition.
+    open_shape_definition: Option<(usize, usize)>,
 }
 
 thread_local! {
@@ -40,13 +65,23 @@ thread_local! {
 impl Default for Context {
     fn default() -> Self {
         Self {
-            bump_allocator: Bump::new(),
             input_bytes: Vec::new(),
-            output_bytes: ByteBuf::with_capacity(1024),
+            input_root: None,
+            input_obj_prop_buffer: Vec::with_capacity(64),
+            long_string_lens: read::nav::LongStringLens::default(),
+            cursor_memo: read::nav::CursorMemo::default(),
+            output_bytes: Vec::with_capacity(1024),
+            #[cfg(target_family = "wasm")]
+            assembled_output_bytes: Vec::new(),
             logs: Logs::default(),
             write_state: State::Start,
             write_parent_state_stack: Vec::new(),
             string_interner: StringInterner::new(),
+            string_table: Vec::with_capacity(8),
+            interned_string_table_ids: Vec::with_capacity(8),
+            shape_keys: Vec::with_capacity(16),
+            shapes: Vec::with_capacity(4),
+            open_shape_definition: None,
         }
     }
 }
@@ -72,6 +107,57 @@ impl Context {
         F: FnOnce(&mut Context) -> T,
     {
         CONTEXT.with_borrow_mut(f)
+    }
+
+    fn assemble_output_payload(&self) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(5 + self.output_bytes.len());
+        payload.extend_from_slice(&MAGIC);
+        payload.push(VERSION);
+
+        let mut flags = 0;
+        if !self.string_table.is_empty() {
+            flags |= FLAG_STRING_TABLE;
+        }
+        if !self.shapes.is_empty() {
+            flags |= FLAG_SHAPE_TABLE;
+        }
+        payload.push(flags);
+
+        if !self.string_table.is_empty() {
+            fbf::varint::write(&mut payload, self.string_table.len() as u64);
+            for &interned_id in &self.string_table {
+                let entry = self.string_interner.get(interned_id);
+                fbf::varint::write(&mut payload, entry.len() as u64);
+                payload.extend_from_slice(entry);
+            }
+        }
+
+        if !self.shapes.is_empty() {
+            fbf::varint::write(&mut payload, self.shapes.len() as u64);
+            for shape in &self.shapes {
+                let keys = &self.shape_keys[shape.clone()];
+                fbf::varint::write(&mut payload, keys.len() as u64);
+                for &key_id in keys {
+                    append_string_reference(&mut payload, key_id);
+                }
+            }
+        }
+
+        payload.extend_from_slice(&self.output_bytes);
+        payload
+    }
+}
+
+pub(crate) fn append_string_reference(output: &mut Vec<u8>, id: u32) {
+    if let Ok(id) = u8::try_from(id) {
+        output.push(STRREF8);
+        output.push(id);
+    } else if let Ok(id) = u16::try_from(id) {
+        output.push(STRREF16);
+        output.extend_from_slice(&id.to_le_bytes());
+    } else {
+        output.push(STRREF32);
+        output.extend_from_slice(&id.to_le_bytes());
     }
 }
 
@@ -108,7 +194,7 @@ extern "C" fn initialize(input_len: usize) -> *const u8 {
 }
 
 #[cfg(not(target_family = "wasm"))]
-pub fn initialize_from_msgpack_bytes(bytes: Vec<u8>) {
+pub fn initialize_from_fbf_bytes(bytes: Vec<u8>) {
     CONTEXT.with_borrow_mut(|context| {
         use std::mem;
 
@@ -121,9 +207,10 @@ pub fn initialize_from_msgpack_bytes(bytes: Vec<u8>) {
 #[cfg(target_family = "wasm")]
 #[export_name = "finalize"]
 extern "C" fn finalize() -> *const usize {
-    Context::with(|context| {
+    Context::with_mut(|context| {
+        context.assembled_output_bytes = context.assemble_output_payload();
         OUTPUT_AND_LOG_PTRS.with_borrow_mut(|output_and_log_ptrs| {
-            let output = context.output_bytes.as_vec();
+            let output = &context.assembled_output_bytes;
             output_and_log_ptrs[0] = output.as_ptr() as usize;
             output_and_log_ptrs[1] = output.len();
             let (log_offset1, log_len1, log_offset2, log_len2) = context.logs.read_ptrs();

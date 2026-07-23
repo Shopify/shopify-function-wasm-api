@@ -112,18 +112,18 @@ fn run_example(example: &str, input_bytes: Vec<u8>) -> Result<(Vec<u8>, String, 
     Ok((output, logs, instructions))
 }
 
-fn decode_msgpack_output(output: Vec<u8>) -> Result<serde_json::Value> {
-    Ok(rmp_serde::from_slice(&output)?)
+fn decode_output(output: Vec<u8>) -> Result<serde_json::Value> {
+    Ok(fbf::from_slice::<serde_json::Value>(&output)?)
 }
 
 fn prepare_wasm_api_input(input: serde_json::Value) -> Result<Vec<u8>> {
-    Ok(rmp_serde::to_vec(&input)?)
+    Ok(fbf::to_vec_optimized(&input)?)
 }
 
 fn run_wasm_api_example(example: &str, input: serde_json::Value) -> Result<serde_json::Value> {
     let input_bytes = prepare_wasm_api_input(input)?;
     let (output, _logs, _fuel) = run_example(example, input_bytes)?;
-    decode_msgpack_output(output)
+    decode_output(output)
 }
 
 #[derive(Debug)]
@@ -141,6 +141,9 @@ impl Display for CallFuncError {
 static ECHO_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("echo"));
 static BENCHMARK_EXAMPLE_RESULT: LazyLock<Result<()>> =
     LazyLock::new(|| prepare_example("cart-checkout-validation-wasm-api"));
+static BENCHMARK_SHAPES_EXAMPLE_RESULT: LazyLock<Result<()>> =
+    LazyLock::new(|| prepare_example("cart-checkout-validation-wasm-api-shapes"));
+static SHAPES_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("shapes"));
 static LOG_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("log"));
 static PANIC_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("panic"));
 static LOG_LEN_EXAMPLE_RESULT: LazyLock<Result<()>> = LazyLock::new(|| prepare_example("log-len"));
@@ -321,6 +324,29 @@ fn test_echo_with_large_array_input() -> Result<()> {
 }
 
 #[test]
+fn test_shapes() -> Result<()> {
+    SHAPES_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
+
+    let input = serde_json::json!({ "count": 3 });
+    let input_bytes = prepare_wasm_api_input(input)?;
+    let (output, _logs, fuel) = run_example("shapes", input_bytes)?;
+
+    assert_eq!(
+        decode_output(output)?,
+        serde_json::json!([
+            { "x": 0, "y": 0 },
+            { "x": 1, "y": 2 },
+            { "x": 2, "y": 4 }
+        ])
+    );
+    assert_fuel_consumed_within_threshold(4_611, fuel);
+
+    Ok(())
+}
+
+#[test]
 fn test_fuel_consumption_within_threshold() -> Result<()> {
     BENCHMARK_EXAMPLE_RESULT
         .as_ref()
@@ -330,7 +356,28 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(9637, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(11_652, wasm_api_fuel);
+    Ok(())
+}
+
+#[test]
+fn test_shapes_fuel_consumption_within_threshold() -> Result<()> {
+    BENCHMARK_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    BENCHMARK_SHAPES_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare shapes example: {}", e))?;
+
+    let input = generate_cart_with_size(2, true);
+    let wasm_api_input = prepare_wasm_api_input(input)?;
+    let (output, _, _) = run_example("cart-checkout-validation-wasm-api", wasm_api_input.clone())?;
+    let (shapes_output, _, shapes_fuel) =
+        run_example("cart-checkout-validation-wasm-api-shapes", wasm_api_input)?;
+
+    assert_eq!(decode_output(shapes_output)?, decode_output(output)?);
+    eprintln!("WASM API shapes fuel: {}", shapes_fuel);
+    assert_fuel_consumed_within_threshold(12_483, shapes_fuel);
     Ok(())
 }
 
@@ -345,7 +392,28 @@ fn test_benchmark_with_input() -> Result<()> {
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
 
-    assert_fuel_consumed_within_threshold(9_637, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(11_652, wasm_api_fuel);
+
+    Ok(())
+}
+
+#[test]
+fn test_shapes_benchmark_with_input() -> Result<()> {
+    BENCHMARK_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    BENCHMARK_SHAPES_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare shapes example: {}", e))?;
+
+    let input = generate_cart_with_size(2, true);
+    let wasm_api_input = prepare_wasm_api_input(input)?;
+    let (output, _, _) = run_example("cart-checkout-validation-wasm-api", wasm_api_input.clone())?;
+    let (shapes_output, _, shapes_fuel) =
+        run_example("cart-checkout-validation-wasm-api-shapes", wasm_api_input)?;
+
+    assert_eq!(decode_output(shapes_output)?, decode_output(output)?);
+    assert_fuel_consumed_within_threshold(12_483, shapes_fuel);
 
     Ok(())
 }
@@ -361,7 +429,28 @@ fn test_benchmark_with_input_early_exit() -> Result<()> {
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
 
-    assert_fuel_consumed_within_threshold(9_017, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(12_458, wasm_api_fuel);
+
+    Ok(())
+}
+
+#[test]
+fn test_shapes_benchmark_with_input_early_exit() -> Result<()> {
+    BENCHMARK_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare example: {}", e))?;
+    BENCHMARK_SHAPES_EXAMPLE_RESULT
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("Failed to prepare shapes example: {}", e))?;
+
+    let input = generate_cart_with_size(100, false);
+    let wasm_api_input = prepare_wasm_api_input(input)?;
+    let (output, _, _) = run_example("cart-checkout-validation-wasm-api", wasm_api_input.clone())?;
+    let (shapes_output, _, shapes_fuel) =
+        run_example("cart-checkout-validation-wasm-api-shapes", wasm_api_input)?;
+
+    assert_eq!(decode_output(shapes_output)?, decode_output(output)?);
+    assert_fuel_consumed_within_threshold(12_997, shapes_fuel);
 
     Ok(())
 }
@@ -373,7 +462,7 @@ fn test_log() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
     let (_, logs, fuel) = run_example("log", vec![])?;
     assert_eq!(logs, "Hi!\nHello\nHere's a third string\n✌️\n");
-    assert_fuel_consumed_within_threshold(466, fuel);
+    assert_fuel_consumed_within_threshold(465, fuel);
     Ok(())
 }
 
@@ -386,17 +475,17 @@ fn test_log_len() -> Result<()> {
         Ok(run_example("log-len", prepare_wasm_api_input(serde_json::json!(len))?)?.2)
     };
     let fuel = run(1)?;
-    assert_fuel_consumed_within_threshold(744, fuel);
+    assert_fuel_consumed_within_threshold(670, fuel);
     let fuel = run(500)?;
-    assert_fuel_consumed_within_threshold(2_750, fuel);
+    assert_fuel_consumed_within_threshold(2_972, fuel);
     let fuel = run(1_000)?;
-    assert_fuel_consumed_within_threshold(4_375, fuel);
+    assert_fuel_consumed_within_threshold(4_597, fuel);
     let fuel = run(5_000)?;
-    assert_fuel_consumed_within_threshold(17_411, fuel);
+    assert_fuel_consumed_within_threshold(17_633, fuel);
     let fuel = run(10_000)?;
-    assert_fuel_consumed_within_threshold(33_706, fuel);
+    assert_fuel_consumed_within_threshold(33_928, fuel);
     let fuel = run(100_000)?;
-    assert_fuel_consumed_within_threshold(327_055, fuel);
+    assert_fuel_consumed_within_threshold(327_266, fuel);
     Ok(())
 }
 
@@ -407,7 +496,7 @@ fn test_log_past_capacity() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
     let (_, logs, fuel) = run_example("log-past-capacity", vec![])?;
     assert_eq!(logs, format!("{}{}", "a".repeat(991), "b".repeat(10)));
-    assert_fuel_consumed_within_threshold(928, fuel);
+    assert_fuel_consumed_within_threshold(965, fuel);
     Ok(())
 }
 

@@ -70,6 +70,26 @@ static IMPORTS: &[(&str, &str)] = &[
         "shopify_function_output_finish_array",
         "_shopify_function_output_finish_array",
     ),
+    (
+        "shopify_function_output_shape_define_new",
+        "_shopify_function_output_shape_define_new",
+    ),
+    (
+        "shopify_function_output_shape_define_key",
+        "_shopify_function_output_shape_define_key",
+    ),
+    (
+        "shopify_function_output_shape_define_finish",
+        "_shopify_function_output_shape_define_finish",
+    ),
+    (
+        "shopify_function_output_new_shaped_object",
+        "_shopify_function_output_new_shaped_object",
+    ),
+    (
+        "shopify_function_output_finish_shaped_object",
+        "_shopify_function_output_finish_shaped_object",
+    ),
     (LOG_STR, "_shopify_function_log_new_utf8_str"),
 ];
 
@@ -93,8 +113,6 @@ pub struct TrampolineCodegen {
     provider_memory_id: OnceCell<MemoryId>,
     memcpy_to_guest: OnceCell<FunctionId>,
     memcpy_to_provider: OnceCell<FunctionId>,
-    imported_shopify_function_alloc: OnceCell<FunctionId>,
-    alloc: OnceCell<FunctionId>,
 }
 
 impl TrampolineCodegen {
@@ -107,8 +125,6 @@ impl TrampolineCodegen {
             provider_memory_id: OnceCell::new(),
             memcpy_to_guest: OnceCell::new(),
             memcpy_to_provider: OnceCell::new(),
-            imported_shopify_function_alloc: OnceCell::new(),
-            alloc: OnceCell::new(),
         })
     }
 
@@ -195,39 +211,6 @@ impl TrampolineCodegen {
                 );
 
             memcpy_to_provider.finish(vec![dst, src, size], &mut self.module.funcs)
-        })
-    }
-
-    fn emit_shopify_function_alloc_import(&mut self) -> FunctionId {
-        *self.imported_shopify_function_alloc.get_or_init(|| {
-            let shopify_function_alloc_type =
-                self.module.types.add(&[ValType::I32], &[ValType::I32]);
-
-            let (imported_shopify_function_alloc, _) = self.module.add_import_func(
-                PROVIDER_MODULE_NAME,
-                "_shopify_function_alloc",
-                shopify_function_alloc_type,
-            );
-
-            imported_shopify_function_alloc
-        })
-    }
-
-    fn emit_alloc(&mut self) -> FunctionId {
-        let imported_shopify_function_alloc = self.emit_shopify_function_alloc_import();
-
-        *self.alloc.get_or_init(|| {
-            let mut alloc =
-                FunctionBuilder::new(&mut self.module.types, &[ValType::I32], &[ValType::I32]);
-
-            let size = self.module.locals.add(ValType::I32);
-
-            alloc
-                .func_body()
-                .local_get(size)
-                .call(imported_shopify_function_alloc);
-
-            alloc.finish(vec![size], &mut self.module.funcs)
         })
     }
 
@@ -318,7 +301,13 @@ impl TrampolineCodegen {
                 shopify_function_input_get_obj_prop_type,
             );
 
-            let alloc = self.emit_alloc();
+            let input_get_obj_prop_buffer_type =
+                self.module.types.add(&[ValType::I32], &[ValType::I32]);
+            let (input_get_obj_prop_buffer, _) = self.module.add_import_func(
+                PROVIDER_MODULE_NAME,
+                "_shopify_function_input_get_obj_prop_buffer",
+                input_get_obj_prop_buffer_type,
+            );
             let memcpy_to_provider = self.emit_memcpy_to_provider();
 
             let dst_ptr = self.module.locals.add(ValType::I32);
@@ -333,7 +322,7 @@ impl TrampolineCodegen {
                     builder
                         .func_body()
                         .local_get(len)
-                        .call(alloc)
+                        .call(input_get_obj_prop_buffer)
                         .local_tee(dst_ptr)
                         .local_get(src_ptr)
                         .local_get(len)
@@ -602,6 +591,7 @@ impl TrampolineCodegen {
                 && (!IMPORTS.iter().any(|(orig_name, new_name)| {
                     *orig_name == import.name || *new_name == import.name
                 }) && import.name != "_shopify_function_input_get_utf8_str_addr"
+                    && import.name != "_shopify_function_input_get_obj_prop_buffer"
                     && import.name != "_shopify_function_alloc"
                     && import.name != "memory")
         }) {

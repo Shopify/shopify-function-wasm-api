@@ -62,6 +62,13 @@ extern "C" {
     fn shopify_function_output_finish_object() -> usize;
     fn shopify_function_output_new_array(len: usize) -> usize;
     fn shopify_function_output_finish_array() -> usize;
+    fn shopify_function_output_shape_define_new(key_count: usize) -> usize;
+    fn shopify_function_output_shape_define_key(
+        id: shopify_function_wasm_api_core::InternedStringId,
+    ) -> usize;
+    fn shopify_function_output_shape_define_finish() -> u64;
+    fn shopify_function_output_new_shaped_object(shape_id: usize) -> usize;
+    fn shopify_function_output_finish_shaped_object() -> usize;
 
     // Log API.
     fn shopify_function_log_new_utf8_str(ptr: *const u8, len: usize);
@@ -154,6 +161,30 @@ mod provider_fallback {
     }
     pub(crate) unsafe fn shopify_function_output_finish_array() -> usize {
         shopify_function_provider::write::shopify_function_output_finish_array() as usize
+    }
+    pub(crate) unsafe fn shopify_function_output_shape_define_new(key_count: usize) -> usize {
+        shopify_function_provider::write::shopify_function_output_shape_define_new(key_count)
+            as usize
+    }
+    pub(crate) unsafe fn shopify_function_output_shape_define_key(
+        id: shopify_function_wasm_api_core::InternedStringId,
+    ) -> usize {
+        shopify_function_provider::write::shopify_function_output_shape_define_key(id) as usize
+    }
+    #[cfg(target_pointer_width = "64")]
+    pub(crate) unsafe fn shopify_function_output_shape_define_finish() -> u128 {
+        shopify_function_provider::write::shopify_function_output_shape_define_finish()
+    }
+    #[cfg(target_pointer_width = "32")]
+    pub(crate) unsafe fn shopify_function_output_shape_define_finish() -> u64 {
+        shopify_function_provider::write::shopify_function_output_shape_define_finish()
+    }
+    pub(crate) unsafe fn shopify_function_output_new_shaped_object(shape_id: usize) -> usize {
+        shopify_function_provider::write::shopify_function_output_new_shaped_object(shape_id)
+            as usize
+    }
+    pub(crate) unsafe fn shopify_function_output_finish_shaped_object() -> usize {
+        shopify_function_provider::write::shopify_function_output_finish_shaped_object() as usize
     }
 
     // Logging.
@@ -429,8 +460,8 @@ impl Context {
     /// This is only available when compiled to a non-Wasm target, for usage in unit tests.
     #[cfg(not(target_family = "wasm"))]
     pub fn new_with_input(input: serde_json::Value) -> Self {
-        let bytes = rmp_serde::to_vec(&input).unwrap();
-        shopify_function_provider::initialize_from_msgpack_bytes(bytes);
+        let bytes = fbf::to_vec_optimized(&input).unwrap();
+        shopify_function_provider::initialize_from_fbf_bytes(bytes);
         Self
     }
 

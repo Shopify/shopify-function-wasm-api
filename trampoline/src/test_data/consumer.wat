@@ -22,6 +22,11 @@
     (import "shopify_function_v2" "shopify_function_output_new_array" (func (param i32) (result i32)))
     (import "shopify_function_v2" "shopify_function_output_finish_array" (func (result i32)))
     (import "shopify_function_v2" "shopify_function_output_new_interned_utf8_str" (func (param i32) (result i32)))
+    (import "shopify_function_v2" "shopify_function_output_shape_define_new" (func (param i32) (result i32)))
+    (import "shopify_function_v2" "shopify_function_output_shape_define_key" (func (param i32) (result i32)))
+    (import "shopify_function_v2" "shopify_function_output_shape_define_finish" (func (result i64)))
+    (import "shopify_function_v2" "shopify_function_output_new_shaped_object" (func (param i32) (result i32)))
+    (import "shopify_function_v2" "shopify_function_output_finish_shaped_object" (func (result i32)))
 
     ;; Log.
     (import "shopify_function_v2" "shopify_function_log_new_utf8_str" (func (param i32 i32)))

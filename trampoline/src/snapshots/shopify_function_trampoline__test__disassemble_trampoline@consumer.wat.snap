@@ -29,19 +29,24 @@ input_file: trampoline/src/test_data/consumer.wat
   (import "shopify_function_v2" "_shopify_function_output_new_array" (func (;11;) (type 6)))
   (import "shopify_function_v2" "_shopify_function_output_finish_array" (func (;12;) (type 7)))
   (import "shopify_function_v2" "_shopify_function_output_new_interned_utf8_str" (func (;13;) (type 6)))
-  (import "shopify_function_v2" "_shopify_function_input_get_utf8_str_addr" (func (;14;) (type 6)))
+  (import "shopify_function_v2" "_shopify_function_output_shape_define_new" (func (;14;) (type 6)))
+  (import "shopify_function_v2" "_shopify_function_output_shape_define_key" (func (;15;) (type 6)))
+  (import "shopify_function_v2" "_shopify_function_output_shape_define_finish" (func (;16;) (type 1)))
+  (import "shopify_function_v2" "_shopify_function_output_new_shaped_object" (func (;17;) (type 6)))
+  (import "shopify_function_v2" "_shopify_function_output_finish_shaped_object" (func (;18;) (type 7)))
+  (import "shopify_function_v2" "_shopify_function_input_get_utf8_str_addr" (func (;19;) (type 6)))
   (import "shopify_function_v2" "memory" (memory (;0;) 1))
-  (import "shopify_function_v2" "_shopify_function_input_get_obj_prop" (func (;15;) (type 2)))
-  (import "shopify_function_v2" "_shopify_function_alloc" (func (;16;) (type 6)))
-  (import "shopify_function_v2" "_shopify_function_output_new_utf8_str" (func (;17;) (type 10)))
-  (import "shopify_function_v2" "_shopify_function_intern_utf8_str" (func (;18;) (type 10)))
-  (import "shopify_function_v2" "_shopify_function_log_new_utf8_str" (func (;19;) (type 6)))
+  (import "shopify_function_v2" "_shopify_function_input_get_obj_prop" (func (;20;) (type 2)))
+  (import "shopify_function_v2" "_shopify_function_input_get_obj_prop_buffer" (func (;21;) (type 6)))
+  (import "shopify_function_v2" "_shopify_function_output_new_utf8_str" (func (;22;) (type 10)))
+  (import "shopify_function_v2" "_shopify_function_intern_utf8_str" (func (;23;) (type 10)))
+  (import "shopify_function_v2" "_shopify_function_log_new_utf8_str" (func (;24;) (type 6)))
   (memory (;1;) 1)
   (export "memory" (memory 1))
-  (func (;20;) (type 9) (param i32 i32)
+  (func (;25;) (type 9) (param i32 i32)
     (local i32 i32 i32 i32 i32 i32)
     local.get 1
-    call 19
+    call 24
     local.tee 2
     i32.load
     local.set 3
@@ -57,7 +62,7 @@ input_file: trampoline/src/test_data/consumer.wat
     i32.add
     local.tee 0
     local.get 5
-    call 26
+    call 31
     local.get 5
     local.get 1
     i32.ne
@@ -73,14 +78,14 @@ input_file: trampoline/src/test_data/consumer.wat
       local.get 5
       i32.add
       local.get 7
-      call 26
+      call 31
     else
     end
   )
-  (func (;21;) (type 0) (param i32 i32) (result i32)
+  (func (;26;) (type 0) (param i32 i32) (result i32)
     (local i64)
     local.get 1
-    call 18
+    call 23
     local.tee 2
     i64.const 32
     i64.shr_u
@@ -89,12 +94,12 @@ input_file: trampoline/src/test_data/consumer.wat
     i32.wrap_i64
     local.get 0
     local.get 1
-    call 26
+    call 31
   )
-  (func (;22;) (type 0) (param i32 i32) (result i32)
+  (func (;27;) (type 0) (param i32 i32) (result i32)
     (local i64)
     local.get 1
-    call 17
+    call 22
     local.tee 2
     i64.const 32
     i64.shr_u
@@ -103,43 +108,39 @@ input_file: trampoline/src/test_data/consumer.wat
     i32.wrap_i64
     local.get 0
     local.get 1
-    call 26
+    call 31
   )
-  (func (;23;) (type 2) (param i64 i32 i32) (result i64)
+  (func (;28;) (type 2) (param i64 i32 i32) (result i64)
     (local i32)
     local.get 2
-    call 27
+    call 21
     local.tee 3
     local.get 1
     local.get 2
-    call 26
+    call 31
     local.get 0
     local.get 3
     local.get 2
-    call 15
+    call 20
   )
-  (func (;24;) (type 5) (param i32 i32 i32)
+  (func (;29;) (type 5) (param i32 i32 i32)
     local.get 1
     local.get 0
-    call 14
+    call 19
     local.get 2
-    call 25
+    call 30
   )
-  (func (;25;) (type 5) (param i32 i32 i32)
+  (func (;30;) (type 5) (param i32 i32 i32)
     local.get 0
     local.get 1
     local.get 2
     memory.copy 1 0
   )
-  (func (;26;) (type 5) (param i32 i32 i32)
+  (func (;31;) (type 5) (param i32 i32 i32)
     local.get 0
     local.get 1
     local.get 2
     memory.copy 0 1
-  )
-  (func (;27;) (type 6) (param i32) (result i32)
-    local.get 0
-    call 16
   )
   (@producers
     (processed-by "walrus" "0.26.0")

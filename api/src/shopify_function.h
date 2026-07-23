@@ -8,6 +8,7 @@
 typedef int64_t Val;
 typedef int32_t WriteResult;
 typedef size_t InternedStringId;
+typedef size_t ShapeId;
 
 // Constants for WriteResult
 #define WRITE_RESULT_OK 0
@@ -173,6 +174,49 @@ extern WriteResult shopify_function_output_new_array(size_t len);
 __attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
 __attribute__((import_name("shopify_function_output_finish_array")))
 extern WriteResult shopify_function_output_finish_array();
+
+/**
+ * Starts defining a reusable shape with the specified number of object keys
+ * @param key_count The number of keys in the shape
+ * @return WriteResult indicating success or failure
+ */
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_shape_define_new")))
+extern WriteResult shopify_function_output_shape_define_new(size_t key_count);
+
+/**
+ * Adds an interned string key to the shape currently being defined
+ * @param id The interned string ID for the key
+ * @return WriteResult indicating success or failure
+ */
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_shape_define_key")))
+extern WriteResult shopify_function_output_shape_define_key(InternedStringId id);
+
+/**
+ * Finishes a shape definition
+ * @return The WriteResult in the high 32 bits and shape ID in the low 32 bits
+ */
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_shape_define_finish")))
+extern uint64_t shopify_function_output_shape_define_finish();
+
+/**
+ * Creates a shaped object using a previously defined shape
+ * @param shape_id The shape ID
+ * @return WriteResult indicating success or failure
+ */
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_new_shaped_object")))
+extern WriteResult shopify_function_output_new_shaped_object(ShapeId shape_id);
+
+/**
+ * Finalizes a shaped object output value
+ * @return WriteResult indicating success or failure
+ */
+__attribute__((import_module(SHOPIFY_FUNCTION_IMPORT_MODULE)))
+__attribute__((import_name("shopify_function_output_finish_shaped_object")))
+extern WriteResult shopify_function_output_finish_shaped_object();
 
 // Other
 /**
