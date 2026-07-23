@@ -693,12 +693,16 @@ fn shape_find(
     let recent = caches.shape_lookup[meta.shape_id as usize];
     let start = if recent < meta.count { recent } else { 0 };
     let mut matched = None;
-    for step in 0..meta.count {
-        let index = (start + step) % meta.count;
+    let mut index = start;
+    for _ in 0..meta.count {
         let span = state.shape_keys[(keys_start + index) as usize];
         if span_matches(bytes, span, query) {
             matched = Some(index);
             break;
+        }
+        index += 1;
+        if index == meta.count {
+            index = 0;
         }
     }
     let Some(mut index) = matched else {
