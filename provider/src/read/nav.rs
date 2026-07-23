@@ -589,9 +589,29 @@ fn container_end(meta: ContainerMeta, bytes: &[u8]) -> Result<u32> {
     }
 }
 
+#[inline(always)]
+fn map_key_span_at(
+    bytes: &[u8],
+    state: &InputState,
+    pos: u32,
+    end: u32,
+) -> Result<((u32, u32), u32)> {
+    let tag = *bytes.get(pos as usize).ok_or(ErrorCode::ReadError)?;
+    if matches!(tag, format::FIXSTR_MIN..=format::FIXSTR_MAX) {
+        let len = (tag - format::FIXSTR_MIN) as u32;
+        let content = checked_add(pos, 1)?;
+        let next = checked_add(content, len)?;
+        if next <= end && next as usize <= bytes.len() {
+            return Ok(((content, len), next));
+        }
+        return Err(ErrorCode::ReadError);
+    }
+    string_span_at(bytes, state, pos, end)
+}
+
 #[inline]
 fn skip_map_pair(bytes: &[u8], state: &InputState, key_pos: u32, end: u32) -> Result<(u32, u32)> {
-    let (_, value_pos) = string_span_at(bytes, state, key_pos, end)?;
+    let (_, value_pos) = map_key_span_at(bytes, state, key_pos, end)?;
     let next_pair = skip_value(bytes, state, value_pos, end)?;
     Ok((value_pos, next_pair))
 }
@@ -688,7 +708,7 @@ fn map_find(
             pos = meta.first_child;
         }
         let pair_pos = pos;
-        let (span, value_pos) = string_span_at(bytes, state, pair_pos, end)?;
+        let (span, value_pos) = map_key_span_at(bytes, state, pair_pos, end)?;
         if span_matches(bytes, span, query) {
             let value = decode_value(bytes, state, caches, value_pos)?;
             update_property_cursor(caches, meta.tag_offset, index, pair_pos);
@@ -800,7 +820,7 @@ pub(crate) fn key_at(
         pos = skip_map_pair(bytes, state, pos, end)?.1;
         current += 1;
     }
-    let (span, value_pos) = string_span_at(bytes, state, pos, end)?;
+    let (span, value_pos) = map_key_span_at(bytes, state, pos, end)?;
     let next = skip_value(bytes, state, value_pos, end)?;
     if span.1 >= NanBox::MAX_VALUE_LENGTH as u32 {
         caches.long_string_lens.insert(span.0, span.1);
