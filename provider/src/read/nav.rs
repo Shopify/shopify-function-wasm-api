@@ -705,7 +705,7 @@ fn map_find(
     caches: &mut Caches,
     meta: ContainerMeta,
     query: &[u8],
-) -> Result<Option<NanBox>> {
+) -> Result<NanBox> {
     let end = container_end(meta, bytes)?;
     let cursor = caches.cursors[1];
     let (mut index, mut pos) =
@@ -725,12 +725,12 @@ fn map_find(
         if span_matches(bytes, span, query) {
             let value = decode_value(bytes, state, caches, value_pos)?;
             update_property_cursor(caches, meta.tag_offset, index, pair_pos);
-            return Ok(Some(value));
+            return Ok(value);
         }
         index += 1;
         pos = skip_value(bytes, state, value_pos, end)?;
     }
-    Ok(None)
+    Ok(NanBox::null())
 }
 
 fn shape_find(
@@ -739,9 +739,9 @@ fn shape_find(
     caches: &mut Caches,
     meta: ContainerMeta,
     query: &[u8],
-) -> Result<Option<NanBox>> {
+) -> Result<NanBox> {
     if meta.count == 0 {
-        return Ok(None);
+        return Ok(NanBox::null());
     }
     let (keys_start, keys_len) = state.shapes[meta.shape_id as usize];
     if keys_len != meta.count {
@@ -763,7 +763,7 @@ fn shape_find(
         }
     }
     let Some(mut index) = matched else {
-        return Ok(None);
+        return Ok(NanBox::null());
     };
     // A hit at the memoized index was already proven to be the first matching
     // duplicate. New matches still scan their prefix to preserve first-wins.
@@ -777,7 +777,7 @@ fn shape_find(
         }
     }
     caches.shape_lookup[meta.shape_id as usize] = index;
-    element_at_with_meta(bytes, state, caches, meta, index, false).map(Some)
+    element_at_with_meta(bytes, state, caches, meta, index, false)
 }
 
 #[inline]
@@ -796,11 +796,7 @@ pub(crate) fn find_property(
         },
         Err(error) => Err(error),
     };
-    match result {
-        Ok(Some(value)) => value,
-        Ok(None) => NanBox::null(),
-        Err(error) => NanBox::error(error),
-    }
+    result.unwrap_or_else(NanBox::error)
 }
 
 #[inline]
