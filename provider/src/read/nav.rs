@@ -632,15 +632,15 @@ fn map_find(
             index = 0;
             pos = meta.first_child;
         }
-        let (span, value_pos) = string_span_at(bytes, state, pos, end)?;
-        let next = skip_value(bytes, state, value_pos, end)?;
+        let pair_pos = pos;
+        let (span, value_pos) = string_span_at(bytes, state, pair_pos, end)?;
         if span_matches(bytes, span, query) {
             let value = decode_value(bytes, state, caches, value_pos)?;
-            update_cursor(caches, meta.tag_offset, index + 1, next);
+            update_cursor(caches, meta.tag_offset, index, pair_pos);
             return Ok(Some(value));
         }
         index += 1;
-        pos = next;
+        pos = skip_value(bytes, state, value_pos, end)?;
     }
     Ok(None)
 }
