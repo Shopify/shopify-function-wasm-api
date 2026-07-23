@@ -650,11 +650,7 @@ fn shape_find(
         return Err(ErrorCode::ReadError);
     }
     let recent = caches.shape_lookup[meta.shape_id as usize];
-    let start = if recent < meta.count {
-        (recent + 1) % meta.count
-    } else {
-        0
-    };
+    let start = if recent < meta.count { recent } else { 0 };
     let mut matched = None;
     for step in 0..meta.count {
         let index = (start + step) % meta.count;
