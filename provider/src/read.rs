@@ -48,10 +48,10 @@ decorate_for_target! {
         Context::with_mut(|context| {
             let buffer = &mut context.input_obj_prop_buffer;
             if len > buffer.capacity() {
-                buffer.reserve(len - buffer.len());
+                buffer.reserve(len);
             }
-            // The trampoline initializes every byte before property lookup.
-            unsafe { buffer.set_len(len) };
+            // The trampoline initializes the requested spare capacity before
+            // property lookup; no logical Vec length update is needed.
             buffer.as_mut_ptr() as usize
         })
     }
