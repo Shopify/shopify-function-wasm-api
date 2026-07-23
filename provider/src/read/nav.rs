@@ -72,7 +72,7 @@ impl Default for Caches {
             containers: [EMPTY_META; CONTAINER_CACHE_LEN],
             cursors: [EMPTY_CURSOR; CURSOR_CACHE_LEN],
             cursor_victim: 0,
-            shape_lookup: Vec::new(),
+            shape_lookup: Vec::with_capacity(8),
             long_string_lens: HashMap::new(),
         }
     }
