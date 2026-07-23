@@ -719,8 +719,8 @@ fn shape_find(
                 break;
             }
         }
+        caches.shape_lookup[meta.shape_id as usize] = index;
     }
-    caches.shape_lookup[meta.shape_id as usize] = index;
     element_at_with_meta(bytes, state, caches, meta, index, false)
 }
 
