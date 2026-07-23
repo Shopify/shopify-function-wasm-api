@@ -687,6 +687,22 @@ fn map_find(
     Ok(NanBox::null())
 }
 
+#[inline(always)]
+fn shape_element_at(
+    bytes: &[u8],
+    state: &InputState,
+    caches: &mut Caches,
+    meta: ContainerMeta,
+    index: u32,
+) -> Result<NanBox> {
+    let end = container_end(meta, bytes)?;
+    let mut pos = meta.first_child;
+    for _ in 0..index {
+        pos = skip_value(bytes, state, pos, end)?;
+    }
+    decode_value(bytes, state, caches, pos)
+}
+
 fn shape_find(
     bytes: &[u8],
     state: &InputState,
@@ -727,7 +743,7 @@ fn shape_find(
         }
         caches.shape_lookup[meta.shape_id() as usize].1 = index;
     }
-    element_at_with_meta(bytes, state, caches, meta, index, false)
+    shape_element_at(bytes, state, caches, meta, index)
 }
 
 #[inline]
