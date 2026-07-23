@@ -24,8 +24,8 @@ impl InputState {
         Self {
             root: 0,
             strings: Vec::with_capacity(8),
-            shape_keys: Vec::with_capacity(32),
-            shapes: Vec::with_capacity(8),
+            shape_keys: Vec::with_capacity(8),
+            shapes: Vec::with_capacity(4),
         }
     }
 }
