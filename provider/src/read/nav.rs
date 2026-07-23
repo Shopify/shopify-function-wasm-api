@@ -598,7 +598,17 @@ fn span_matches(bytes: &[u8], span: (u32, u32), query: &[u8]) -> bool {
     let Some(end) = start.checked_add(span.1 as usize) else {
         return false;
     };
-    bytes.get(start..end) == Some(query)
+    let Some(value) = bytes.get(start..end) else {
+        return false;
+    };
+    if query.len() == 8 {
+        // FBF strings and trampoline scratch bytes need not be aligned.
+        return unsafe {
+            std::ptr::read_unaligned(value.as_ptr().cast::<u64>())
+                == std::ptr::read_unaligned(query.as_ptr().cast::<u64>())
+        };
+    }
+    value == query
 }
 
 fn map_find(
