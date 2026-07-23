@@ -558,6 +558,7 @@ pub(crate) fn element_at(
     caches: &mut Caches,
     container: u32,
     index: u32,
+    advance_cursor: bool,
 ) -> Result<NanBox> {
     let meta = container_meta(bytes, state, caches, container)?;
     if index >= meta.count {
@@ -571,9 +572,16 @@ pub(crate) fn element_at(
                 pos = skip_value(bytes, state, pos, end)?;
                 current += 1;
             }
-            let next = skip_value(bytes, state, pos, end)?;
-            let value = decode_value(bytes, state, caches, pos)?;
-            update_cursor(caches, container, index + 1, next);
+            let value = if advance_cursor {
+                let next = skip_value(bytes, state, pos, end)?;
+                let value = decode_value(bytes, state, caches, pos)?;
+                update_cursor(caches, container, index + 1, next);
+                value
+            } else {
+                let value = decode_value(bytes, state, caches, pos)?;
+                update_cursor(caches, container, index, pos);
+                value
+            };
             Ok(value)
         }
         ContainerKind::Map => {
@@ -682,7 +690,7 @@ fn shape_find(
         }
     }
     caches.shape_lookup[meta.shape_id as usize] = index;
-    element_at(bytes, state, caches, meta.tag_offset, index).map(Some)
+    element_at(bytes, state, caches, meta.tag_offset, index, false).map(Some)
 }
 
 #[inline]

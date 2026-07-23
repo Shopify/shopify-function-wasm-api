@@ -175,6 +175,7 @@ decorate_for_target! {
                 &mut context.input_caches,
                 container,
                 index,
+                true,
             )
             .unwrap_or_else(NanBox::error)
             .to_bits()
