@@ -664,20 +664,15 @@ fn map_find(
     query: &[u8],
 ) -> Result<NanBox> {
     let end = container_end(meta, bytes)?;
-    let (mut index, mut pos) = (0, meta.first_child);
+    let mut pos = meta.first_child;
 
     for _ in 0..meta.count {
-        if index == meta.count {
-            index = 0;
-            pos = meta.first_child;
-        }
         let pair_pos = pos;
         let (span, value_pos) = map_key_span_at(bytes, state, pair_pos, end)?;
         if span_matches(bytes, span, query) {
             let value = decode_value(bytes, state, caches, value_pos)?;
             return Ok(value);
         }
-        index += 1;
         pos = skip_value(bytes, state, value_pos, end)?;
     }
     Ok(NanBox::null())
