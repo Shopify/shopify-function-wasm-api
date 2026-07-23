@@ -7,6 +7,8 @@ pub mod write;
 use fbf::format::{
     FLAG_SHAPE_TABLE, FLAG_STRING_TABLE, MAGIC, STRREF16, STRREF32, STRREF8, VERSION,
 };
+#[cfg(target_family = "wasm")]
+use std::cell::UnsafeCell;
 use std::{cell::RefCell, ops::Range};
 use string_interner::StringInterner;
 use write::State;
@@ -51,6 +53,12 @@ struct Context {
     open_shape_definition: Option<(usize, usize)>,
 }
 
+#[cfg(target_family = "wasm")]
+thread_local! {
+    static CONTEXT: UnsafeCell<Context> = UnsafeCell::new(Context::default())
+}
+
+#[cfg(not(target_family = "wasm"))]
 thread_local! {
     static CONTEXT: RefCell<Context> = RefCell::new(Context::default())
 }
@@ -97,6 +105,10 @@ impl Context {
     where
         F: FnOnce(&Context) -> T,
     {
+        #[cfg(target_family = "wasm")]
+        return CONTEXT.with(|context| unsafe { f(&*context.get()) });
+
+        #[cfg(not(target_family = "wasm"))]
         CONTEXT.with_borrow(f)
     }
 
@@ -104,6 +116,10 @@ impl Context {
     where
         F: FnOnce(&mut Context) -> T,
     {
+        #[cfg(target_family = "wasm")]
+        return CONTEXT.with(|context| unsafe { f(&mut *context.get()) });
+
+        #[cfg(not(target_family = "wasm"))]
         CONTEXT.with_borrow_mut(f)
     }
 
@@ -184,7 +200,7 @@ use crate::log::Logs;
 #[cfg(target_family = "wasm")]
 #[export_name = "initialize"]
 extern "C" fn initialize(input_len: usize) -> *const u8 {
-    CONTEXT.with_borrow_mut(|context| {
+    Context::with_mut(|context| {
         *context = Context::default();
         context.input_bytes = vec![0; input_len];
         context.input_bytes.as_ptr()
