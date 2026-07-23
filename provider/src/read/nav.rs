@@ -147,7 +147,9 @@ const fn classify_tag(tag: u8) -> TagInfo {
 }
 
 pub(crate) fn reset_caches_for_state(caches: &mut Caches, state: &InputState) {
-    *caches = Caches::default();
+    // `initialize` installs a fresh `Context`, so the fixed-size caches and
+    // long-string map are already empty here. Only the input-sized shape memo
+    // needs initialization after parsing the prelude.
     caches
         .shape_lookup
         .resize(state.shapes.len(), INVALID_OFFSET);
