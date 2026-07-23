@@ -406,7 +406,7 @@ fn validate_child_minimum(meta: &ContainerMeta, limit: u32) -> Result<()> {
     Ok(())
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn container_meta(
     bytes: &[u8],
     state: &InputState,
