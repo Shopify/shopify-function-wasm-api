@@ -23,23 +23,32 @@ fn decode_scope(scope: Val) -> ScopeKind {
     const PAYLOAD_SIZE: u32 = 50 + F64_OFFSET;
     const TAG_SHIFT: u32 = 46 + F64_OFFSET;
     const NAN_MASK: Val = (((1 as Val) << 13) - 1) << PAYLOAD_SIZE;
+    const TAG_MASK: Val = (0xf as Val) << TAG_SHIFT;
     const POINTER_MASK: Val = ((1 as Val) << usize::BITS) - 1;
+    const OBJECT_HEADER: Val = NAN_MASK | ((4 as Val) << TAG_SHIFT);
+    const ARRAY_HEADER: Val = NAN_MASK | ((5 as Val) << TAG_SHIFT);
 
+    let header = scope & (NAN_MASK | TAG_MASK);
+    let is_object = header == OBJECT_HEADER;
+    if is_object || header == ARRAY_HEADER {
+        let ptr = (scope & POINTER_MASK) as usize;
+        let Ok(ptr) = u32::try_from(ptr) else {
+            return ScopeKind::BadPointer;
+        };
+        return if is_object {
+            ScopeKind::Object(ptr)
+        } else {
+            ScopeKind::Array(ptr)
+        };
+    }
     if scope & NAN_MASK != NAN_MASK {
         return ScopeKind::Other;
     }
     let tag = ((scope >> TAG_SHIFT) & 0xf) as u8;
-    if !matches!(tag, 0 | 1 | 3 | 4 | 5 | 15) {
-        return ScopeKind::Invalid;
-    }
-    let ptr = (scope & POINTER_MASK) as usize;
-    let Ok(ptr) = u32::try_from(ptr) else {
-        return ScopeKind::BadPointer;
-    };
-    match tag {
-        4 => ScopeKind::Object(ptr),
-        5 => ScopeKind::Array(ptr),
-        _ => ScopeKind::Other,
+    if matches!(tag, 0 | 1 | 3 | 15) {
+        ScopeKind::Other
+    } else {
+        ScopeKind::Invalid
     }
 }
 
