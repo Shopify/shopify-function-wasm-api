@@ -534,7 +534,7 @@ fn update_property_cursor(caches: &mut Caches, container: u32, index: u32, pos: 
     };
 }
 
-#[inline]
+#[inline(always)]
 fn update_cursor(caches: &mut Caches, container: u32, next_index: u32, next_pos: u32) {
     if let Some(slot) = caches
         .cursors
