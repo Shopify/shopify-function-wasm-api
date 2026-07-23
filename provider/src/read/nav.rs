@@ -509,16 +509,20 @@ fn cursor_start(caches: &Caches, container: u32, index: u32, first: u32) -> (u32
 
 #[inline]
 fn update_cursor(caches: &mut Caches, container: u32, next_index: u32, next_pos: u32) {
-    if let Some(cursor) = caches
+    if let Some((slot, cursor)) = caches
         .cursors
         .iter_mut()
-        .find(|cursor| cursor.container == container)
+        .enumerate()
+        .find(|(_, cursor)| cursor.container == container)
     {
         *cursor = Cursor {
             container,
             next_index,
             next_pos,
         };
+        // Alternating parent/child access should not evict the just-refreshed
+        // parent. Reuse its following slot for the transient child instead.
+        caches.cursor_victim = (slot + 1) % CURSOR_CACHE_LEN;
         return;
     }
     let slot = caches.cursor_victim;
