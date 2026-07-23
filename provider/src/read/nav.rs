@@ -19,6 +19,17 @@ pub(crate) struct InputState {
     pub(crate) shapes: Vec<(u32, u32)>,
 }
 
+impl InputState {
+    pub(crate) fn preallocated() -> Self {
+        Self {
+            root: 0,
+            strings: Vec::with_capacity(256),
+            shape_keys: Vec::with_capacity(32),
+            shapes: Vec::with_capacity(8),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ContainerKind {
     Array,
@@ -326,6 +337,14 @@ pub(crate) fn decode_value(
 }
 
 pub(crate) fn parse_input(bytes: &[u8]) -> Result<InputState> {
+    parse_input_reusing(bytes, InputState::default())
+}
+
+pub(crate) fn parse_input_reusing(bytes: &[u8], mut state: InputState) -> Result<InputState> {
+    state.root = 0;
+    state.strings.clear();
+    state.shape_keys.clear();
+    state.shapes.clear();
     let input_len = u32::try_from(bytes.len()).map_err(|_| ErrorCode::ReadError)?;
     if bytes.len() < 5
         || bytes[..3] != format::MAGIC
@@ -337,15 +356,14 @@ pub(crate) fn parse_input(bytes: &[u8]) -> Result<InputState> {
 
     let flags = bytes[4];
     let mut pos = 5u32;
-    let mut state = InputState::default();
 
     if flags & format::FLAG_STRING_TABLE != 0 {
         let count = read_var_u32(bytes, &mut pos, input_len)? as usize;
         let remaining = (input_len - pos) as usize;
-        state.strings = Vec::with_capacity(count.min(remaining));
         if count > remaining {
             return Err(ErrorCode::ReadError);
         }
+        state.strings.reserve(count);
         for _ in 0..count {
             let len = read_var_u32(bytes, &mut pos, input_len)?;
             let content = pos;
@@ -368,10 +386,10 @@ pub(crate) fn parse_input(bytes: &[u8]) -> Result<InputState> {
 fn parse_shapes(bytes: &[u8], input_len: u32, pos: &mut u32, state: &mut InputState) -> Result<()> {
     let count = read_var_u32(bytes, pos, input_len)? as usize;
     let remaining = (input_len - *pos) as usize;
-    state.shapes = Vec::with_capacity(count.min(remaining));
     if count > remaining {
         return Err(ErrorCode::ReadError);
     }
+    state.shapes.reserve(count);
     for _ in 0..count {
         let key_count = read_var_u32(bytes, pos, input_len)?;
         if key_count > input_len - *pos {

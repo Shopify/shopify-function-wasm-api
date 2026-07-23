@@ -25,6 +25,8 @@ struct Context {
     input_bytes: Vec<u8>,
     /// Parsed input prelude and root offset, initialized on first read.
     input_state: Option<read::nav::InputState>,
+    /// Prelude vectors allocated during initialization and consumed on first read.
+    input_parse_state: read::nav::InputState,
     /// Small read-side navigation caches and rare long-string lengths.
     input_caches: read::nav::Caches,
     /// Inline destination for normal property names copied by the trampoline.
@@ -73,6 +75,7 @@ impl Default for Context {
         Self {
             input_bytes: Vec::new(),
             input_state: None,
+            input_parse_state: read::nav::InputState::preallocated(),
             input_caches: read::nav::Caches::default(),
             input_obj_prop_buffer: [0; 64],
             input_obj_prop_overflow: Vec::new(),

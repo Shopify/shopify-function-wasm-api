@@ -62,7 +62,8 @@ decorate_for_target! {
     fn shopify_function_input_get() -> Val {
         Context::with_mut(|context| {
             if context.input_state.is_none() {
-                let state = match nav::parse_input(&context.input_bytes) {
+                let parse_state = std::mem::take(&mut context.input_parse_state);
+                let state = match nav::parse_input_reusing(&context.input_bytes, parse_state) {
                     Ok(state) => state,
                     Err(_) => return NanBox::error(ErrorCode::ReadError).to_bits(),
                 };
