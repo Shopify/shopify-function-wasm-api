@@ -704,12 +704,15 @@ fn shape_find(
     let Some(mut index) = matched else {
         return Ok(None);
     };
-    // Duplicate shape keys are legal. Always return the first matching value.
-    for earlier in 0..index {
-        let span = state.shape_keys[(keys_start + earlier) as usize];
-        if span_matches(bytes, span, query) {
-            index = earlier;
-            break;
+    // A hit at the memoized index was already proven to be the first matching
+    // duplicate. New matches still scan their prefix to preserve first-wins.
+    if index != recent {
+        for earlier in 0..index {
+            let span = state.shape_keys[(keys_start + earlier) as usize];
+            if span_matches(bytes, span, query) {
+                index = earlier;
+                break;
+            }
         }
     }
     caches.shape_lookup[meta.shape_id as usize] = index;
