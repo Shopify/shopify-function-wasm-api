@@ -667,8 +667,7 @@ fn map_find(
     let mut pos = meta.first_child;
 
     for _ in 0..meta.count {
-        let pair_pos = pos;
-        let (span, value_pos) = map_key_span_at(bytes, state, pair_pos, end)?;
+        let (span, value_pos) = map_key_span_at(bytes, state, pos, end)?;
         if span_matches(bytes, span, query) {
             let value = decode_value(bytes, state, caches, value_pos)?;
             return Ok(value);
