@@ -155,7 +155,7 @@ pub(crate) fn reset_caches_for_state(caches: &mut Caches, state: &InputState) {
         .resize(state.shapes.len(), INVALID_OFFSET);
 }
 
-#[inline]
+#[inline(always)]
 fn read_le(bytes: &[u8], pos: u32, width: u8, end: u32) -> Result<u32> {
     let start = pos as usize;
     let stop = start
