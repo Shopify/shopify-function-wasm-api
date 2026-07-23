@@ -836,6 +836,13 @@ pub(crate) fn long_string_len(caches: &Caches, content: u32) -> Option<u32> {
 
 #[inline(always)]
 pub(crate) fn skip_value(bytes: &[u8], state: &InputState, pos: u32, end: u32) -> Result<u32> {
+    let tag = *bytes.get(pos as usize).ok_or(ErrorCode::ReadError)?;
+    if matches!(tag, format::ARRAY8 | format::MAP8 | format::SHAPE8) {
+        let len_pos = checked_add(pos, 1)?;
+        let len = read_le(bytes, len_pos, 1, end)?;
+        let payload = checked_add(len_pos, 1)?;
+        return bounded_span(bytes, payload, len, end).map(|(_, next)| next);
+    }
     checked_add(pos, extent_at(bytes, state, pos, end, 0)?)
 }
 
