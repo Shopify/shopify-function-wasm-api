@@ -509,20 +509,22 @@ fn cursor_start(caches: &Caches, container: u32, index: u32, first: u32) -> (u32
 
 #[inline]
 fn update_cursor(caches: &mut Caches, container: u32, next_index: u32, next_pos: u32) {
-    if let Some((slot, cursor)) = caches
+    if let Some(slot) = caches
         .cursors
-        .iter_mut()
-        .enumerate()
-        .find(|(_, cursor)| cursor.container == container)
+        .iter()
+        .position(|cursor| cursor.container == container)
     {
-        *cursor = Cursor {
+        caches.cursors[slot] = Cursor {
             container,
             next_index,
             next_pos,
         };
-        // Alternating parent/child access should not evict the just-refreshed
-        // parent. Reuse its following slot for the transient child instead.
-        caches.cursor_victim = (slot + 1) % CURSOR_CACHE_LEN;
+        if slot != 0 {
+            caches.cursors.swap(0, slot);
+        }
+        // Keep the refreshed MRU parent in slot zero and reuse slot one for
+        // transient children in alternating parent/child traversal.
+        caches.cursor_victim = 1;
         return;
     }
     let slot = caches.cursor_victim;
