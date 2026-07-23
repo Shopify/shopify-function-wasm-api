@@ -642,11 +642,9 @@ fn span_matches(bytes: &[u8], span: (u32, u32), query: &[u8]) -> bool {
         return false;
     };
     if query.len() == 8 {
-        // FBF strings and trampoline scratch bytes need not be aligned.
-        return unsafe {
-            std::ptr::read_unaligned(value.as_ptr().cast::<u64>())
-                == std::ptr::read_unaligned(query.as_ptr().cast::<u64>())
-        };
+        let value = u64::from_ne_bytes(value.try_into().unwrap());
+        let query = u64::from_ne_bytes(query.try_into().unwrap());
+        return value == query;
     }
     value == query
 }
