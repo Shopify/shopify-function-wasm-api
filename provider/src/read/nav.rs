@@ -202,6 +202,7 @@ fn bounded_span(bytes: &[u8], start: u32, len: u32, end: u32) -> Result<(u32, u3
     Ok((start, stop))
 }
 
+#[inline(always)]
 fn string_span_at(
     bytes: &[u8],
     state: &InputState,
