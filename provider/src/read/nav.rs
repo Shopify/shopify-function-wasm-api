@@ -6,7 +6,6 @@ use std::collections::HashMap;
 
 const MAX_DEPTH: u32 = 128;
 const CONTAINER_CACHE_LEN: usize = 256;
-const CURSOR_CACHE_LEN: usize = 2;
 const INVALID_OFFSET: u32 = u32::MAX;
 
 type Result<T> = std::result::Result<T, ErrorCode>;
@@ -71,8 +70,7 @@ const EMPTY_CURSOR: Cursor = Cursor {
 
 pub(crate) struct Caches {
     containers: [ContainerMeta; CONTAINER_CACHE_LEN],
-    cursors: [Cursor; CURSOR_CACHE_LEN],
-    cursor_victim: usize,
+    cursors: [Cursor; 1],
     shape_lookup: Vec<u32>,
     long_string_lens: HashMap<u32, u32>,
 }
@@ -81,8 +79,7 @@ impl Default for Caches {
     fn default() -> Self {
         Self {
             containers: [EMPTY_META; CONTAINER_CACHE_LEN],
-            cursors: [EMPTY_CURSOR; CURSOR_CACHE_LEN],
-            cursor_victim: 0,
+            cursors: [EMPTY_CURSOR; 1],
             shape_lookup: Vec::with_capacity(8),
             long_string_lens: HashMap::new(),
         }
@@ -523,50 +520,23 @@ pub(crate) fn container_meta(
     Ok(meta)
 }
 
-#[inline]
+#[inline(always)]
 fn cursor_start(caches: &Caches, container: u32, index: u32, first: u32) -> (u32, u32) {
-    caches
-        .cursors
-        .iter()
-        .find(|cursor| cursor.container == container && index >= cursor.next_index)
-        .map_or((0, first), |cursor| (cursor.next_index, cursor.next_pos))
+    let cursor = caches.cursors[0];
+    if cursor.container == container && index >= cursor.next_index {
+        (cursor.next_index, cursor.next_pos)
+    } else {
+        (0, first)
+    }
 }
-
-#[inline(always)]
-fn property_cursor_start(_caches: &Caches, _container: u32, _index: u32, first: u32) -> (u32, u32) {
-    (0, first)
-}
-
-#[inline(always)]
-fn update_property_cursor(_caches: &mut Caches, _container: u32, _index: u32, _pos: u32) {}
 
 #[inline(always)]
 fn update_cursor(caches: &mut Caches, container: u32, next_index: u32, next_pos: u32) {
-    if let Some(slot) = caches
-        .cursors
-        .iter()
-        .position(|cursor| cursor.container == container)
-    {
-        caches.cursors[slot] = Cursor {
-            container,
-            next_index,
-            next_pos,
-        };
-        if slot != 0 {
-            caches.cursors.swap(0, slot);
-        }
-        // Keep the refreshed MRU parent in slot zero and reuse slot one for
-        // transient children in alternating parent/child traversal.
-        caches.cursor_victim = 1;
-        return;
-    }
-    let slot = caches.cursor_victim;
-    caches.cursors[slot] = Cursor {
+    caches.cursors[0] = Cursor {
         container,
         next_index,
         next_pos,
     };
-    caches.cursor_victim = (slot + 1) % CURSOR_CACHE_LEN;
 }
 
 #[inline]
@@ -635,7 +605,7 @@ fn element_at_with_meta(
     let (mut current, mut pos) = if advance_cursor {
         cursor_start(caches, container, index, meta.first_child)
     } else {
-        property_cursor_start(caches, container, index, meta.first_child)
+        (0, meta.first_child)
     };
     match meta.kind {
         ContainerKind::Array | ContainerKind::Shape => {
@@ -649,9 +619,7 @@ fn element_at_with_meta(
                 update_cursor(caches, container, index + 1, next);
                 value
             } else {
-                let value = decode_value(bytes, state, caches, pos)?;
-                update_property_cursor(caches, container, index, pos);
-                value
+                decode_value(bytes, state, caches, pos)?
             };
             Ok(value)
         }
@@ -696,13 +664,7 @@ fn map_find(
     query: &[u8],
 ) -> Result<NanBox> {
     let end = container_end(meta, bytes)?;
-    let cursor = caches.cursors[1];
-    let (mut index, mut pos) =
-        if cursor.container == meta.tag_offset && cursor.next_index < meta.count {
-            (cursor.next_index, cursor.next_pos)
-        } else {
-            (0, meta.first_child)
-        };
+    let (mut index, mut pos) = (0, meta.first_child);
 
     for _ in 0..meta.count {
         if index == meta.count {
@@ -713,7 +675,6 @@ fn map_find(
         let (span, value_pos) = map_key_span_at(bytes, state, pair_pos, end)?;
         if span_matches(bytes, span, query) {
             let value = decode_value(bytes, state, caches, value_pos)?;
-            update_property_cursor(caches, meta.tag_offset, index, pair_pos);
             return Ok(value);
         }
         index += 1;
