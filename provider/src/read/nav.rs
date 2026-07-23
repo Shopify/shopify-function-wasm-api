@@ -7,6 +7,8 @@ use std::collections::HashMap;
 const MAX_DEPTH: u32 = 128;
 const CONTAINER_CACHE_LEN: usize = 256;
 const INVALID_OFFSET: u32 = u32::MAX;
+const ARRAY_KIND_ID: u32 = u32::MAX;
+const MAP_KIND_ID: u32 = u32::MAX - 1;
 
 type Result<T> = std::result::Result<T, ErrorCode>;
 
@@ -39,20 +41,34 @@ pub(crate) enum ContainerKind {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ContainerMeta {
     pub(crate) tag_offset: u32,
-    pub(crate) kind: ContainerKind,
     pub(crate) count: u32,
     pub(crate) first_child: u32,
     pub(crate) end: u32,
-    pub(crate) shape_id: u32,
+    kind_id: u32,
+}
+
+impl ContainerMeta {
+    #[inline(always)]
+    fn kind(self) -> ContainerKind {
+        match self.kind_id {
+            ARRAY_KIND_ID => ContainerKind::Array,
+            MAP_KIND_ID => ContainerKind::Map,
+            _ => ContainerKind::Shape,
+        }
+    }
+
+    #[inline(always)]
+    fn shape_id(self) -> u32 {
+        self.kind_id
+    }
 }
 
 const EMPTY_META: ContainerMeta = ContainerMeta {
     tag_offset: INVALID_OFFSET,
-    kind: ContainerKind::Array,
     count: 0,
     first_child: 0,
     end: INVALID_OFFSET,
-    shape_id: 0,
+    kind_id: ARRAY_KIND_ID,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -327,7 +343,7 @@ pub(crate) fn decode_value(
         }
         _ => {
             let meta = container_meta(bytes, state, caches, pos)?;
-            match meta.kind {
+            match meta.kind() {
                 ContainerKind::Array => NanBox::array(pos as usize, meta.count as usize),
                 ContainerKind::Map | ContainerKind::Shape => {
                     NanBox::obj(pos as usize, meta.count as usize)
@@ -426,7 +442,7 @@ fn validate_child_minimum(meta: &ContainerMeta, limit: u32) -> Result<()> {
     } else {
         meta.end
     };
-    let slots = if meta.kind == ContainerKind::Map {
+    let slots = if meta.kind() == ContainerKind::Map {
         meta.count.checked_mul(2).ok_or(ErrorCode::ReadError)?
     } else {
         meta.count
@@ -452,16 +468,15 @@ pub(crate) fn container_meta(
     let tag = *bytes.get(pos as usize).ok_or(ErrorCode::ReadError)?;
     let mut meta = ContainerMeta {
         tag_offset: pos,
-        kind: ContainerKind::Array,
         count: 0,
         first_child: checked_add(pos, 1)?,
         end: INVALID_OFFSET,
-        shape_id: 0,
+        kind_id: ARRAY_KIND_ID,
     };
     match tag {
         format::FIXARRAY0 => meta.end = meta.first_child,
         format::FIXMAP0 => {
-            meta.kind = ContainerKind::Map;
+            meta.kind_id = MAP_KIND_ID;
             meta.end = meta.first_child;
         }
         0xd1..=0xd7 | 0xd9..=0xdf => {
@@ -471,7 +486,7 @@ pub(crate) fn container_meta(
             if tag <= format::FIXARRAY_MAX {
                 meta.count = (tag - format::FIXARRAY0) as u32;
             } else {
-                meta.kind = ContainerKind::Map;
+                meta.kind_id = MAP_KIND_ID;
                 meta.count = (tag - format::FIXMAP0) as u32;
             }
         }
@@ -479,7 +494,7 @@ pub(crate) fn container_meta(
             meta.count = (tag - format::SEQFIXARRAY_MIN + 1) as u32;
         }
         format::SEQFIXMAP_MIN..=format::SEQFIXMAP_MAX => {
-            meta.kind = ContainerKind::Map;
+            meta.kind_id = MAP_KIND_ID;
             meta.count = (tag - format::SEQFIXMAP_MIN + 1) as u32;
         }
         format::ARRAY8..=format::ARRAY32 | format::MAP8..=format::MAP32 => {
@@ -489,7 +504,7 @@ pub(crate) fn container_meta(
             meta.first_child = first;
             meta.end = end;
             if matches!(tag, format::MAP8..=format::MAP32) {
-                meta.kind = ContainerKind::Map;
+                meta.kind_id = MAP_KIND_ID;
             }
         }
         format::SEQARRAY | format::SEQMAP => {
@@ -497,7 +512,7 @@ pub(crate) fn container_meta(
             meta.count = read_var_u32(bytes, &mut first, limit)?;
             meta.first_child = first;
             if tag == format::SEQMAP {
-                meta.kind = ContainerKind::Map;
+                meta.kind_id = MAP_KIND_ID;
             }
         }
         format::SHAPE8..=format::SHAPE32 | format::SEQSHAPE => {
@@ -508,13 +523,12 @@ pub(crate) fn container_meta(
                 framed_payload(bytes, pos, width, limit)?
             };
             let shape_end = if end == INVALID_OFFSET { limit } else { end };
-            meta.shape_id = read_var_u32(bytes, &mut first, shape_end)?;
+            meta.kind_id = read_var_u32(bytes, &mut first, shape_end)?;
             meta.count = state
                 .shapes
-                .get(meta.shape_id as usize)
+                .get(meta.shape_id() as usize)
                 .map(|shape| shape.1)
                 .ok_or(ErrorCode::ReadError)?;
-            meta.kind = ContainerKind::Shape;
             meta.first_child = first;
             meta.end = end;
         }
@@ -612,7 +626,7 @@ fn element_at_with_meta(
     } else {
         (0, meta.first_child)
     };
-    match meta.kind {
+    match meta.kind() {
         ContainerKind::Array | ContainerKind::Shape => {
             while current < index {
                 pos = skip_value(bytes, state, pos, end)?;
@@ -692,7 +706,7 @@ fn shape_find(
     if meta.count == 0 {
         return Ok(NanBox::null());
     }
-    let (keys_start, recent) = caches.shape_lookup[meta.shape_id as usize];
+    let (keys_start, recent) = caches.shape_lookup[meta.shape_id() as usize];
     let start = if recent < meta.count { recent } else { 0 };
     let mut matched = None;
     let mut index = start;
@@ -720,7 +734,7 @@ fn shape_find(
                 break;
             }
         }
-        caches.shape_lookup[meta.shape_id as usize].1 = index;
+        caches.shape_lookup[meta.shape_id() as usize].1 = index;
     }
     element_at_with_meta(bytes, state, caches, meta, index, false)
 }
@@ -734,7 +748,7 @@ pub(crate) fn find_property(
     query: &[u8],
 ) -> NanBox {
     let result = match container_meta(bytes, state, caches, container) {
-        Ok(meta) => match meta.kind {
+        Ok(meta) => match meta.kind() {
             ContainerKind::Array => Err(ErrorCode::NotAnObject),
             ContainerKind::Map => map_find(bytes, state, caches, meta, query),
             ContainerKind::Shape => shape_find(bytes, state, caches, meta, query),
@@ -753,14 +767,14 @@ pub(crate) fn key_at(
     index: u32,
 ) -> Result<(u32, u32)> {
     let meta = container_meta(bytes, state, caches, container)?;
-    if meta.kind == ContainerKind::Array {
+    if meta.kind() == ContainerKind::Array {
         return Err(ErrorCode::NotAnObject);
     }
     if index >= meta.count {
         return Err(ErrorCode::IndexOutOfBounds);
     }
-    if meta.kind == ContainerKind::Shape {
-        let (start, _) = state.shapes[meta.shape_id as usize];
+    if meta.kind() == ContainerKind::Shape {
+        let (start, _) = state.shapes[meta.shape_id() as usize];
         let span = state.shape_keys[(start + index) as usize];
         if span.1 >= NanBox::MAX_VALUE_LENGTH as u32 {
             caches.long_string_lens.insert(span.0, span.1);
