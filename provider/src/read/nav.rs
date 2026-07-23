@@ -80,7 +80,7 @@ impl Default for Caches {
         Self {
             containers: [EMPTY_META; CONTAINER_CACHE_LEN],
             cursors: [EMPTY_CURSOR; 1],
-            shape_lookup: Vec::with_capacity(8),
+            shape_lookup: vec![INVALID_OFFSET; 8],
             long_string_lens: HashMap::new(),
         }
     }
@@ -158,9 +158,11 @@ pub(crate) fn reset_caches_for_state(caches: &mut Caches, state: &InputState) {
     // `initialize` installs a fresh `Context`, so the fixed-size caches and
     // long-string map are already empty here. Only the input-sized shape memo
     // needs initialization after parsing the prelude.
-    caches
-        .shape_lookup
-        .resize(state.shapes.len(), INVALID_OFFSET);
+    if state.shapes.len() > caches.shape_lookup.len() {
+        caches
+            .shape_lookup
+            .resize(state.shapes.len(), INVALID_OFFSET);
+    }
 }
 
 #[inline(always)]
