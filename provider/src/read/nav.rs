@@ -507,6 +507,25 @@ fn cursor_start(caches: &Caches, container: u32, index: u32, first: u32) -> (u32
         .map_or((0, first), |cursor| (cursor.next_index, cursor.next_pos))
 }
 
+#[inline(always)]
+fn property_cursor_start(caches: &Caches, container: u32, index: u32, first: u32) -> (u32, u32) {
+    let cursor = caches.cursors[1];
+    if cursor.container == container && index >= cursor.next_index {
+        (cursor.next_index, cursor.next_pos)
+    } else {
+        (0, first)
+    }
+}
+
+#[inline(always)]
+fn update_property_cursor(caches: &mut Caches, container: u32, index: u32, pos: u32) {
+    caches.cursors[1] = Cursor {
+        container,
+        next_index: index,
+        next_pos: pos,
+    };
+}
+
 #[inline]
 fn update_cursor(caches: &mut Caches, container: u32, next_index: u32, next_pos: u32) {
     if let Some(slot) = caches
@@ -565,7 +584,11 @@ pub(crate) fn element_at(
         return Err(ErrorCode::IndexOutOfBounds);
     }
     let end = container_end(meta, bytes)?;
-    let (mut current, mut pos) = cursor_start(caches, container, index, meta.first_child);
+    let (mut current, mut pos) = if advance_cursor {
+        cursor_start(caches, container, index, meta.first_child)
+    } else {
+        property_cursor_start(caches, container, index, meta.first_child)
+    };
     match meta.kind {
         ContainerKind::Array | ContainerKind::Shape => {
             while current < index {
@@ -579,7 +602,7 @@ pub(crate) fn element_at(
                 value
             } else {
                 let value = decode_value(bytes, state, caches, pos)?;
-                update_cursor(caches, container, index, pos);
+                update_property_cursor(caches, container, index, pos);
                 value
             };
             Ok(value)
@@ -627,13 +650,13 @@ fn map_find(
     query: &[u8],
 ) -> Result<Option<NanBox>> {
     let end = container_end(meta, bytes)?;
-    let (mut index, mut pos) = caches
-        .cursors
-        .iter()
-        .find(|cursor| cursor.container == meta.tag_offset && cursor.next_index < meta.count)
-        .map_or((0, meta.first_child), |cursor| {
+    let cursor = caches.cursors[1];
+    let (mut index, mut pos) =
+        if cursor.container == meta.tag_offset && cursor.next_index < meta.count {
             (cursor.next_index, cursor.next_pos)
-        });
+        } else {
+            (0, meta.first_child)
+        };
 
     for _ in 0..meta.count {
         if index == meta.count {
@@ -644,7 +667,7 @@ fn map_find(
         let (span, value_pos) = string_span_at(bytes, state, pair_pos, end)?;
         if span_matches(bytes, span, query) {
             let value = decode_value(bytes, state, caches, value_pos)?;
-            update_cursor(caches, meta.tag_offset, index, pair_pos);
+            update_property_cursor(caches, meta.tag_offset, index, pair_pos);
             return Ok(Some(value));
         }
         index += 1;
