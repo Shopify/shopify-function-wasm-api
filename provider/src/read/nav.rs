@@ -5,7 +5,7 @@ use shopify_function_wasm_api_core::read::{ErrorCode, NanBox};
 use std::collections::HashMap;
 
 const MAX_DEPTH: u32 = 128;
-const CONTAINER_CACHE_LEN: usize = 8;
+const CONTAINER_CACHE_LEN: usize = 16;
 const CURSOR_CACHE_LEN: usize = 4;
 const INVALID_OFFSET: u32 = u32::MAX;
 
