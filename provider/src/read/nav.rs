@@ -393,6 +393,7 @@ pub(crate) fn parse_input_reusing(bytes: &[u8], mut state: InputState) -> Result
     Ok(state)
 }
 
+#[inline(always)]
 fn parse_shapes(bytes: &[u8], input_len: u32, pos: &mut u32, state: &mut InputState) -> Result<()> {
     let count = read_var_u32(bytes, pos, input_len)? as usize;
     let remaining = (input_len - *pos) as usize;
