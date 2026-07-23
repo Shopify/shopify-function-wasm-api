@@ -739,12 +739,19 @@ pub(crate) fn find_property(
     caches: &mut Caches,
     container: u32,
     query: &[u8],
-) -> Result<Option<NanBox>> {
-    let meta = container_meta(bytes, state, caches, container)?;
-    match meta.kind {
-        ContainerKind::Array => Err(ErrorCode::NotAnObject),
-        ContainerKind::Map => map_find(bytes, state, caches, meta, query),
-        ContainerKind::Shape => shape_find(bytes, state, caches, meta, query),
+) -> NanBox {
+    let result = match container_meta(bytes, state, caches, container) {
+        Ok(meta) => match meta.kind {
+            ContainerKind::Array => Err(ErrorCode::NotAnObject),
+            ContainerKind::Map => map_find(bytes, state, caches, meta, query),
+            ContainerKind::Shape => shape_find(bytes, state, caches, meta, query),
+        },
+        Err(error) => Err(error),
+    };
+    match result {
+        Ok(Some(value)) => value,
+        Ok(None) => NanBox::null(),
+        Err(error) => NanBox::error(error),
     }
 }
 

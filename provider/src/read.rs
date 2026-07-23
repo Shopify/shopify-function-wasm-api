@@ -103,17 +103,14 @@ decorate_for_target! {
             let Some(state) = context.input_state.as_ref() else {
                 return NanBox::error(ErrorCode::ReadError).to_bits();
             };
-            match nav::find_property(
+            nav::find_property(
                 &context.input_bytes,
                 state,
                 &mut context.input_caches,
                 object,
                 query,
-            ) {
-                Ok(Some(value)) => value.to_bits(),
-                Ok(None) => NanBox::null().to_bits(),
-                Err(error) => NanBox::error(error).to_bits(),
-            }
+            )
+            .to_bits()
         })
     }
 }
@@ -134,17 +131,14 @@ decorate_for_target! {
                 return NanBox::error(ErrorCode::ReadError).to_bits();
             };
             let query = context.string_interner.get(interned_string_id);
-            match nav::find_property(
+            nav::find_property(
                 &context.input_bytes,
                 state,
                 &mut context.input_caches,
                 object,
                 query,
-            ) {
-                Ok(Some(value)) => value.to_bits(),
-                Ok(None) => NanBox::null().to_bits(),
-                Err(error) => NanBox::error(error).to_bits(),
-            }
+            )
+            .to_bits()
         })
     }
 }
