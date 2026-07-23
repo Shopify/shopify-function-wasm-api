@@ -25,8 +25,10 @@ struct Context {
     input_state: Option<read::nav::InputState>,
     /// Small read-side navigation caches and rare long-string lengths.
     input_caches: read::nav::Caches,
-    /// Reused destination for property names copied by the trampoline.
-    input_obj_prop_buffer: Vec<u8>,
+    /// Inline destination for normal property names copied by the trampoline.
+    input_obj_prop_buffer: [u8; 64],
+    /// Reused fallback for property names larger than the inline buffer.
+    input_obj_prop_overflow: Vec<u8>,
     /// The encoded root value, without the FBF header or definition prelude.
     output_bytes: Vec<u8>,
     /// The fully assembled output. This remains owned by the context so Wasm
@@ -64,7 +66,8 @@ impl Default for Context {
             input_bytes: Vec::new(),
             input_state: None,
             input_caches: read::nav::Caches::default(),
-            input_obj_prop_buffer: Vec::with_capacity(64),
+            input_obj_prop_buffer: [0; 64],
+            input_obj_prop_overflow: Vec::new(),
             output_bytes: Vec::with_capacity(1024),
             #[cfg(target_family = "wasm")]
             assembled_output_bytes: Vec::new(),

@@ -46,12 +46,13 @@ fn decode_scope(scope: Val) -> ScopeKind {
 decorate_for_target! {
     fn shopify_function_input_get_obj_prop_buffer(len: usize) -> usize {
         Context::with_mut(|context| {
-            let buffer = &mut context.input_obj_prop_buffer;
+            if len <= context.input_obj_prop_buffer.len() {
+                return context.input_obj_prop_buffer.as_mut_ptr() as usize;
+            }
+            let buffer = &mut context.input_obj_prop_overflow;
             if len > buffer.capacity() {
                 buffer.reserve(len);
             }
-            // The trampoline initializes the requested spare capacity before
-            // property lookup; no logical Vec length update is needed.
             buffer.as_mut_ptr() as usize
         })
     }
