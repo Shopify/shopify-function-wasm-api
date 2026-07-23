@@ -21,16 +21,12 @@ type DoubleUsize = u64;
 
 struct Context {
     input_bytes: Vec<u8>,
-    /// Parsed input definition tables and the offset of the root value.
-    /// Populated lazily by the first input read.
-    input_root: Option<(fbf::read::Tables, usize)>,
-    /// Scratch space used by the trampoline to copy property names from guest
-    /// memory without allocating on every lookup.
+    /// Parsed input prelude and root offset, initialized on first read.
+    input_state: Option<read::nav::InputState>,
+    /// Small read-side navigation caches and rare long-string lengths.
+    input_caches: read::nav::Caches,
+    /// Reused destination for property names copied by the trampoline.
     input_obj_prop_buffer: Vec<u8>,
-    /// Lengths for strings whose size does not fit in a NanBox.
-    long_string_lens: read::nav::LongStringLens,
-    /// 4-slot cache for container cursor positions
-    cursor_memo: read::nav::CursorMemo,
     /// The encoded root value, without the FBF header or definition prelude.
     output_bytes: Vec<u8>,
     /// The fully assembled output. This remains owned by the context so Wasm
@@ -66,10 +62,9 @@ impl Default for Context {
     fn default() -> Self {
         Self {
             input_bytes: Vec::new(),
-            input_root: None,
+            input_state: None,
+            input_caches: read::nav::Caches::default(),
             input_obj_prop_buffer: Vec::with_capacity(64),
-            long_string_lens: read::nav::LongStringLens::default(),
-            cursor_memo: read::nav::CursorMemo::default(),
             output_bytes: Vec::with_capacity(1024),
             #[cfg(target_family = "wasm")]
             assembled_output_bytes: Vec::new(),

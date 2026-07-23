@@ -341,7 +341,7 @@ fn test_shapes() -> Result<()> {
             { "x": 2, "y": 4 }
         ])
     );
-    assert_fuel_consumed_within_threshold(4_611, fuel);
+    assert_fuel_consumed_within_threshold(4_182, fuel);
 
     Ok(())
 }
@@ -356,7 +356,7 @@ fn test_fuel_consumption_within_threshold() -> Result<()> {
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
     eprintln!("WASM API fuel: {}", wasm_api_fuel);
     // Using a target fuel value as reference similar to the Javy example
-    assert_fuel_consumed_within_threshold(11_652, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10_344, wasm_api_fuel);
     Ok(())
 }
 
@@ -377,7 +377,7 @@ fn test_shapes_fuel_consumption_within_threshold() -> Result<()> {
 
     assert_eq!(decode_output(shapes_output)?, decode_output(output)?);
     eprintln!("WASM API shapes fuel: {}", shapes_fuel);
-    assert_fuel_consumed_within_threshold(12_483, shapes_fuel);
+    assert_fuel_consumed_within_threshold(11_175, shapes_fuel);
     Ok(())
 }
 
@@ -392,7 +392,7 @@ fn test_benchmark_with_input() -> Result<()> {
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
 
-    assert_fuel_consumed_within_threshold(11_652, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10_344, wasm_api_fuel);
 
     Ok(())
 }
@@ -413,7 +413,7 @@ fn test_shapes_benchmark_with_input() -> Result<()> {
         run_example("cart-checkout-validation-wasm-api-shapes", wasm_api_input)?;
 
     assert_eq!(decode_output(shapes_output)?, decode_output(output)?);
-    assert_fuel_consumed_within_threshold(12_483, shapes_fuel);
+    assert_fuel_consumed_within_threshold(11_175, shapes_fuel);
 
     Ok(())
 }
@@ -429,7 +429,7 @@ fn test_benchmark_with_input_early_exit() -> Result<()> {
     let wasm_api_input = prepare_wasm_api_input(input.clone())?;
     let (_, _, wasm_api_fuel) = run_example("cart-checkout-validation-wasm-api", wasm_api_input)?;
 
-    assert_fuel_consumed_within_threshold(12_458, wasm_api_fuel);
+    assert_fuel_consumed_within_threshold(10_726, wasm_api_fuel);
 
     Ok(())
 }
@@ -450,7 +450,7 @@ fn test_shapes_benchmark_with_input_early_exit() -> Result<()> {
         run_example("cart-checkout-validation-wasm-api-shapes", wasm_api_input)?;
 
     assert_eq!(decode_output(shapes_output)?, decode_output(output)?);
-    assert_fuel_consumed_within_threshold(12_997, shapes_fuel);
+    assert_fuel_consumed_within_threshold(11_265, shapes_fuel);
 
     Ok(())
 }
@@ -475,13 +475,13 @@ fn test_log_len() -> Result<()> {
         Ok(run_example("log-len", prepare_wasm_api_input(serde_json::json!(len))?)?.2)
     };
     let fuel = run(1)?;
-    assert_fuel_consumed_within_threshold(670, fuel);
+    assert_fuel_consumed_within_threshold(487, fuel);
     let fuel = run(500)?;
-    assert_fuel_consumed_within_threshold(2_972, fuel);
+    assert_fuel_consumed_within_threshold(2_532, fuel);
     let fuel = run(1_000)?;
-    assert_fuel_consumed_within_threshold(4_597, fuel);
+    assert_fuel_consumed_within_threshold(4_157, fuel);
     let fuel = run(5_000)?;
-    assert_fuel_consumed_within_threshold(17_633, fuel);
+    assert_fuel_consumed_within_threshold(17_193, fuel);
     let fuel = run(10_000)?;
     assert_fuel_consumed_within_threshold(33_928, fuel);
     let fuel = run(100_000)?;
