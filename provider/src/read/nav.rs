@@ -23,7 +23,7 @@ impl InputState {
     pub(crate) fn preallocated() -> Self {
         Self {
             root: 0,
-            strings: Vec::with_capacity(32),
+            strings: Vec::with_capacity(16),
             shape_keys: Vec::with_capacity(32),
             shapes: Vec::with_capacity(8),
         }
