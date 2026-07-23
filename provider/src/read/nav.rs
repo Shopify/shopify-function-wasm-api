@@ -731,7 +731,7 @@ pub(crate) fn long_string_len(caches: &Caches, content: u32) -> Option<u32> {
     caches.long_string_lens.get(&content).copied()
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn skip_value(bytes: &[u8], state: &InputState, pos: u32, end: u32) -> Result<u32> {
     checked_add(pos, extent_at(bytes, state, pos, end, 0)?)
 }
