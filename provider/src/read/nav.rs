@@ -32,7 +32,7 @@ pub(crate) struct ContainerMeta {
     pub(crate) kind: ContainerKind,
     pub(crate) count: u32,
     pub(crate) first_child: u32,
-    pub(crate) end: Option<u32>,
+    pub(crate) end: u32,
     pub(crate) shape_id: u32,
 }
 
@@ -41,7 +41,7 @@ const EMPTY_META: ContainerMeta = ContainerMeta {
     kind: ContainerKind::Array,
     count: 0,
     first_child: 0,
-    end: None,
+    end: INVALID_OFFSET,
     shape_id: 0,
 };
 
@@ -397,7 +397,11 @@ fn framed_payload(bytes: &[u8], pos: u32, width: u8, limit: u32) -> Result<(u32,
 
 #[inline]
 fn validate_child_minimum(meta: &ContainerMeta, limit: u32) -> Result<()> {
-    let end = meta.end.unwrap_or(limit);
+    let end = if meta.end == INVALID_OFFSET {
+        limit
+    } else {
+        meta.end
+    };
     let slots = if meta.kind == ContainerKind::Map {
         meta.count.checked_mul(2).ok_or(ErrorCode::ReadError)?
     } else {
@@ -427,19 +431,19 @@ pub(crate) fn container_meta(
         kind: ContainerKind::Array,
         count: 0,
         first_child: checked_add(pos, 1)?,
-        end: None,
+        end: INVALID_OFFSET,
         shape_id: 0,
     };
     match tag {
-        format::FIXARRAY0 => meta.end = Some(meta.first_child),
+        format::FIXARRAY0 => meta.end = meta.first_child,
         format::FIXMAP0 => {
             meta.kind = ContainerKind::Map;
-            meta.end = Some(meta.first_child);
+            meta.end = meta.first_child;
         }
         0xd1..=0xd7 | 0xd9..=0xdf => {
             let (first, end) = framed_payload(bytes, pos, 1, limit)?;
             meta.first_child = first;
-            meta.end = Some(end);
+            meta.end = end;
             if tag <= format::FIXARRAY_MAX {
                 meta.count = (tag - format::FIXARRAY0) as u32;
             } else {
@@ -459,7 +463,7 @@ pub(crate) fn container_meta(
             let (mut first, end) = framed_payload(bytes, pos, width, limit)?;
             meta.count = read_var_u32(bytes, &mut first, end)?;
             meta.first_child = first;
-            meta.end = Some(end);
+            meta.end = end;
             if matches!(tag, format::MAP8..=format::MAP32) {
                 meta.kind = ContainerKind::Map;
             }
@@ -474,13 +478,12 @@ pub(crate) fn container_meta(
         }
         format::SHAPE8..=format::SHAPE32 | format::SEQSHAPE => {
             let (mut first, end) = if tag == format::SEQSHAPE {
-                (meta.first_child, None)
+                (meta.first_child, INVALID_OFFSET)
             } else {
                 let width = TAG_INFO[tag as usize].arg;
-                let (first, end) = framed_payload(bytes, pos, width, limit)?;
-                (first, Some(end))
+                framed_payload(bytes, pos, width, limit)?
             };
-            let shape_end = end.unwrap_or(limit);
+            let shape_end = if end == INVALID_OFFSET { limit } else { end };
             meta.shape_id = read_var_u32(bytes, &mut first, shape_end)?;
             meta.count = state
                 .shapes
@@ -557,10 +560,11 @@ fn update_cursor(caches: &mut Caches, container: u32, next_index: u32, next_pos:
 
 #[inline]
 fn container_end(meta: ContainerMeta, bytes: &[u8]) -> Result<u32> {
-    meta.end.map_or_else(
-        || u32::try_from(bytes.len()).map_err(|_| ErrorCode::ReadError),
-        Ok,
-    )
+    if meta.end == INVALID_OFFSET {
+        u32::try_from(bytes.len()).map_err(|_| ErrorCode::ReadError)
+    } else {
+        Ok(meta.end)
+    }
 }
 
 #[inline]
