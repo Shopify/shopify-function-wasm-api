@@ -182,7 +182,7 @@ fn checked_add(a: u32, b: u32) -> Result<u32> {
     a.checked_add(b).ok_or(ErrorCode::ReadError)
 }
 
-#[inline]
+#[inline(always)]
 fn read_var_u32(bytes: &[u8], pos: &mut u32, end: u32) -> Result<u32> {
     if *pos >= end || end as usize > bytes.len() {
         return Err(ErrorCode::ReadError);
