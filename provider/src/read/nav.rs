@@ -275,7 +275,7 @@ fn read_number(bytes: &[u8], pos: u32, tag: u8, end: u32) -> Result<f64> {
     }
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn decode_value(
     bytes: &[u8],
     state: &InputState,
