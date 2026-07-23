@@ -184,8 +184,13 @@ fn checked_add(a: u32, b: u32) -> Result<u32> {
 
 #[inline]
 fn read_var_u32(bytes: &[u8], pos: &mut u32, end: u32) -> Result<u32> {
-    if *pos > end || end as usize > bytes.len() {
+    if *pos >= end || end as usize > bytes.len() {
         return Err(ErrorCode::ReadError);
+    }
+    let first = bytes[*pos as usize];
+    if first & 0x80 == 0 {
+        *pos += 1;
+        return Ok(first as u32);
     }
     let mut cursor = *pos as usize;
     let value = fbf::varint::read(&bytes[..end as usize], &mut cursor, false)
