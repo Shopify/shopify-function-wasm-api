@@ -71,7 +71,7 @@ const EMPTY_CURSOR: Cursor = Cursor {
 pub(crate) struct Caches {
     containers: [ContainerMeta; CONTAINER_CACHE_LEN],
     cursors: [Cursor; 1],
-    shape_lookup: Vec<u32>,
+    shape_lookup: Vec<(u32, u32)>, // (key arena start, recent index)
     long_string_lens: HashMap<u32, u32>,
 }
 
@@ -80,7 +80,7 @@ impl Default for Caches {
         Self {
             containers: [EMPTY_META; CONTAINER_CACHE_LEN],
             cursors: [EMPTY_CURSOR; 1],
-            shape_lookup: vec![INVALID_OFFSET; 8],
+            shape_lookup: vec![(INVALID_OFFSET, INVALID_OFFSET); 8],
             long_string_lens: HashMap::new(),
         }
     }
@@ -161,7 +161,10 @@ pub(crate) fn reset_caches_for_state(caches: &mut Caches, state: &InputState) {
     if state.shapes.len() > caches.shape_lookup.len() {
         caches
             .shape_lookup
-            .resize(state.shapes.len(), INVALID_OFFSET);
+            .resize(state.shapes.len(), (INVALID_OFFSET, INVALID_OFFSET));
+    }
+    for (memo, &(keys_start, _)) in caches.shape_lookup.iter_mut().zip(&state.shapes) {
+        *memo = (keys_start, INVALID_OFFSET);
     }
 }
 
@@ -689,11 +692,7 @@ fn shape_find(
     if meta.count == 0 {
         return Ok(NanBox::null());
     }
-    let (keys_start, keys_len) = state.shapes[meta.shape_id as usize];
-    if keys_len != meta.count {
-        return Err(ErrorCode::ReadError);
-    }
-    let recent = caches.shape_lookup[meta.shape_id as usize];
+    let (keys_start, recent) = caches.shape_lookup[meta.shape_id as usize];
     let start = if recent < meta.count { recent } else { 0 };
     let mut matched = None;
     let mut index = start;
@@ -721,7 +720,7 @@ fn shape_find(
                 break;
             }
         }
-        caches.shape_lookup[meta.shape_id as usize] = index;
+        caches.shape_lookup[meta.shape_id as usize].1 = index;
     }
     element_at_with_meta(bytes, state, caches, meta, index, false)
 }
