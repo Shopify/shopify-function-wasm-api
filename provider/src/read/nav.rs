@@ -533,23 +533,12 @@ fn cursor_start(caches: &Caches, container: u32, index: u32, first: u32) -> (u32
 }
 
 #[inline(always)]
-fn property_cursor_start(caches: &Caches, container: u32, index: u32, first: u32) -> (u32, u32) {
-    let cursor = caches.cursors[1];
-    if cursor.container == container && index >= cursor.next_index {
-        (cursor.next_index, cursor.next_pos)
-    } else {
-        (0, first)
-    }
+fn property_cursor_start(_caches: &Caches, _container: u32, _index: u32, first: u32) -> (u32, u32) {
+    (0, first)
 }
 
 #[inline(always)]
-fn update_property_cursor(caches: &mut Caches, container: u32, index: u32, pos: u32) {
-    caches.cursors[1] = Cursor {
-        container,
-        next_index: index,
-        next_pos: pos,
-    };
-}
+fn update_property_cursor(_caches: &mut Caches, _container: u32, _index: u32, _pos: u32) {}
 
 #[inline(always)]
 fn update_cursor(caches: &mut Caches, container: u32, next_index: u32, next_pos: u32) {
