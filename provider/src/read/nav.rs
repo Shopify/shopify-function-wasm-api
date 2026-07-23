@@ -31,13 +31,6 @@ impl InputState {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ContainerKind {
-    Array,
-    Map,
-    Shape,
-}
-
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ContainerMeta {
     pub(crate) tag_offset: u32,
@@ -49,12 +42,13 @@ pub(crate) struct ContainerMeta {
 
 impl ContainerMeta {
     #[inline(always)]
-    fn kind(self) -> ContainerKind {
-        match self.kind_id {
-            ARRAY_KIND_ID => ContainerKind::Array,
-            MAP_KIND_ID => ContainerKind::Map,
-            _ => ContainerKind::Shape,
-        }
+    fn is_array(self) -> bool {
+        self.kind_id == ARRAY_KIND_ID
+    }
+
+    #[inline(always)]
+    fn is_map(self) -> bool {
+        self.kind_id == MAP_KIND_ID
     }
 
     #[inline(always)]
@@ -343,11 +337,10 @@ pub(crate) fn decode_value(
         }
         _ => {
             let meta = container_meta(bytes, state, caches, pos)?;
-            match meta.kind() {
-                ContainerKind::Array => NanBox::array(pos as usize, meta.count as usize),
-                ContainerKind::Map | ContainerKind::Shape => {
-                    NanBox::obj(pos as usize, meta.count as usize)
-                }
+            if meta.is_array() {
+                NanBox::array(pos as usize, meta.count as usize)
+            } else {
+                NanBox::obj(pos as usize, meta.count as usize)
             }
         }
     };
@@ -442,7 +435,7 @@ fn validate_child_minimum(meta: &ContainerMeta, limit: u32) -> Result<()> {
     } else {
         meta.end
     };
-    let slots = if meta.kind() == ContainerKind::Map {
+    let slots = if meta.is_map() {
         meta.count.checked_mul(2).ok_or(ErrorCode::ReadError)?
     } else {
         meta.count
@@ -626,32 +619,29 @@ fn element_at_with_meta(
     } else {
         (0, meta.first_child)
     };
-    match meta.kind() {
-        ContainerKind::Array | ContainerKind::Shape => {
-            while current < index {
-                pos = skip_value(bytes, state, pos, end)?;
-                current += 1;
-            }
-            let value = if advance_cursor {
-                let next = skip_value(bytes, state, pos, end)?;
-                let value = decode_value(bytes, state, caches, pos)?;
-                update_cursor(caches, container, index + 1, next);
-                value
-            } else {
-                decode_value(bytes, state, caches, pos)?
-            };
-            Ok(value)
+    if meta.is_map() {
+        while current < index {
+            pos = skip_map_pair(bytes, state, pos, end)?.1;
+            current += 1;
         }
-        ContainerKind::Map => {
-            while current < index {
-                pos = skip_map_pair(bytes, state, pos, end)?.1;
-                current += 1;
-            }
-            let (value_pos, next) = skip_map_pair(bytes, state, pos, end)?;
-            let value = decode_value(bytes, state, caches, value_pos)?;
+        let (value_pos, next) = skip_map_pair(bytes, state, pos, end)?;
+        let value = decode_value(bytes, state, caches, value_pos)?;
+        update_cursor(caches, container, index + 1, next);
+        Ok(value)
+    } else {
+        while current < index {
+            pos = skip_value(bytes, state, pos, end)?;
+            current += 1;
+        }
+        let value = if advance_cursor {
+            let next = skip_value(bytes, state, pos, end)?;
+            let value = decode_value(bytes, state, caches, pos)?;
             update_cursor(caches, container, index + 1, next);
-            Ok(value)
-        }
+            value
+        } else {
+            decode_value(bytes, state, caches, pos)?
+        };
+        Ok(value)
     }
 }
 
@@ -748,11 +738,9 @@ pub(crate) fn find_property(
     query: &[u8],
 ) -> NanBox {
     let result = match container_meta(bytes, state, caches, container) {
-        Ok(meta) => match meta.kind() {
-            ContainerKind::Array => Err(ErrorCode::NotAnObject),
-            ContainerKind::Map => map_find(bytes, state, caches, meta, query),
-            ContainerKind::Shape => shape_find(bytes, state, caches, meta, query),
-        },
+        Ok(meta) if meta.is_array() => Err(ErrorCode::NotAnObject),
+        Ok(meta) if meta.is_map() => map_find(bytes, state, caches, meta, query),
+        Ok(meta) => shape_find(bytes, state, caches, meta, query),
         Err(error) => Err(error),
     };
     result.unwrap_or_else(NanBox::error)
@@ -767,13 +755,13 @@ pub(crate) fn key_at(
     index: u32,
 ) -> Result<(u32, u32)> {
     let meta = container_meta(bytes, state, caches, container)?;
-    if meta.kind() == ContainerKind::Array {
+    if meta.is_array() {
         return Err(ErrorCode::NotAnObject);
     }
     if index >= meta.count {
         return Err(ErrorCode::IndexOutOfBounds);
     }
-    if meta.kind() == ContainerKind::Shape {
+    if !meta.is_map() {
         let (start, _) = state.shapes[meta.shape_id() as usize];
         let span = state.shape_keys[(start + index) as usize];
         if span.1 >= NanBox::MAX_VALUE_LENGTH as u32 {
