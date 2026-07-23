@@ -562,7 +562,7 @@ fn map_key_span_at(
         let len = (tag - format::FIXSTR_MIN) as u32;
         let content = checked_add(pos, 1)?;
         let next = checked_add(content, len)?;
-        if next <= end && next as usize <= bytes.len() {
+        if next <= end {
             return Ok(((content, len), next));
         }
         return Err(ErrorCode::ReadError);
