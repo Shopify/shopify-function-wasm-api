@@ -684,10 +684,17 @@ mod test {
         //
         // to update the snapshots, either run `cargo insta review` or use the `INSTA_UPDATE`
         // environment variable as documented at https://docs.rs/insta/latest/insta/index.html#updating-snapshots
-        insta::glob!("test_data/*.wat", |path| {
-            let input = wat::parse_file(path).unwrap();
-            let actual = trampoline_wat(&input).unwrap();
-            insta::assert_snapshot!(actual);
+        insta::with_settings!({
+            filters => vec![(
+                r#"\(processed-by "walrus" "[^"]+"\)"#,
+                r#"(processed-by "walrus" "[WALRUS-VERSION]")"#,
+            )],
+        }, {
+            insta::glob!("test_data/*.wat", |path| {
+                let input = wat::parse_file(path).unwrap();
+                let actual = trampoline_wat(&input).unwrap();
+                insta::assert_snapshot!(actual);
+            });
         });
     }
 

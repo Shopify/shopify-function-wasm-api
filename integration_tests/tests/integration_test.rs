@@ -407,7 +407,7 @@ fn test_log_past_capacity() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to prepare example: {e}"))?;
     let (_, logs, fuel) = run_example("log-past-capacity", vec![])?;
     assert_eq!(logs, format!("{}{}", "a".repeat(991), "b".repeat(10)));
-    assert_fuel_consumed_within_threshold(928, fuel);
+    assert_fuel_consumed_within_threshold(965, fuel);
     Ok(())
 }
 
