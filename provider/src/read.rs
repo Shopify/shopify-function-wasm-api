@@ -8,6 +8,41 @@ use shopify_function_wasm_api_core::{
 
 pub(crate) mod nav;
 
+#[derive(Clone, Copy)]
+enum ScopeKind {
+    Object(u32),
+    Array(u32),
+    Other,
+    BadPointer,
+    Invalid,
+}
+
+#[inline(always)]
+fn decode_scope(scope: Val) -> ScopeKind {
+    const F64_OFFSET: u32 = Val::BITS - 64;
+    const PAYLOAD_SIZE: u32 = 50 + F64_OFFSET;
+    const TAG_SHIFT: u32 = 46 + F64_OFFSET;
+    const NAN_MASK: Val = (((1 as Val) << 13) - 1) << PAYLOAD_SIZE;
+    const POINTER_MASK: Val = ((1 as Val) << usize::BITS) - 1;
+
+    if scope & NAN_MASK != NAN_MASK {
+        return ScopeKind::Other;
+    }
+    let tag = ((scope >> TAG_SHIFT) & 0xf) as u8;
+    if !matches!(tag, 0 | 1 | 3 | 4 | 5 | 15) {
+        return ScopeKind::Invalid;
+    }
+    let ptr = (scope & POINTER_MASK) as usize;
+    let Ok(ptr) = u32::try_from(ptr) else {
+        return ScopeKind::BadPointer;
+    };
+    match tag {
+        4 => ScopeKind::Object(ptr),
+        5 => ScopeKind::Array(ptr),
+        _ => ScopeKind::Other,
+    }
+}
+
 decorate_for_target! {
     fn shopify_function_input_get_obj_prop_buffer(len: usize) -> usize {
         Context::with_mut(|context| {
@@ -52,13 +87,11 @@ decorate_for_target! {
         ptr: usize,
         len: usize,
     ) -> Val {
-        let object = match NanBox::from_bits(scope).try_decode() {
-            Ok(NanBoxValueRef::Object { ptr, .. }) => match u32::try_from(ptr) {
-                Ok(ptr) => ptr,
-                Err(_) => return NanBox::error(ErrorCode::ReadError).to_bits(),
-            },
-            Ok(_) => return NanBox::error(ErrorCode::NotAnObject).to_bits(),
-            Err(_) => return NanBox::error(ErrorCode::DecodeError).to_bits(),
+        let object = match decode_scope(scope) {
+            ScopeKind::Object(ptr) => ptr,
+            ScopeKind::BadPointer => return NanBox::error(ErrorCode::ReadError).to_bits(),
+            ScopeKind::Invalid => return NanBox::error(ErrorCode::DecodeError).to_bits(),
+            _ => return NanBox::error(ErrorCode::NotAnObject).to_bits(),
         };
         let query = if len == 0 {
             &[]
@@ -89,13 +122,11 @@ decorate_for_target! {
         scope: Val,
         interned_string_id: InternedStringId,
     ) -> Val {
-        let object = match NanBox::from_bits(scope).try_decode() {
-            Ok(NanBoxValueRef::Object { ptr, .. }) => match u32::try_from(ptr) {
-                Ok(ptr) => ptr,
-                Err(_) => return NanBox::error(ErrorCode::ReadError).to_bits(),
-            },
-            Ok(_) => return NanBox::error(ErrorCode::NotAnObject).to_bits(),
-            Err(_) => return NanBox::error(ErrorCode::DecodeError).to_bits(),
+        let object = match decode_scope(scope) {
+            ScopeKind::Object(ptr) => ptr,
+            ScopeKind::BadPointer => return NanBox::error(ErrorCode::ReadError).to_bits(),
+            ScopeKind::Invalid => return NanBox::error(ErrorCode::DecodeError).to_bits(),
+            _ => return NanBox::error(ErrorCode::NotAnObject).to_bits(),
         };
         Context::with_mut(|context| {
             let Some(state) = context.input_state.as_ref() else {
@@ -122,16 +153,12 @@ decorate_for_target! {
         scope: Val,
         index: usize,
     ) -> Val {
-        let container = match NanBox::from_bits(scope).try_decode() {
-            Ok(
-                NanBoxValueRef::Array { ptr, .. }
-                | NanBoxValueRef::Object { ptr, .. },
-            ) => match u32::try_from(ptr) {
-                Ok(ptr) => ptr,
-                Err(_) => return NanBox::error(ErrorCode::ReadError).to_bits(),
-            },
-            Ok(_) => return NanBox::error(ErrorCode::NotIndexable).to_bits(),
-            Err(_) => return NanBox::error(ErrorCode::ReadError).to_bits(),
+        let container = match decode_scope(scope) {
+            ScopeKind::Object(ptr) | ScopeKind::Array(ptr) => ptr,
+            ScopeKind::Other => return NanBox::error(ErrorCode::NotIndexable).to_bits(),
+            ScopeKind::BadPointer | ScopeKind::Invalid => {
+                return NanBox::error(ErrorCode::ReadError).to_bits()
+            }
         };
         let index = match u32::try_from(index) {
             Ok(index) => index,
@@ -159,13 +186,14 @@ decorate_for_target! {
         scope: Val,
         index: usize,
     ) -> Val {
-        let object = match NanBox::from_bits(scope).try_decode() {
-            Ok(NanBoxValueRef::Object { ptr, .. }) => match u32::try_from(ptr) {
-                Ok(ptr) => ptr,
-                Err(_) => return NanBox::error(ErrorCode::ReadError).to_bits(),
-            },
-            Ok(_) => return NanBox::error(ErrorCode::NotAnObject).to_bits(),
-            Err(_) => return NanBox::error(ErrorCode::ReadError).to_bits(),
+        let object = match decode_scope(scope) {
+            ScopeKind::Object(ptr) => ptr,
+            ScopeKind::Other | ScopeKind::Array(_) => {
+                return NanBox::error(ErrorCode::NotAnObject).to_bits()
+            }
+            ScopeKind::BadPointer | ScopeKind::Invalid => {
+                return NanBox::error(ErrorCode::ReadError).to_bits()
+            }
         };
         let index = match u32::try_from(index) {
             Ok(index) => index,
