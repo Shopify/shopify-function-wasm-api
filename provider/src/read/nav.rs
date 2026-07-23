@@ -803,7 +803,12 @@ pub(crate) fn skip_value(bytes: &[u8], state: &InputState, pos: u32, end: u32) -
         let len_pos = checked_add(pos, 1)?;
         let len = read_le(bytes, len_pos, 1, end)?;
         let payload = checked_add(len_pos, 1)?;
-        return bounded_span(bytes, payload, len, end).map(|(_, next)| next);
+        let next = checked_add(payload, len)?;
+        return if next <= end {
+            Ok(next)
+        } else {
+            Err(ErrorCode::ReadError)
+        };
     }
     checked_add(pos, extent_at(bytes, state, pos, end, 0)?)
 }
