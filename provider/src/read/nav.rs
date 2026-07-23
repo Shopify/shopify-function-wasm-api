@@ -543,7 +543,7 @@ fn skip_map_pair(bytes: &[u8], state: &InputState, key_pos: u32, end: u32) -> Re
     Ok((value_pos, next_pair))
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn element_at(
     bytes: &[u8],
     state: &InputState,
