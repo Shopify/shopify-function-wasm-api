@@ -735,6 +735,7 @@ pub(crate) fn skip_value(bytes: &[u8], state: &InputState, pos: u32, end: u32) -
     checked_add(pos, extent_at(bytes, state, pos, end, 0)?)
 }
 
+#[inline(always)]
 fn extent_at(bytes: &[u8], state: &InputState, pos: u32, end: u32, depth: u32) -> Result<u32> {
     if pos >= end || end as usize > bytes.len() {
         return Err(ErrorCode::ReadError);
