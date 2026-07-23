@@ -626,6 +626,19 @@ pub(crate) fn element_at(
     advance_cursor: bool,
 ) -> Result<NanBox> {
     let meta = container_meta(bytes, state, caches, container)?;
+    element_at_with_meta(bytes, state, caches, meta, index, advance_cursor)
+}
+
+#[inline(always)]
+fn element_at_with_meta(
+    bytes: &[u8],
+    state: &InputState,
+    caches: &mut Caches,
+    meta: ContainerMeta,
+    index: u32,
+    advance_cursor: bool,
+) -> Result<NanBox> {
+    let container = meta.tag_offset;
     if index >= meta.count {
         return Err(ErrorCode::IndexOutOfBounds);
     }
@@ -764,7 +777,7 @@ fn shape_find(
         }
     }
     caches.shape_lookup[meta.shape_id as usize] = index;
-    element_at(bytes, state, caches, meta.tag_offset, index, false).map(Some)
+    element_at_with_meta(bytes, state, caches, meta, index, false).map(Some)
 }
 
 #[inline]
