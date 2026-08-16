@@ -28,7 +28,7 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-features -- -D warnings
       - name: Run clippy (wasm32-unknown-unknown target)
-        run: cargo clippy --target wasm32-unknown-unknown --all-features --workspace --exclude shopify_function_trampoline --exclude integration_tests -- -D warnings
+        run: cargo clippy --target wasm32-unknown-unknown --all-features --workspace --exclude shopify_function_trampoline --exclude integration_tests --exclude conformance_tests -- -D warnings
       - name: Run clippy (tests)
         run: cargo clippy --tests --all-features
       - name: Run clippy (benches)
@@ -77,3 +77,20 @@ jobs:
             cargo-target
       - name: Build
         run: cargo build --release --all-features
+
+  codegen:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: codegen
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: "10.28.0"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm pack --pack-destination /tmp

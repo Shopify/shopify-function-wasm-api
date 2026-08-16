@@ -1,0 +1,65 @@
+"""
+Test schema with deeply nested object types and arrays.
+Used to verify recursive nesting in code generation.
+"""
+
+schema {
+  query: Input
+  mutation: MutationRoot
+}
+
+scalar Date
+scalar Decimal
+
+type Input {
+  cart: Cart!
+  customer: Customer
+}
+
+type Cart {
+  lines: [CartLine!]!
+  note: String
+}
+
+type CartLine {
+  quantity: Int!
+  merchandise: Merchandise!
+  attributes: [Attribute!]!
+}
+
+type Merchandise {
+  title: String!
+  sku: String
+}
+
+type Attribute {
+  key: String!
+  value: String
+}
+
+type Customer {
+  displayName: String!
+  address: Address
+}
+
+type Address {
+  city: String!
+  country: String!
+}
+
+type MutationRoot {
+  cartValidation(
+    result: CartValidationResult!
+  ): Void!
+}
+
+scalar Void
+
+input ValidationError {
+  message: String!
+  target: String!
+}
+
+input CartValidationResult {
+  errors: [ValidationError!]!
+}

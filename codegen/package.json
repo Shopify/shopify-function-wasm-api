@@ -1,0 +1,48 @@
+{
+  "name": "@shopify/shopify-function-codegen",
+  "version": "0.1.0",
+  "description": "Code generator for Shopify Function SDKs - generates typed code from GraphQL schemas and queries",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shopify/shopify-function-wasm-api.git",
+    "directory": "codegen"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist/src/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "bin": {
+    "shopify-function-codegen": "./dist/src/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/lib.d.ts",
+      "import": "./dist/src/lib.js"
+    },
+    "./cli": "./dist/src/index.js"
+  },
+  "main": "./dist/src/lib.js",
+  "types": "./dist/src/lib.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "test": "node --test dist/tests/*.test.js",
+    "pretest": "tsc",
+    "prepack": "pnpm clean && pnpm build && pnpm test"
+  },
+  "dependencies": {
+    "graphql": "^16.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}

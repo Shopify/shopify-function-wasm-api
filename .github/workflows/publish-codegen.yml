@@ -1,0 +1,46 @@
+name: Publish codegen
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Tag to publish (codegen/vX.Y.Z)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: startsWith(inputs.tag_name || github.event.release.tag_name, 'codegen/v')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: codegen
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.tag_name || github.event.release.tag_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: "10.28.0"
+
+      - name: Validate tag and package version
+        env:
+          TAG_NAME: ${{ inputs.tag_name || github.event.release.tag_name }}
+        run: |
+          test "${TAG_NAME#codegen/v}" = "$(node -p "require('./package.json').version")"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm publish --access public --provenance --no-git-checks

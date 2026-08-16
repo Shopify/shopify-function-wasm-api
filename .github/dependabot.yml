@@ -18,3 +18,9 @@ updates:
       - "@Shopify/functions-dependabot-reviewers"
     schedule:
       interval: "weekly"
+  - package-ecosystem: "npm"
+    directory: "/codegen"
+    reviewers:
+      - "@Shopify/functions-dependabot-reviewers"
+    schedule:
+      interval: "weekly"
