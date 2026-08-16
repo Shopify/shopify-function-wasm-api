@@ -34,6 +34,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
+    "fuzz": "tsc && CODEGEN_FUZZ_RUNS=1000 node --test dist/tests/fuzz.test.js",
     "test": "node --test dist/tests/*.test.js",
     "pretest": "tsc",
     "prepack": "pnpm clean && pnpm build && pnpm test"

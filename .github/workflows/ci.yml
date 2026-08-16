@@ -93,4 +93,6 @@ jobs:
           version: "10.28.0"
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+      - name: Run seeded codegen fuzz tests
+        run: pnpm fuzz
       - run: pnpm pack --pack-destination /tmp
