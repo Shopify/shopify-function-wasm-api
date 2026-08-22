@@ -33,6 +33,7 @@ import {
 import { emitZig, camelToSnake } from "./emitters/zig.js";
 import { emitC } from "./emitters/c.js";
 import { emitGo } from "./emitters/go.js";
+import { emitRuby } from "./emitters/ruby.js";
 
 interface QueryArg {
   path: string;
@@ -73,7 +74,7 @@ function parseArgs(argv: string[]): CliArgs {
         console.log(`Usage: shopify-function-codegen --language <lang> [options]
 
 Options:
-  --language <lang>          Target language: zig, c, or go (default: zig)
+  --language <lang>          Target language: zig, c, go, or ruby (default: zig)
   --schema <file>            GraphQL schema file (default: schema.graphql)
   --query <file>             Query file (repeatable; auto-discovered from . and src/ if omitted)
   --target <name>            Mutation target for the preceding --query (camelCase)
@@ -265,6 +266,7 @@ function main() {
     return {
       targetName,
       graphqlTargetName: mutationTarget.name,
+      resultTypeName: mutationTarget.resultTypeName,
       selections: parsedQuery.selections,
     };
   });
@@ -303,6 +305,21 @@ function main() {
       const outputPath = path.join(args.output, "schema.go");
       fs.writeFileSync(outputPath, output);
       console.log(`Generated ${outputPath}`);
+      break;
+    }
+    case "ruby": {
+      const result = emitRuby(schemaModel, targets, {
+        enumsAsStr: args.enumsAsStr,
+      });
+      const rubyPath = path.join(args.output, "schema.rb");
+      const rbsPath = path.join(args.output, "schema.rbs");
+      const lspPath = path.join(args.output, "schema_lsp.rb");
+      fs.writeFileSync(rubyPath, result.ruby);
+      fs.writeFileSync(rbsPath, result.rbs);
+      fs.writeFileSync(lspPath, result.rbi);
+      console.log(`Generated ${rubyPath}`);
+      console.log(`Generated ${rbsPath}`);
+      console.log(`Generated ${lspPath}`);
       break;
     }
     default:

@@ -4,6 +4,7 @@ import { parseQuery, parseSchema } from "../src/parser.js";
 import { emitC } from "../src/emitters/c.js";
 import { emitGo } from "../src/emitters/go.js";
 import { emitZig } from "../src/emitters/zig.js";
+import { emitRuby } from "../src/emitters/ruby.js";
 
 const DEFAULT_SEED = 0x5f3759df;
 const DEFAULT_RUNS = 200;
@@ -116,14 +117,19 @@ test("seeded schema/query fuzzing produces deterministic output for every emitte
         packageName: "generated",
       };
       const go = emitGo(schema, targets, goOptions);
+      const ruby = emitRuby(schema, targets, options);
 
       assert.equal(zig, emitZig(schema, targets, options));
       assert.deepEqual(c, emitC(schema, targets, options));
       assert.equal(go, emitGo(schema, targets, goOptions));
+      assert.deepEqual(ruby, emitRuby(schema, targets, options));
       assertSaneOutput("Zig", zig);
       assertSaneOutput("C header", c.header);
       assertSaneOutput("C source", c.source);
       assertSaneOutput("Go", go);
+      assertSaneOutput("Ruby", ruby.ruby);
+      assertSaneOutput("Ruby RBS", ruby.rbs);
+      assertSaneOutput("Ruby LSP stubs", ruby.rbi);
     } catch (error) {
       assert.fail(`fuzz failure at seed=${seed}, run=${run}: ${String(error)}`);
     }

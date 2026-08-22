@@ -1,6 +1,6 @@
 # Shopify Function Codegen
 
-Generates typed SDK code from GraphQL schemas and queries for Zig, C, and Go.
+Generates typed SDK code from GraphQL schemas and queries for Zig, C, Go, and Ruby.
 
 ## Setup
 
@@ -32,6 +32,16 @@ node dist/src/index.js \
 - `--go-module-path` — Go module path for the sf import (default: `github.com/Shopify/shopify-function-go`)
 - `--go-package` — package name in generated file (default: `generated`)
 
+**Ruby** (`--language ruby`): outputs `schema.rb`, `schema.rbs`, and `schema_lsp.rb`
+
+Ruby functions are compiled by rubywat, which lowers a receiver call like `input.cart` into the top-level call `cart(input)`. The three files follow from that:
+
+- `schema.rb` — one single-parameter method per selected field, each annotated with an inline RBS comment (`#: (_RunInput) -> String`) and returning `receiver["graphqlKey"]`. Output objects get `__Type_new` helpers (or one `__Type_<variant>` per variant for `@oneOf` inputs) that build the hash rubywat serializes. Compile this file with your function.
+- `schema.rbs` — interfaces describing each receiver's method surface, plus a `class Object` block declaring the lowered one-argument form so type checkers accept both spellings.
+- `schema_lsp.rb` — stub classes with the same methods and doc comments, for editors that index Ruby rather than RBS. Not meant to be compiled.
+
+A method selected on more than one receiver takes a union of receivers, and the return types stay positional (`(String | String? | String)`) so rubywat can correlate receiver N with return N. Enums are always emitted as `String`, so `--enums-as-str` has no effect on Ruby output.
+
 ### Options
 
 | Flag | Description |
@@ -40,7 +50,7 @@ node dist/src/index.js \
 | `--query` | Path to query file, one per target (required, repeatable) |
 | `--target` | Mutation field for the preceding query, when it cannot be inferred from its filename |
 | `--target-handle` | Exact API handle used by `@restrictTarget` for the preceding query |
-| `--language` | Target language: `zig`, `c`, or `go` |
+| `--language` | Target language: `zig`, `c`, `go`, or `ruby` |
 | `--output` | Output directory (default: `./generated/`) |
 | `--enums-as-str` | Comma-separated enum types to treat as strings (default: `LanguageCode,CountryCode,CurrencyCode`) |
 | `--json-types` | Path to a GraphQL file defining types for JSON scalar fields |
@@ -81,13 +91,15 @@ The generated code will include typed accessors for the JSON field's sub-fields 
 ## What it generates
 
 - **Output types** — structs from GraphQL `input` types with serialization code
-- **@oneOf unions** — tagged unions (Zig: `union(enum)`, C: enum tag + union, Go: interface + variants)
+- **@oneOf unions** — tagged unions (Zig: `union(enum)`, C: enum tag + union, Go: interface + variants, Ruby: one constructor per variant)
 - **Enums** — with `fromStr`/`toStr` conversion (unless in `--enums-as-str`)
 - **Per-query Input types** — lazy accessors wrapping a raw `Value`, filtered by `@restrictTarget`
 - **String interning** — field name lookups use interned string IDs for performance
 
+Ruby is the exception to the last two: rubywat reads decoded JSON, so accessors are plain hash lookups with no wrapper types or interning.
+
 ## Tests
 
 ```bash
-npx tsc && node --test dist/tests/codegen.test.js
+npx tsc && node --test dist/tests/*.test.js
 ```

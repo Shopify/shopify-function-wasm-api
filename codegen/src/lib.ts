@@ -27,6 +27,13 @@ export type { CEmitterOptions } from "./emitters/c.js";
 export { emitGo } from "./emitters/go.js";
 export type { GoEmitterOptions } from "./emitters/go.js";
 
+export { emitRuby } from "./emitters/ruby.js";
+export type {
+  RubyEmitterOptions,
+  RubyEmitterOutput,
+  RubyTargetQuery,
+} from "./emitters/ruby.js";
+
 export type {
   SchemaModel,
   ObjectType,
