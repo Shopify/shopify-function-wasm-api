@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
-import { parseQuery, parseSchema } from "../src/parser.js";
+import { mergeJsonTypes, parseQuery, parseSchema } from "../src/parser.js";
 import { emitC } from "../src/emitters/c.js";
 import { emitGo } from "../src/emitters/go.js";
 import { emitZig } from "../src/emitters/zig.js";
@@ -101,6 +101,20 @@ test("seeded schema/query fuzzing produces deterministic output for every emitte
       const query = parseQuery(querySource, schema);
       assert.equal(query.selections.length, 3);
       assert.equal(query.selections[0].name, `alias_${run}`);
+
+      // Json types reusing schema type names must not change how the query
+      // resolves against the schema.
+      const clashing = parseSchema(schemaSource);
+      mergeJsonTypes(
+        `
+        enum ${enumType} { OTHER_${run} }
+        type ${leafType} { other_${run}: ${maybeList(random, branchType)} }
+        type ${branchType} { other_${run}: ${scalarFieldType} }
+        type Query_${suffix} { leaf_${run}: ${leafType} }
+        `,
+        clashing
+      );
+      assert.deepEqual(parseQuery(querySource, clashing), query);
 
       const targets = [{
         targetName: `target_${run}`,

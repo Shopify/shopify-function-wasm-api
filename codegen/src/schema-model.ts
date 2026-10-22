@@ -50,6 +50,12 @@ export interface SchemaModel {
   enumTypes: Map<string, EnumType>;
   unionTypes: Map<string, UnionType>;
   customScalars: Set<string>;
+  /**
+   * Model name of each type merged from --json-types, keyed by the name it has
+   * in the json types file. A json type whose name a schema type already uses
+   * is stored under a fresh name so the schema type is not replaced.
+   */
+  jsonTypeNames?: Map<string, string>;
 }
 
 /** Helper to create a non-null type ref */
