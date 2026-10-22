@@ -291,7 +291,11 @@ function resolveSelections(
 
     // Find field in parent type using the schema field name
     const fieldDef = parentType.fields.find((f) => f.name === schemaFieldName);
-    if (!fieldDef) continue;
+    if (!fieldDef) {
+      throw new Error(
+        `Cannot query field "${schemaFieldName}" on type "${parentType.name}"`
+      );
+    }
 
     // Filter by @restrictTarget
     if (fieldDef.restrictTargets && targetName) {
@@ -369,6 +373,14 @@ function getNamedTypeFromRef(typeRef: TypeRef): string {
  * Parse a supplementary GraphQL types file and merge its type definitions
  * into the schema model. This is used for --json-types to define shapes
  * for JSON scalar fields.
+ *
+ * The json types live in their own namespace: a json type named like a schema
+ * type (a config `Discount` next to the schema's `Discount`) must not replace
+ * the schema type, or every query selection through that schema type resolves
+ * against the json type's fields instead. Such a json type is stored under
+ * `Json<Name>` (made unique if needed), its references are rewritten to match,
+ * and `schemaModel.jsonTypeNames` records the mapping so --json-override
+ * still finds it by the name written in the json types file.
  */
 export function mergeJsonTypes(
   jsonTypesSource: string,
@@ -379,10 +391,66 @@ export function mergeJsonTypes(
   const schema = buildSchema(wrappedSource);
 
   const typeMap = schema.getTypeMap();
-  for (const [typeName, type] of Object.entries(typeMap)) {
-    if (typeName.startsWith("__")) continue;
-    if (["String", "Int", "Float", "Boolean", "ID", "Query"].includes(typeName))
+  const jsonTypes = Object.entries(typeMap).filter(
+    ([typeName, type]) =>
+      !typeName.startsWith("__") &&
+      !["String", "Int", "Float", "Boolean", "ID", "Query"].includes(typeName) &&
+      (isObjectType(type) || isEnumType(type) || isScalarType(type))
+  );
+
+  const schemaTypeNames = new Set<string>([
+    ...schemaModel.objectTypes.keys(),
+    ...schemaModel.inputTypes.keys(),
+    ...schemaModel.enumTypes.keys(),
+    ...schemaModel.unionTypes.keys(),
+    ...schemaModel.customScalars,
+  ]);
+  const taken = new Set<string>([
+    ...schemaTypeNames,
+    ...jsonTypes.map(([typeName]) => typeName),
+  ]);
+
+  const modelNames = schemaModel.jsonTypeNames ?? new Map<string, string>();
+  schemaModel.jsonTypeNames = modelNames;
+  for (const [typeName, type] of jsonTypes) {
+    if (isScalarType(type)) {
+      // A json scalar shares the schema's scalar of that name (both are opaque
+      // JSON values); one named like a schema object, input, enum or union
+      // would make json fields of that scalar resolve to the schema type.
+      if (
+        schemaTypeNames.has(typeName) &&
+        !schemaModel.customScalars.has(typeName)
+      ) {
+        throw new Error(
+          `--json-types declares scalar ${typeName}, but the schema already defines a non-scalar type ${typeName}; rename the scalar in the json types file`
+        );
+      }
       continue;
+    }
+
+    let modelName = typeName;
+    if (schemaTypeNames.has(typeName)) {
+      modelName = `Json${typeName}`;
+      for (let n = 2; taken.has(modelName); n++) {
+        modelName = `Json${typeName}${n}`;
+      }
+      taken.add(modelName);
+    }
+    modelNames.set(typeName, modelName);
+  }
+
+  const rename = (typeRef: TypeRef): TypeRef => {
+    if (typeRef.kind !== "Named") {
+      return { kind: typeRef.kind, ofType: rename(typeRef.ofType!) };
+    }
+    const scalar = typeMap[typeRef.name!];
+    if (scalar && isScalarType(scalar)) return typeRef;
+    return named(modelNames.get(typeRef.name!) ?? typeRef.name!);
+  };
+
+  for (const [typeName, type] of jsonTypes) {
+    const modelName = modelNames.get(typeName);
+    if (!modelName) continue;
 
     if (isObjectType(type)) {
       const fields: FieldDefinition[] = [];
@@ -390,14 +458,14 @@ export function mergeJsonTypes(
       for (const [fieldName, field] of Object.entries(fieldMap)) {
         const fieldDef: FieldDefinition = {
           name: fieldName,
-          type: graphqlTypeToTypeRef(field.type),
+          type: rename(graphqlTypeToTypeRef(field.type)),
         };
         fields.push(fieldDef);
       }
-      schemaModel.objectTypes.set(typeName, { name: typeName, fields });
+      schemaModel.objectTypes.set(modelName, { name: modelName, fields });
     } else if (isEnumType(type)) {
-      schemaModel.enumTypes.set(typeName, {
-        name: typeName,
+      schemaModel.enumTypes.set(modelName, {
+        name: modelName,
         values: type.getValues().map((v) => v.name),
       });
     }
@@ -415,6 +483,17 @@ export function injectJsonOverrides(
   schemaModel: SchemaModel,
   pathPrefix: string[] = []
 ): void {
+  if (pathPrefix.length === 0) {
+    for (const [overridePath, typeName] of overrides) {
+      const modelName = schemaModel.jsonTypeNames?.get(typeName) ?? typeName;
+      if (!schemaModel.objectTypes.has(modelName)) {
+        throw new Error(
+          `--json-override ${overridePath}=${typeName}: no object type named "${typeName}" in the schema or --json-types`
+        );
+      }
+    }
+  }
+
   for (const selection of selections) {
     const currentPath = [...pathPrefix, selection.name];
 
@@ -423,7 +502,9 @@ export function injectJsonOverrides(
       if (pathSuffixMatches(currentPath, overridePath)) {
         // Only inject if the field currently has no sub-selections (it's a scalar)
         if (selection.selections.length === 0) {
-          const overrideType = schemaModel.objectTypes.get(typeName);
+          const overrideType = schemaModel.objectTypes.get(
+            schemaModel.jsonTypeNames?.get(typeName) ?? typeName
+          );
           if (overrideType) {
             selection.selections = generateSelectionsFromType(
               overrideType,

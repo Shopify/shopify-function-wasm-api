@@ -1157,3 +1157,218 @@ describe("Ruby emitter - JSON override", () => {
     assert.ok(ruby.includes("def __FunctionTargetResult_new(status)"));
   });
 });
+
+// --- JSON types named like schema types ---
+
+const clashSchemaSource = `
+scalar JSON
+scalar Void
+
+schema {
+  query: Input
+  mutation: MutationRoot
+}
+
+enum Status { ACTIVE INACTIVE }
+
+type Input {
+  discount: Discount!
+}
+
+type Discount {
+  id: ID!
+  status: Status!
+  configuration: Metafield
+}
+
+type Metafield {
+  jsonValue: JSON!
+}
+
+type MutationRoot {
+  handleTarget(result: FunctionTargetResult!): Void!
+}
+
+input FunctionTargetResult {
+  status: String
+}
+`;
+
+const clashQuerySource = `query Input {
+  discount {
+    id
+    status
+    configuration {
+      jsonValue
+    }
+  }
+}
+`;
+
+const clashJsonTypesSource = `
+scalar JSON
+
+enum Status { ON OFF }
+
+type Configuration {
+  discounts: [Discount!]
+}
+
+type Discount {
+  t: String
+  a: JSON
+  status: Status
+}
+`;
+
+function makeClashTargets(jsonTypes: string = clashJsonTypesSource) {
+  const schema = parseSchema(clashSchemaSource);
+  mergeJsonTypes(jsonTypes, schema);
+  const query = parseQuery(clashQuerySource, schema);
+  injectJsonOverrides(query.selections, new Map([["jsonValue", "Configuration"]]), schema);
+  return {
+    schema,
+    query,
+    targets: [
+      {
+        targetName: "handle_target",
+        graphqlTargetName: "handleTarget",
+        selections: query.selections,
+      },
+    ],
+  };
+}
+
+describe("mergeJsonTypes - json types named like schema types", () => {
+  it("should keep the schema type and store the json type under a fresh name", () => {
+    const { schema } = makeClashTargets();
+    assert.deepStrictEqual(
+      schema.objectTypes.get("Discount")!.fields.map((f) => f.name),
+      ["id", "status", "configuration"]
+    );
+    assert.deepStrictEqual(
+      schema.objectTypes.get("JsonDiscount")!.fields.map((f) => f.name),
+      ["t", "a", "status"]
+    );
+    assert.deepStrictEqual(schema.enumTypes.get("Status")!.values, ["ACTIVE", "INACTIVE"]);
+    assert.deepStrictEqual(schema.enumTypes.get("JsonStatus")!.values, ["ON", "OFF"]);
+    assert.strictEqual(schema.jsonTypeNames!.get("Discount"), "JsonDiscount");
+    assert.strictEqual(schema.jsonTypeNames!.get("Configuration"), "Configuration");
+  });
+
+  it("should resolve query selections against the schema type", () => {
+    const { query } = makeClashTargets();
+    const discount = query.selections.find((s) => s.name === "discount")!;
+    assert.deepStrictEqual(
+      discount.selections.map((s) => s.name),
+      ["id", "status", "configuration"]
+    );
+    const jsonValue = discount.selections
+      .find((s) => s.name === "configuration")!
+      .selections.find((s) => s.name === "jsonValue")!;
+    const discounts = jsonValue.selections.find((s) => s.name === "discounts")!;
+    assert.deepStrictEqual(discounts.selections.map((s) => s.name), ["t", "a", "status"]);
+    const status = discounts.selections.find((s) => s.name === "status")!;
+    assert.strictEqual(status.schemaType.name, "JsonStatus");
+  });
+
+  it("should pick a name no json or schema type uses", () => {
+    const { schema } = makeClashTargets(
+      `${clashJsonTypesSource}\ntype JsonDiscount { x: String }\n`
+    );
+    assert.deepStrictEqual(
+      schema.objectTypes.get("JsonDiscount")!.fields.map((f) => f.name),
+      ["x"]
+    );
+    assert.deepStrictEqual(
+      schema.objectTypes.get("JsonDiscount2")!.fields.map((f) => f.name),
+      ["t", "a", "status"]
+    );
+  });
+
+  it("should reject a json scalar named like a schema object type", () => {
+    const schema = parseSchema(clashSchemaSource);
+    assert.throws(
+      () => mergeJsonTypes("scalar Discount\ntype Configuration { d: Discount }\n", schema),
+      /scalar Discount.*non-scalar type Discount/
+    );
+  });
+
+  it("should type the schema accessor in the Ruby output", () => {
+    const { schema, targets } = makeClashTargets();
+    const { ruby, rbs } = emitRuby(schema, targets, { enumsAsStr: [] });
+    assert.ok(
+      ruby.includes("#: (_HandleTargetInput) -> _HandleTargetInputDiscount\ndef discount(")
+    );
+    assert.ok(ruby.includes("#: (_HandleTargetInputDiscount) -> String\ndef id("));
+    assert.ok(
+      ruby.includes(
+        "#: (_HandleTargetInputDiscountConfigurationJsonValueDiscountsItem) -> String?\ndef t("
+      )
+    );
+    assert.ok(rbs.includes("def discount: () -> _HandleTargetInputDiscount\n"));
+  });
+
+  it("should give the other emitters both the schema and json fields", () => {
+    const { schema, targets } = makeClashTargets();
+    const zig = emitZig(schema, targets, { enumsAsStr: [] });
+    const { header } = emitC(schema, targets, { enumsAsStr: [] });
+    const go = emitGo(schema, targets, {
+      enumsAsStr: [],
+      modulePath: "github.com/Shopify/shopify-function-go",
+      packageName: "generated",
+    });
+    assert.ok(zig.includes("pub fn id(self: discount_T) []const u8 {"));
+    assert.ok(zig.includes("pub fn t(self: discounts_Item) ?[]const u8 {"));
+    assert.ok(zig.includes("pub fn status(self: discounts_Item) ?JsonStatus {"));
+    assert.ok(header.includes("sf_str_t handle_target_discount_get_id(handle_target_discount input);"));
+    assert.ok(
+      header.includes(
+        "JsonStatus handle_target_discount_configuration_jsonValue_discounts_Item_get_status("
+      )
+    );
+    assert.ok(go.includes("func (input Handle_targetInputDiscount) Id() string {"));
+    assert.ok(
+      go.includes(
+        "func (input Handle_targetInputDiscountConfigurationJsonValueDiscountsItem) Status() (*JsonStatus, bool) {"
+      )
+    );
+  });
+});
+
+describe("unknown names fail loudly", () => {
+  it("should reject a query field the type does not define", () => {
+    const schema = parseSchema(clashSchemaSource);
+    assert.throws(
+      () => parseQuery("query Input { discount { id missing } }", schema),
+      /Cannot query field "missing" on type "Discount"/
+    );
+  });
+
+  it("should reject an unknown top-level query field", () => {
+    const schema = parseSchema(clashSchemaSource);
+    assert.throws(
+      () => parseQuery("query Input { nope }", schema),
+      /Cannot query field "nope" on type "Input"/
+    );
+  });
+
+  it("should reject a --json-override naming an unknown type", () => {
+    const schema = parseSchema(jsonSchemaSource);
+    mergeJsonTypes(jsonTypesSource, schema);
+    const query = parseQuery(jsonQuerySource, schema);
+    assert.throws(
+      () => injectJsonOverrides(query.selections, new Map([["jsonValue", "Missing"]]), schema),
+      /--json-override jsonValue=Missing: no object type named "Missing"/
+    );
+  });
+
+  it("should reject a --json-override without --json-types", () => {
+    const schema = parseSchema(jsonSchemaSource);
+    const query = parseQuery(jsonQuerySource, schema);
+    assert.throws(
+      () => injectJsonOverrides(query.selections, new Map([["jsonValue", "Configuration"]]), schema),
+      /no object type named "Configuration"/
+    );
+  });
+});

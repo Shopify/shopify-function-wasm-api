@@ -88,6 +88,8 @@ The override key uses suffix matching — `jsonValue` matches any field path end
 
 The generated code will include typed accessors for the JSON field's sub-fields (e.g. `.maxQuantity()`, `.message()`) instead of returning a raw JSON value.
 
+The json types file has its own namespace: a type in it may share a name with a schema type (a config `Discount` next to the schema's `Discount`) without replacing it. Overrides name json types as written in the file. Where a json enum is emitted by name (Zig, C, Go), one that clashes is emitted as `Json<Name>`. A json `scalar` named like a schema object, input, enum or union is rejected.
+
 ## What it generates
 
 - **Output types** — structs from GraphQL `input` types with serialization code
